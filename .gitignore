@@ -2,6 +2,7 @@
 .DS_Store
 
 *.pyc
+**/__pycache__
 
 mc_list_*
 *.csv
