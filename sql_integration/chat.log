@@ -1,0 +1,36 @@
+ERROR:logger:Cannot add database
+ERROR:logger:Cannot open database
+ERROR:root:Failed to query database
+INFO:root:<PySide2.QtSql.QSqlQuery object at 0x11cb1fa40>
+DEBUG:root:Table was loaded successfully.
+ERROR:logger:Cannot add database
+ERROR:logger:Cannot open database
+ERROR:root:Failed to query database
+INFO:root:<PySide2.QtSql.QSqlQuery object at 0x11ba09a80>
+DEBUG:root:Table was loaded successfully.
+ERROR:logger:Cannot add database
+ERROR:logger:Cannot open database
+ERROR:root:Failed to query database
+INFO:root:<PySide2.QtSql.QSqlQuery object at 0x11754abc0>
+DEBUG:root:Table was loaded successfully.
+ERROR:logger:Cannot add database
+ERROR:logger:Cannot open database
+ERROR:root:Failed to query database
+INFO:root:<PySide2.QtSql.QSqlQuery object at 0x11c380340>
+DEBUG:root:Table was loaded successfully.
+ERROR:logger:Cannot add database
+ERROR:logger:Cannot open database
+ERROR:root:Failed to query database
+INFO:root:<PySide2.QtSql.QSqlQuery object at 0x110a4aac0>
+DEBUG:root:Table was loaded successfully.
+INFO:root:<PySide2.QtSql.QSqlQuery object at 0x116de1c00>
+DEBUG:root:Table was loaded successfully.
+DEBUG:root:Table was loaded successfully.
+DEBUG:root:Table was loaded successfully.
+DEBUG:root:Message: "hi" 
+ Received by: "machine"
+DEBUG:root:Message: "fdas" 
+ Received by: "machine"
+DEBUG:root:Message: "fdas" 
+ Received by: "machine"
+DEBUG:root:Table was loaded successfully.
