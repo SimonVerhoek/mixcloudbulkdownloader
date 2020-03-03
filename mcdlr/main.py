@@ -1,15 +1,17 @@
 import sys
 from typing import Callable
 
-from PySide2.QtCore import Slot, Qt, QTimer
+import requests
+from PySide2.QtCore import Qt, QTimer, Slot
 from PySide2.QtWidgets import (
     QApplication,
-    QMainWindow,
-    QWidget,
-    QLineEdit,
-    QPushButton,
     QHBoxLayout,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
     QVBoxLayout,
+    QWidget,
 )
 
 
@@ -29,13 +31,14 @@ class Widget(QWidget):
             delay_ms=750,
         )
 
-        self.search_account_name_button = QPushButton('Search')
-        self.search_account_name_button.clicked.connect(self.search_account)
-
         self.search_layout.addWidget(self.account_name)
-        self.search_layout.addWidget(self.search_account_name_button)
+
+        self.search_result_layout = QVBoxLayout()
+        self.search_results_list = QListWidget()
+        self.search_result_layout.addWidget(self.search_results_list)
 
         self.layout.addLayout(self.search_layout)
+        self.layout.addLayout(self.search_result_layout)
 
         self.setLayout(self.layout)
 
@@ -54,14 +57,20 @@ class Widget(QWidget):
 
     @Slot()
     def search_account(self):
+        self.search_results_list.clear()
         phrase = self.account_name.text()
 
-        from pprint import pprint
-        print()
-        print()
-        pprint(phrase)
-        print()
-        print()
+        req = requests.get(f'https://api.mixcloud.com/search/?q={phrase}&type=user')
+        response = req.json()
+        data = response['data']
+
+        for result in data:
+            username = result['username']
+            name = result['name']
+            item = QListWidgetItem(f'{name} ({username})')
+            # item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            # item.setCheckState(Qt.Unchecked)
+            self.search_results_list.addItem(item)
 
 
 class MainWindow(QMainWindow):
