@@ -50,22 +50,16 @@ class Widget(QWidget):
 
         self._connect_with_delay(
             input=self.search_user_input.textChanged[str],
-            slot=self.search_account,
-            delay_ms=750,
+            slot=self.search_account
         )
 
-    def _connect_with_delay(self, input: Callable, slot: Slot, delay_ms: int):
+    def _connect_with_delay(self, input: Callable, slot: Slot, delay_ms: int = 750):
         """Connects a given input to a given Slot with a given delay."""
-        self.timer = self._set_timer(ms=delay_ms)
+        self.timer = QTimer()
+        self.timer.setInterval(delay_ms)
+        self.timer.setSingleShot(True)
         self.timer.timeout.connect(slot)
         input.connect(self.timer.start)
-
-    def _set_timer(self, ms: int = 750):
-        """Sets a SingleShot timer."""
-        timer = QTimer()
-        timer.setInterval(ms)
-        timer.setSingleShot(True)
-        return timer
 
     @Slot()
     def search_account(self):
