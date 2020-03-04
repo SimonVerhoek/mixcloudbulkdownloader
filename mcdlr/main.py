@@ -6,16 +6,17 @@ from PySide2.QtCore import Qt, QTimer, Slot
 from PySide2.QtWidgets import (
     QApplication,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QListWidget,
     QMainWindow,
     QVBoxLayout,
     QWidget,
-    QLabel,
 )
 
-from .data_classes import Cloudcast, MixcloudUser
+from .api import search_user_API_url, user_cloudcasts_API_url
 from .custom_widgets import CloudcastQListWidgetItem, UserQListWidgetItem
+from .data_classes import Cloudcast, MixcloudUser
 
 
 class Widget(QWidget):
@@ -70,8 +71,8 @@ class Widget(QWidget):
     def search_account(self):
         self.search_user_results_list.clear()
         phrase = self.search_user_input.text()
-
-        req = requests.get(f'https://api.mixcloud.com/search/?q={phrase}&type=user')
+        url = search_user_API_url(phrase=phrase)
+        req = requests.get(url=url)
         response = req.json()
         data = response['data']
 
@@ -91,7 +92,7 @@ class Widget(QWidget):
 
     def _query_cloudcasts(self, username: str, url: str = ''):
         if not url:
-            url = f'https://api.mixcloud.com/{username}/cloudcasts/'
+            url = user_cloudcasts_API_url(username=username)
 
         req = requests.get(url=url)
         response = req.json()
