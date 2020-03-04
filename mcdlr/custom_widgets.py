@@ -14,4 +14,4 @@ class CloudcastQListWidgetItem(QListWidgetItem):
     def __init__(self, cloudcast: Cloudcast):
         super().__init__(cloudcast.name)
 
-        self.cloudcast = Cloudcast
+        self.cloudcast = cloudcast

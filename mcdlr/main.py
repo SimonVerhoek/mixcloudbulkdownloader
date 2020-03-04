@@ -10,10 +10,11 @@ from PySide2.QtWidgets import (
     QLineEdit,
     QListWidget,
     QMainWindow,
+    QPushButton,
     QVBoxLayout,
     QWidget,
-    QPushButton
 )
+from youtube_dl import YoutubeDL
 
 from .api import search_user_API_url, user_cloudcasts_API_url
 from .custom_widgets import CloudcastQListWidgetItem, UserQListWidgetItem
@@ -62,11 +63,11 @@ class Widget(QWidget):
 
         # connections
         self._connect_with_delay(
-            input=self.search_user_input.textChanged[str],
-            slot=self.search_account
+            input=self.search_user_input.textChanged[str], slot=self.search_account
         )
         self.select_all_button.clicked.connect(self.select_all)
         self.unselect_all_button.clicked.connect(self.unselect_all)
+        self.download_button.clicked.connect(self.download_selected_cloudcasts)
 
     @Slot()
     def search_account(self):
@@ -101,6 +102,21 @@ class Widget(QWidget):
         for i in range(self.user_cloudcasts_results.count()):
             self.user_cloudcasts_results.item(i).setCheckState(Qt.Unchecked)
 
+    @Slot()
+    def download_selected_cloudcasts(self):
+        urls = [item.cloudcast.url for item in self._get_checked_cloudcast_items()]
+
+        ydl_opts = {}
+        with YoutubeDL(ydl_opts) as ydl:
+            ydl.download(urls)
+
+    def _get_checked_cloudcast_items(self):
+        selected_cloudcasts = []
+        for i in range(self.user_cloudcasts_results.count()):
+            if self.user_cloudcasts_results.item(i).checkState() == Qt.Checked:
+                selected_cloudcasts.append(self.user_cloudcasts_results.item(i))
+        return selected_cloudcasts
+
     def _connect_with_delay(self, input: Callable, slot: Slot, delay_ms: int = 750):
         """Connects a given input to a given Slot with a given delay."""
         self.timer = QTimer()
@@ -131,13 +147,6 @@ class Widget(QWidget):
         if response.get('paging') and response['paging'].get('next'):
             next_url = response['paging'].get('next')
             self._query_cloudcasts(username=username, url=next_url)
-
-    def _get_all_checked_cloudcasts(self):
-        selected_cloudcasts = []
-        for i in range(self.user_cloudcasts_results.count()):
-            if self.user_cloudcasts_results.item(i).checkState() == Qt.Checked:
-                selected_cloudcasts.append(self.user_cloudcasts_results.item(i))
-        return selected_cloudcasts
 
 
 class MainWindow(QMainWindow):
