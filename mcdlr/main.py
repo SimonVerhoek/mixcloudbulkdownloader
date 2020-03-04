@@ -2,10 +2,10 @@ import sys
 from os.path import expanduser
 from typing import Callable
 
-import requests
 from PySide2.QtCore import Qt, QTimer, Slot
 from PySide2.QtWidgets import (
     QApplication,
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -14,11 +14,14 @@ from PySide2.QtWidgets import (
     QPushButton,
     QVBoxLayout,
     QWidget,
-    QFileDialog,
 )
-from youtube_dl import YoutubeDL
 
-from .api import search_user_API_url, user_cloudcasts_API_url
+from .api import (
+    download_cloudcasts,
+    get_mixcloud_API_data,
+    search_user_API_url,
+    user_cloudcasts_API_url,
+)
 from .custom_widgets import CloudcastQListWidgetItem, UserQListWidgetItem
 from .data_classes import Cloudcast, MixcloudUser
 
@@ -76,11 +79,9 @@ class Widget(QWidget):
         self.search_user_results_list.clear()
         phrase = self.search_user_input.text()
         url = search_user_API_url(phrase=phrase)
-        req = requests.get(url=url)
-        response = req.json()
-        data = response['data']
+        response = get_mixcloud_API_data(url=url)
 
-        for result in data:
+        for result in response['data']:
             user = MixcloudUser(**result)
             item = UserQListWidgetItem(user=user)
 
@@ -110,18 +111,14 @@ class Widget(QWidget):
 
         urls = [item.cloudcast.url for item in self._get_checked_cloudcast_items()]
 
-        ydl_opts = {'outtmpl': f'{download_dir}/%(title)s.%(ext)s'}
-        with YoutubeDL(ydl_opts) as ydl:
-            ydl.download(urls)
+        download_cloudcasts(urls=urls, download_dir=download_dir)
 
     def _get_download_dir(self):
         dialog = QFileDialog()
         dialog.setOption(QFileDialog.ShowDirsOnly)
         dialog.setOption(QFileDialog.DontResolveSymlinks)
         download_dir = dialog.getExistingDirectory(
-            self,
-            'Select download location',
-            expanduser('~')
+            self, 'Select download location', expanduser('~')
         )
         return download_dir
 
@@ -144,11 +141,9 @@ class Widget(QWidget):
         if not url:
             url = user_cloudcasts_API_url(username=username)
 
-        req = requests.get(url=url)
-        response = req.json()
-        data = response['data']
+        response = get_mixcloud_API_data(url=url)
 
-        for cloudcast in data:
+        for cloudcast in response['data']:
             cloudcast = Cloudcast(
                 name=cloudcast['name'],
                 url=cloudcast['url'],
