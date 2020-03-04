@@ -8,11 +8,13 @@ from PySide2.QtWidgets import (
     QHBoxLayout,
     QLineEdit,
     QListWidget,
-    QListWidgetItem,
     QMainWindow,
     QVBoxLayout,
     QWidget,
+    QLabel,
 )
+
+from .model.cloudcast import CloudcastQListWidgetItem
 
 
 class Widget(QWidget):
@@ -21,26 +23,34 @@ class Widget(QWidget):
 
         self.layout = QVBoxLayout()
 
-        self.search_layout = QHBoxLayout()
-        self.search_layout.setAlignment(Qt.AlignTop)
-        self.account_name = QLineEdit()
+        self.search_user_layout = QHBoxLayout()
+        self.search_user_layout.setAlignment(Qt.AlignTop)
+
+        self.search_user_label = QLabel('Search account/artist:')
+        self.search_user_layout.addWidget(self.search_user_label)
+
+        self.search_user_input = QLineEdit()
+        self.search_user_layout.addWidget(self.search_user_input)
+
+        self.search_user_result_layout = QVBoxLayout()
+        self.search_user_results_list = QListWidget()
+        self.search_user_result_layout.addWidget(self.search_user_results_list)
+
+        self.user_cloudcasts_layout = QVBoxLayout()
+        self.user_cloudcasts_results = QListWidget()
+        self.user_cloudcasts_layout.addWidget(self.user_cloudcasts_results)
+
+        self.layout.addLayout(self.search_user_layout)
+        self.layout.addLayout(self.search_user_result_layout)
+        self.layout.addLayout(self.user_cloudcasts_layout)
+
+        self.setLayout(self.layout)
 
         self._connect_with_delay(
-            input=self.account_name.textChanged[str],
+            input=self.search_user_input.textChanged[str],
             slot=self.search_account,
             delay_ms=750,
         )
-
-        self.search_layout.addWidget(self.account_name)
-
-        self.search_result_layout = QVBoxLayout()
-        self.search_results_list = QListWidget()
-        self.search_result_layout.addWidget(self.search_results_list)
-
-        self.layout.addLayout(self.search_layout)
-        self.layout.addLayout(self.search_result_layout)
-
-        self.setLayout(self.layout)
 
     def _connect_with_delay(self, input: Callable, slot: Slot, delay_ms: int):
         """Connects a given input to a given Slot with a given delay."""
@@ -57,20 +67,64 @@ class Widget(QWidget):
 
     @Slot()
     def search_account(self):
-        self.search_results_list.clear()
-        phrase = self.account_name.text()
+        self.search_user_results_list.clear()
+        phrase = self.search_user_input.text()
 
         req = requests.get(f'https://api.mixcloud.com/search/?q={phrase}&type=user')
         response = req.json()
         data = response['data']
 
+        from .model.user import UserQListWidgetItem
+
         for result in data:
-            username = result['username']
-            name = result['name']
-            item = QListWidgetItem(f'{name} ({username})')
+            # username = result['username']
+            # name = result['name']
+            # item = QListWidgetItem(f'{name} ({username})')
+
+            item = UserQListWidgetItem(
+                key=result['key'],
+                name=result['name'],
+                pictures=result['pictures'],
+                url=result['url'],
+                username=result['username'],
+            )
+
             # item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
             # item.setCheckState(Qt.Unchecked)
-            self.search_results_list.addItem(item)
+            self.search_user_results_list.addItem(item)
+
+        self.search_user_results_list.itemClicked.connect(self.get_cloudcasts)
+
+    @Slot()
+    def get_cloudcasts(self):
+        self.user_cloudcasts_results.clear()
+        username = self.search_user_results_list.currentItem().username
+        self._query_cloudcasts(username=username)
+
+    def _query_cloudcasts(self, username: str, url: str = ''):
+        if not url:
+            url = f'https://api.mixcloud.com/{username}/cloudcasts/'
+
+        req = requests.get(url=url)
+        response = req.json()
+        data = response['data']
+
+        full_list = []
+
+        for cloudcast in data:
+            full_list.append(cloudcast['name'])
+
+            item = CloudcastQListWidgetItem(
+                name=cloudcast['name'],
+                url=cloudcast['url'],
+                user=cloudcast['user']['username'],
+            )
+            item.setCheckState(Qt.Unchecked)
+            self.user_cloudcasts_results.addItem(item)
+
+        if response.get('paging') and response['paging'].get('next'):
+            next_url = response['paging'].get('next')
+            self._query_cloudcasts(username=username, url=next_url)
 
 
 class MainWindow(QMainWindow):
