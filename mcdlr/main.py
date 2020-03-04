@@ -1,4 +1,5 @@
 import sys
+from os.path import expanduser
 from typing import Callable
 
 import requests
@@ -13,6 +14,7 @@ from PySide2.QtWidgets import (
     QPushButton,
     QVBoxLayout,
     QWidget,
+    QFileDialog,
 )
 from youtube_dl import YoutubeDL
 
@@ -104,11 +106,24 @@ class Widget(QWidget):
 
     @Slot()
     def download_selected_cloudcasts(self):
+        download_dir = self._get_download_dir()
+
         urls = [item.cloudcast.url for item in self._get_checked_cloudcast_items()]
 
-        ydl_opts = {}
+        ydl_opts = {'outtmpl': f'{download_dir}/%(title)s.%(ext)s'}
         with YoutubeDL(ydl_opts) as ydl:
             ydl.download(urls)
+
+    def _get_download_dir(self):
+        dialog = QFileDialog()
+        dialog.setOption(QFileDialog.ShowDirsOnly)
+        dialog.setOption(QFileDialog.DontResolveSymlinks)
+        download_dir = dialog.getExistingDirectory(
+            self,
+            'Select download location',
+            expanduser('~')
+        )
+        return download_dir
 
     def _get_checked_cloudcast_items(self):
         selected_cloudcasts = []
