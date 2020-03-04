@@ -14,7 +14,8 @@ from PySide2.QtWidgets import (
     QLabel,
 )
 
-from .model.cloudcast import CloudcastQListWidgetItem
+from .data_classes import Cloudcast, MixcloudUser
+from .custom_widgets import CloudcastQListWidgetItem, UserQListWidgetItem
 
 
 class Widget(QWidget):
@@ -74,23 +75,10 @@ class Widget(QWidget):
         response = req.json()
         data = response['data']
 
-        from .model.user import UserQListWidgetItem
-
         for result in data:
-            # username = result['username']
-            # name = result['name']
-            # item = QListWidgetItem(f'{name} ({username})')
+            user = MixcloudUser(**result)
+            item = UserQListWidgetItem(user=user)
 
-            item = UserQListWidgetItem(
-                key=result['key'],
-                name=result['name'],
-                pictures=result['pictures'],
-                url=result['url'],
-                username=result['username'],
-            )
-
-            # item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            # item.setCheckState(Qt.Unchecked)
             self.search_user_results_list.addItem(item)
 
         self.search_user_results_list.itemClicked.connect(self.get_cloudcasts)
@@ -98,7 +86,7 @@ class Widget(QWidget):
     @Slot()
     def get_cloudcasts(self):
         self.user_cloudcasts_results.clear()
-        username = self.search_user_results_list.currentItem().username
+        username = self.search_user_results_list.currentItem().user.username
         self._query_cloudcasts(username=username)
 
     def _query_cloudcasts(self, username: str, url: str = ''):
@@ -109,16 +97,14 @@ class Widget(QWidget):
         response = req.json()
         data = response['data']
 
-        full_list = []
-
         for cloudcast in data:
-            full_list.append(cloudcast['name'])
-
-            item = CloudcastQListWidgetItem(
+            cloudcast = Cloudcast(
                 name=cloudcast['name'],
                 url=cloudcast['url'],
-                user=cloudcast['user']['username'],
+                user=self.search_user_results_list.currentItem().user,
             )
+            item = CloudcastQListWidgetItem(cloudcast=cloudcast)
+
             item.setCheckState(Qt.Unchecked)
             self.user_cloudcasts_results.addItem(item)
 
