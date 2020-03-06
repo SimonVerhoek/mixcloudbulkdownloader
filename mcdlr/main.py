@@ -2,7 +2,7 @@ import sys
 from os.path import expanduser
 from typing import Callable
 
-from PySide2.QtCore import Qt, QTimer, Slot
+from PySide2.QtCore import Qt, QTimer, Slot, QStringListModel
 from PySide2.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -14,6 +14,7 @@ from PySide2.QtWidgets import (
     QPushButton,
     QVBoxLayout,
     QWidget,
+    QCompleter
 )
 
 from .api import (
@@ -41,9 +42,11 @@ class Widget(QWidget):
         self.search_user_input = QLineEdit()
         search_user_layout.addWidget(self.search_user_input)
 
-        search_user_result_layout = QVBoxLayout()
+        search_user_result_layout = QHBoxLayout()
         self.search_user_results_list = QListWidget()
+        self.get_cloudcasts_button = QPushButton('Get cloudcasts')
         search_user_result_layout.addWidget(self.search_user_results_list)
+        search_user_result_layout.addWidget(self.get_cloudcasts_button)
 
         user_cloudcasts_layout = QVBoxLayout()
         self.user_cloudcasts_results = QListWidget()
@@ -68,8 +71,9 @@ class Widget(QWidget):
 
         # connections
         self._connect_with_delay(
-            input=self.search_user_input.textChanged[str], slot=self.search_account
+            input=self.search_user_input.textChanged, slot=self.search_account
         )
+        self.get_cloudcasts_button.clicked.connect(self.get_cloudcasts)
         self.select_all_button.clicked.connect(self.select_all)
         self.unselect_all_button.clicked.connect(self.unselect_all)
         self.download_button.clicked.connect(self.download_selected_cloudcasts)
@@ -78,6 +82,7 @@ class Widget(QWidget):
     def search_account(self):
         self.search_user_results_list.clear()
         phrase = self.search_user_input.text()
+
         url = search_user_API_url(phrase=phrase)
         response = get_mixcloud_API_data(url=url)
 
@@ -86,8 +91,6 @@ class Widget(QWidget):
             item = UserQListWidgetItem(user=user)
 
             self.search_user_results_list.addItem(item)
-
-        self.search_user_results_list.itemClicked.connect(self.get_cloudcasts)
 
     @Slot()
     def get_cloudcasts(self):
