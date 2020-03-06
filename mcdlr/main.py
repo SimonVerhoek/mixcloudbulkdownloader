@@ -1,6 +1,6 @@
 import sys
 from os.path import expanduser
-from typing import Callable
+from typing import Callable, Dict, Any
 
 from PySide2.QtCore import Qt, QTimer, Slot
 from PySide2.QtWidgets import (
@@ -41,8 +41,8 @@ class Widget(QWidget):
         # self.search_user_input = QLineEdit()
         self.search_user_input = QComboBox()
         self.search_user_input.setEditable(True)
-        self.suggestions = {}
-        self.selected_user = None
+        self.user_suggestions: Dict[str, MixcloudUser] = {}
+        self.selected_user: Any[MixcloudUser, None] = None
         self.get_cloudcasts_button = QPushButton('Get cloudcasts')
         search_user_layout.addWidget(self.search_user_input)
         search_user_layout.addWidget(self.get_cloudcasts_button)
@@ -62,7 +62,6 @@ class Widget(QWidget):
         cloudcast_action_buttons.addWidget(self.download_button)
 
         self.layout.addLayout(search_user_layout)
-        # self.layout.addLayout(search_user_result_layout)
         self.layout.addLayout(user_cloudcasts_layout)
         self.layout.addLayout(cloudcast_action_buttons)
 
@@ -80,13 +79,13 @@ class Widget(QWidget):
         self.download_button.clicked.connect(self.download_selected_cloudcasts)
 
     @Slot()
-    def set_selected_user(self):
+    def set_selected_user(self) -> None:
         selected_option = self.search_user_input.currentText()
         username = selected_option.split('(')[1].split(')')[0]
-        self.selected_user = self.suggestions[username]
+        self.selected_user = self.user_suggestions[username]
 
     @Slot()
-    def show_suggestions(self):
+    def show_suggestions(self) -> None:
         phrase = self.search_user_input.currentText()
 
         if phrase:
@@ -94,39 +93,35 @@ class Widget(QWidget):
             response = get_mixcloud_API_data(url=url)
 
             self.search_user_input.clear()
-            self.suggestions.clear()
+            self.user_suggestions.clear()
 
             for result in response['data']:
                 user = MixcloudUser(**result)
-                self.suggestions[user.username] = user
+                self.user_suggestions[user.username] = user
                 self.search_user_input.addItem(f'{user.name} ({user.username})')
 
     @Slot()
-    def get_cloudcasts(self):
+    def get_cloudcasts(self) -> None:
         self.user_cloudcasts_results.clear()
-        # username = self.search_user_results_list.currentItem().user.username
-
         self._query_cloudcasts(user=self.selected_user)
 
     @Slot()
-    def select_all(self):
+    def select_all(self) -> None:
         for i in range(self.user_cloudcasts_results.count()):
             self.user_cloudcasts_results.item(i).setCheckState(Qt.Checked)
 
     @Slot()
-    def unselect_all(self):
+    def unselect_all(self) -> None:
         for i in range(self.user_cloudcasts_results.count()):
             self.user_cloudcasts_results.item(i).setCheckState(Qt.Unchecked)
 
     @Slot()
-    def download_selected_cloudcasts(self):
+    def download_selected_cloudcasts(self) -> None:
         download_dir = self._get_download_dir()
-
         urls = [item.cloudcast.url for item in self._get_checked_cloudcast_items()]
-
         download_cloudcasts(urls=urls, download_dir=download_dir)
 
-    def _get_download_dir(self):
+    def _get_download_dir(self) -> QFileDialog:
         dialog = QFileDialog()
         dialog.setOption(QFileDialog.ShowDirsOnly)
         dialog.setOption(QFileDialog.DontResolveSymlinks)
