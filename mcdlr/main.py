@@ -2,19 +2,18 @@ import sys
 from os.path import expanduser
 from typing import Callable
 
-from PySide2.QtCore import Qt, QTimer, Slot, QStringListModel
+from PySide2.QtCore import Qt, QTimer, Slot
 from PySide2.QtWidgets import (
     QApplication,
+    QComboBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QListWidget,
     QMainWindow,
     QPushButton,
     QVBoxLayout,
     QWidget,
-    QCompleter
 )
 
 from .api import (
@@ -23,7 +22,7 @@ from .api import (
     search_user_API_url,
     user_cloudcasts_API_url,
 )
-from .custom_widgets import CloudcastQListWidgetItem, UserQListWidgetItem
+from .custom_widgets import CloudcastQListWidgetItem
 from .data_classes import Cloudcast, MixcloudUser
 
 
@@ -39,14 +38,14 @@ class Widget(QWidget):
         self.search_user_label = QLabel('Search account/artist:')
         search_user_layout.addWidget(self.search_user_label)
 
-        self.search_user_input = QLineEdit()
-        search_user_layout.addWidget(self.search_user_input)
-
-        search_user_result_layout = QHBoxLayout()
-        self.search_user_results_list = QListWidget()
+        # self.search_user_input = QLineEdit()
+        self.search_user_input = QComboBox()
+        self.search_user_input.setEditable(True)
+        self.suggestions = {}
+        self.selected_user = None
         self.get_cloudcasts_button = QPushButton('Get cloudcasts')
-        search_user_result_layout.addWidget(self.search_user_results_list)
-        search_user_result_layout.addWidget(self.get_cloudcasts_button)
+        search_user_layout.addWidget(self.search_user_input)
+        search_user_layout.addWidget(self.get_cloudcasts_button)
 
         user_cloudcasts_layout = QVBoxLayout()
         self.user_cloudcasts_results = QListWidget()
@@ -63,7 +62,7 @@ class Widget(QWidget):
         cloudcast_action_buttons.addWidget(self.download_button)
 
         self.layout.addLayout(search_user_layout)
-        self.layout.addLayout(search_user_result_layout)
+        # self.layout.addLayout(search_user_result_layout)
         self.layout.addLayout(user_cloudcasts_layout)
         self.layout.addLayout(cloudcast_action_buttons)
 
@@ -71,32 +70,43 @@ class Widget(QWidget):
 
         # connections
         self._connect_with_delay(
-            input=self.search_user_input.textChanged, slot=self.search_account
+            input=self.search_user_input.lineEdit().textEdited,
+            slot=self.show_suggestions,
         )
+        self.search_user_input.activated.connect(self.set_selected_user)
         self.get_cloudcasts_button.clicked.connect(self.get_cloudcasts)
         self.select_all_button.clicked.connect(self.select_all)
         self.unselect_all_button.clicked.connect(self.unselect_all)
         self.download_button.clicked.connect(self.download_selected_cloudcasts)
 
     @Slot()
-    def search_account(self):
-        self.search_user_results_list.clear()
-        phrase = self.search_user_input.text()
+    def set_selected_user(self):
+        selected_option = self.search_user_input.currentText()
+        username = selected_option.split('(')[1].split(')')[0]
+        self.selected_user = self.suggestions[username]
 
-        url = search_user_API_url(phrase=phrase)
-        response = get_mixcloud_API_data(url=url)
+    @Slot()
+    def show_suggestions(self):
+        phrase = self.search_user_input.currentText()
 
-        for result in response['data']:
-            user = MixcloudUser(**result)
-            item = UserQListWidgetItem(user=user)
+        if phrase:
+            url = search_user_API_url(phrase=phrase)
+            response = get_mixcloud_API_data(url=url)
 
-            self.search_user_results_list.addItem(item)
+            self.search_user_input.clear()
+            self.suggestions.clear()
+
+            for result in response['data']:
+                user = MixcloudUser(**result)
+                self.suggestions[user.username] = user
+                self.search_user_input.addItem(f'{user.name} ({user.username})')
 
     @Slot()
     def get_cloudcasts(self):
         self.user_cloudcasts_results.clear()
-        username = self.search_user_results_list.currentItem().user.username
-        self._query_cloudcasts(username=username)
+        # username = self.search_user_results_list.currentItem().user.username
+
+        self._query_cloudcasts(user=self.selected_user)
 
     @Slot()
     def select_all(self):
@@ -140,17 +150,15 @@ class Widget(QWidget):
         self.timer.timeout.connect(slot)
         input.connect(self.timer.start)
 
-    def _query_cloudcasts(self, username: str, url: str = ''):
+    def _query_cloudcasts(self, user: MixcloudUser, url: str = ''):
         if not url:
-            url = user_cloudcasts_API_url(username=username)
+            url = user_cloudcasts_API_url(username=user.username)
 
         response = get_mixcloud_API_data(url=url)
 
         for cloudcast in response['data']:
             cloudcast = Cloudcast(
-                name=cloudcast['name'],
-                url=cloudcast['url'],
-                user=self.search_user_results_list.currentItem().user,
+                name=cloudcast['name'], url=cloudcast['url'], user=user,
             )
             item = CloudcastQListWidgetItem(cloudcast=cloudcast)
 
@@ -159,7 +167,7 @@ class Widget(QWidget):
 
         if response.get('paging') and response['paging'].get('next'):
             next_url = response['paging'].get('next')
-            self._query_cloudcasts(username=username, url=next_url)
+            self._query_cloudcasts(user=user, url=next_url)
 
 
 class MainWindow(QMainWindow):
