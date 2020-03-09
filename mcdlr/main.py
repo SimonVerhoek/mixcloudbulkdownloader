@@ -1,6 +1,6 @@
 import sys
 from os.path import expanduser
-from typing import Callable, Dict, Any
+from typing import Any, Callable, Dict
 
 from PySide2.QtCore import Qt, QTimer, Slot
 from PySide2.QtWidgets import (
@@ -17,13 +17,13 @@ from PySide2.QtWidgets import (
 )
 
 from .api import (
-    download_cloudcasts,
     get_mixcloud_API_data,
     search_user_API_url,
     user_cloudcasts_API_url,
 )
 from .custom_widgets import CloudcastQListWidgetItem
 from .data_classes import Cloudcast, MixcloudUser
+from .threading import DownloadThread
 
 
 class Widget(QWidget):
@@ -119,7 +119,8 @@ class Widget(QWidget):
     def download_selected_cloudcasts(self) -> None:
         download_dir = self._get_download_dir()
         urls = [item.cloudcast.url for item in self._get_checked_cloudcast_items()]
-        download_cloudcasts(urls=urls, download_dir=download_dir)
+
+        DownloadThread(urls=urls, download_dir=download_dir).start()
 
     def _get_download_dir(self) -> QFileDialog:
         dialog = QFileDialog()
