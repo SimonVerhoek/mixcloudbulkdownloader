@@ -9,7 +9,6 @@ from PySide2.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QLabel,
-    QListWidget,
     QMainWindow,
     QPushButton,
     QVBoxLayout,
@@ -21,7 +20,7 @@ from .api import (
     search_user_API_url,
     user_cloudcasts_API_url,
 )
-from .custom_widgets import CloudcastQListWidgetItem
+from .custom_widgets import CloudcastQTree, CloudcastQTreeItem
 from .data_classes import Cloudcast, MixcloudUser
 from .threading import DownloadThread
 
@@ -48,7 +47,7 @@ class Widget(QWidget):
         search_user_layout.addWidget(self.get_cloudcasts_button)
 
         user_cloudcasts_layout = QVBoxLayout()
-        self.user_cloudcasts_results = QListWidget()
+        self.user_cloudcasts_results = CloudcastQTree()
         user_cloudcasts_layout.addWidget(self.user_cloudcasts_results)
 
         cloudcast_action_buttons = QHBoxLayout()
@@ -107,13 +106,17 @@ class Widget(QWidget):
 
     @Slot()
     def select_all(self) -> None:
-        for i in range(self.user_cloudcasts_results.count()):
-            self.user_cloudcasts_results.item(i).setCheckState(Qt.Checked)
+        root = self.user_cloudcasts_results.invisibleRootItem()
+        for i in range(root.childCount()):
+            item = root.child(i)
+            item.setCheckState(0, Qt.Checked)
 
     @Slot()
     def unselect_all(self) -> None:
-        for i in range(self.user_cloudcasts_results.count()):
-            self.user_cloudcasts_results.item(i).setCheckState(Qt.Unchecked)
+        root = self.user_cloudcasts_results.invisibleRootItem()
+        for i in range(root.childCount()):
+            item = root.child(i)
+            item.setCheckState(0, Qt.Unchecked)
 
     @Slot()
     def download_selected_cloudcasts(self) -> None:
@@ -133,9 +136,11 @@ class Widget(QWidget):
 
     def _get_checked_cloudcast_items(self):
         selected_cloudcasts = []
-        for i in range(self.user_cloudcasts_results.count()):
-            if self.user_cloudcasts_results.item(i).checkState() == Qt.Checked:
-                selected_cloudcasts.append(self.user_cloudcasts_results.item(i))
+        root = self.user_cloudcasts_results.invisibleRootItem()
+        for i in range(root.childCount()):
+            item = root.child(i)
+            if item.checkState(0) == Qt.Checked:
+                selected_cloudcasts.append(item)
         return selected_cloudcasts
 
     def _connect_with_delay(self, input: Callable, slot: Slot, delay_ms: int = 750):
@@ -156,10 +161,9 @@ class Widget(QWidget):
             cloudcast = Cloudcast(
                 name=cloudcast['name'], url=cloudcast['url'], user=user,
             )
-            item = CloudcastQListWidgetItem(cloudcast=cloudcast)
+            item = CloudcastQTreeItem(cloudcast=cloudcast)
 
-            item.setCheckState(Qt.Unchecked)
-            self.user_cloudcasts_results.addItem(item)
+            self.user_cloudcasts_results.addTopLevelItem(item)
 
         if response.get('paging') and response['paging'].get('next'):
             next_url = response['paging'].get('next')
