@@ -18,10 +18,9 @@ from PySide2.QtWidgets import (
 from .api import (
     get_mixcloud_API_data,
     search_user_API_url,
-    user_cloudcasts_API_url,
 )
-from .custom_widgets import CloudcastQTree, CloudcastQTreeItem
-from .data_classes import Cloudcast, MixcloudUser
+from .custom_widgets import CloudcastQTree
+from .data_classes import MixcloudUser
 from .threading import DownloadThread
 
 
@@ -72,9 +71,15 @@ class Widget(QWidget):
             slot=self.show_suggestions,
         )
         self.search_user_input.activated.connect(self.set_selected_user)
-        self.get_cloudcasts_button.clicked.connect(self.get_cloudcasts)
-        self.select_all_button.clicked.connect(self.select_all)
-        self.unselect_all_button.clicked.connect(self.unselect_all)
+        self.get_cloudcasts_button.clicked.connect(
+            lambda user: self.user_cloudcasts_results.get_cloudcasts(
+                user=self.selected_user
+            )
+        )
+        self.select_all_button.clicked.connect(self.user_cloudcasts_results.select_all)
+        self.unselect_all_button.clicked.connect(
+            self.user_cloudcasts_results.unselect_all
+        )
         self.download_button.clicked.connect(self.download_selected_cloudcasts)
 
     @Slot()
@@ -98,25 +103,6 @@ class Widget(QWidget):
                 user = MixcloudUser(**result)
                 self.user_suggestions[user.username] = user
                 self.search_user_input.addItem(f'{user.name} ({user.username})')
-
-    @Slot()
-    def get_cloudcasts(self) -> None:
-        self.user_cloudcasts_results.clear()
-        self._query_cloudcasts(user=self.selected_user)
-
-    @Slot()
-    def select_all(self) -> None:
-        root = self.user_cloudcasts_results.invisibleRootItem()
-        for i in range(root.childCount()):
-            item = root.child(i)
-            item.setCheckState(0, Qt.Checked)
-
-    @Slot()
-    def unselect_all(self) -> None:
-        root = self.user_cloudcasts_results.invisibleRootItem()
-        for i in range(root.childCount()):
-            item = root.child(i)
-            item.setCheckState(0, Qt.Unchecked)
 
     @Slot()
     def download_selected_cloudcasts(self) -> None:
@@ -150,24 +136,6 @@ class Widget(QWidget):
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(slot)
         input.connect(self.timer.start)
-
-    def _query_cloudcasts(self, user: MixcloudUser, url: str = ''):
-        if not url:
-            url = user_cloudcasts_API_url(username=user.username)
-
-        response = get_mixcloud_API_data(url=url)
-
-        for cloudcast in response['data']:
-            cloudcast = Cloudcast(
-                name=cloudcast['name'], url=cloudcast['url'], user=user,
-            )
-            item = CloudcastQTreeItem(cloudcast=cloudcast)
-
-            self.user_cloudcasts_results.addTopLevelItem(item)
-
-        if response.get('paging') and response['paging'].get('next'):
-            next_url = response['paging'].get('next')
-            self._query_cloudcasts(user=user, url=next_url)
 
 
 class MainWindow(QMainWindow):
