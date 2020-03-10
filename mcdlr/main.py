@@ -46,8 +46,8 @@ class Widget(QWidget):
         search_user_layout.addWidget(self.get_cloudcasts_button)
 
         user_cloudcasts_layout = QVBoxLayout()
-        self.user_cloudcasts_results = CloudcastQTree()
-        user_cloudcasts_layout.addWidget(self.user_cloudcasts_results)
+        self.cloudcasts = CloudcastQTree()
+        user_cloudcasts_layout.addWidget(self.cloudcasts)
 
         cloudcast_action_buttons = QHBoxLayout()
         self.select_all_button = QPushButton('Select All')
@@ -72,14 +72,10 @@ class Widget(QWidget):
         )
         self.search_user_input.activated.connect(self.set_selected_user)
         self.get_cloudcasts_button.clicked.connect(
-            lambda user: self.user_cloudcasts_results.get_cloudcasts(
-                user=self.selected_user
-            )
+            lambda user: self.cloudcasts.get_cloudcasts(user=self.selected_user)
         )
-        self.select_all_button.clicked.connect(self.user_cloudcasts_results.select_all)
-        self.unselect_all_button.clicked.connect(
-            self.user_cloudcasts_results.unselect_all
-        )
+        self.select_all_button.clicked.connect(self.cloudcasts.select_all)
+        self.unselect_all_button.clicked.connect(self.cloudcasts.unselect_all)
         self.download_button.clicked.connect(self.download_selected_cloudcasts)
 
     @Slot()
@@ -107,7 +103,9 @@ class Widget(QWidget):
     @Slot()
     def download_selected_cloudcasts(self) -> None:
         download_dir = self._get_download_dir()
-        urls = [item.cloudcast.url for item in self._get_checked_cloudcast_items()]
+        urls = [
+            item.cloudcast.url for item in self.cloudcasts.get_selected_cloudcasts()
+        ]
 
         DownloadThread(urls=urls, download_dir=download_dir).start()
 
@@ -119,15 +117,6 @@ class Widget(QWidget):
             self, 'Select download location', expanduser('~')
         )
         return download_dir
-
-    def _get_checked_cloudcast_items(self):
-        selected_cloudcasts = []
-        root = self.user_cloudcasts_results.invisibleRootItem()
-        for i in range(root.childCount()):
-            item = root.child(i)
-            if item.checkState(0) == Qt.Checked:
-                selected_cloudcasts.append(item)
-        return selected_cloudcasts
 
     def _connect_with_delay(self, input: Callable, slot: Slot, delay_ms: int = 750):
         """Connects a given input to a given Slot with a given delay."""

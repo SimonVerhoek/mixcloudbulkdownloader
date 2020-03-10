@@ -29,13 +29,16 @@ class CloudcastQTree(QTreeWidget):
 
         self.results: List[Cloudcast] = []
 
-    @Slot(MixcloudUser)
-    def get_cloudcasts(self, user: MixcloudUser) -> None:
-        self.clear()
-        self._query_cloudcasts(user=user)
-        for cloudcast in self.results:
-            item = CloudcastQTreeItem(cloudcast=cloudcast)
-            self.addTopLevelItem(item)
+    def _get_tree_items(self) -> List[QTreeWidgetItem]:
+        root = self.invisibleRootItem()
+        return [root.child(i) for i in range(root.childCount())]
+
+    def get_selected_cloudcasts(self) -> List[QTreeWidgetItem]:
+        selected_cloudcasts = []
+        for item in self._get_tree_items():
+            if item.checkState(0) == Qt.Checked:
+                selected_cloudcasts.append(item)
+        return selected_cloudcasts
 
     def _query_cloudcasts(self, user: MixcloudUser, url: str = ''):
         if not url:
@@ -54,18 +57,22 @@ class CloudcastQTree(QTreeWidget):
             next_url = response['paging'].get('next')
             self._query_cloudcasts(user=user, url=next_url)
 
+    @Slot(MixcloudUser)
+    def get_cloudcasts(self, user: MixcloudUser) -> None:
+        self.clear()
+        self._query_cloudcasts(user=user)
+        for cloudcast in self.results:
+            item = CloudcastQTreeItem(cloudcast=cloudcast)
+            self.addTopLevelItem(item)
+
     @Slot()
     def select_all(self) -> None:
-        root = self.invisibleRootItem()
-        for i in range(root.childCount()):
-            item = root.child(i)
+        for item in self._get_tree_items():
             item.setCheckState(0, Qt.Checked)
 
     @Slot()
     def unselect_all(self) -> None:
-        root = self.invisibleRootItem()
-        for i in range(root.childCount()):
-            item = root.child(i)
+        for item in self._get_tree_items():
             item.setCheckState(0, Qt.Unchecked)
 
 
