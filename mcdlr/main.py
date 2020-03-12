@@ -1,8 +1,7 @@
 import sys
 from os.path import expanduser
-from typing import Callable
 
-from PySide2.QtCore import Qt, QTimer, Slot
+from PySide2.QtCore import Qt, Slot
 from PySide2.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -56,13 +55,6 @@ class Widget(QWidget):
         self.setLayout(self.layout)
 
         # connections
-        self._connect_with_delay(
-            input=self.search_user_input.lineEdit().textEdited,
-            slot=self.search_user_input.show_suggestions,
-        )
-        self.search_user_input.activated.connect(
-            self.search_user_input.set_selected_user
-        )
         self.get_cloudcasts_button.clicked.connect(
             lambda user: self.cloudcasts.get_cloudcasts(
                 user=self.search_user_input.selected_result
@@ -89,14 +81,6 @@ class Widget(QWidget):
             self, 'Select download location', expanduser('~')
         )
         return download_dir
-
-    def _connect_with_delay(self, input: Callable, slot: Slot, delay_ms: int = 750):
-        """Connects a given input to a given Slot with a given delay."""
-        self.timer = QTimer()
-        self.timer.setInterval(delay_ms)
-        self.timer.setSingleShot(True)
-        self.timer.timeout.connect(slot)
-        input.connect(self.timer.start)
 
 
 class MainWindow(QMainWindow):

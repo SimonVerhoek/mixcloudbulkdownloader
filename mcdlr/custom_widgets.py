@@ -1,6 +1,6 @@
-from typing import Any, Dict, List
+from typing import Callable, Dict, List, Optional
 
-from PySide2.QtCore import Qt, Slot
+from PySide2.QtCore import Qt, QTimer, Slot
 from PySide2.QtWidgets import QComboBox, QListWidgetItem, QTreeWidget, QTreeWidgetItem
 
 from .api import get_mixcloud_API_data, search_user_API_url, user_cloudcasts_API_url
@@ -88,7 +88,20 @@ class SearchUserComboBox(QComboBox):
 
         self.setEditable(True)
         self.results: Dict[str, MixcloudUser] = {}
-        self.selected_result: Any[MixcloudUser, None] = None
+        self.selected_result: Optional[MixcloudUser] = None
+
+        self._connect_with_delay(
+            input=self.lineEdit().textEdited, slot=self.show_suggestions,
+        )
+        self.activated.connect(self.set_selected_user)
+
+    def _connect_with_delay(self, input: Callable, slot: Slot, delay_ms: int = 750):
+        """Connects a given input to a given Slot with a given delay."""
+        self.timer = QTimer()
+        self.timer.setInterval(delay_ms)
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(slot)
+        input.connect(self.timer.start)
 
     @Slot()
     def show_suggestions(self) -> None:
