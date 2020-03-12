@@ -1,10 +1,8 @@
 import sys
-from os.path import expanduser
 
-from PySide2.QtCore import Qt, Slot
+from PySide2.QtCore import Qt
 from PySide2.QtWidgets import (
     QApplication,
-    QFileDialog,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -14,7 +12,6 @@ from PySide2.QtWidgets import (
 )
 
 from .custom_widgets import CloudcastQTreeWidget, SearchUserQComboBox
-from .threading import DownloadThread
 
 
 class Widget(QWidget):
@@ -62,25 +59,9 @@ class Widget(QWidget):
         )
         self.select_all_button.clicked.connect(self.cloudcasts.select_all)
         self.unselect_all_button.clicked.connect(self.cloudcasts.unselect_all)
-        self.download_button.clicked.connect(self.download_selected_cloudcasts)
-
-    @Slot()
-    def download_selected_cloudcasts(self) -> None:
-        download_dir = self._get_download_dir()
-        urls = [
-            item.cloudcast.url for item in self.cloudcasts.get_selected_cloudcasts()
-        ]
-
-        DownloadThread(urls=urls, download_dir=download_dir).start()
-
-    def _get_download_dir(self) -> QFileDialog:
-        dialog = QFileDialog()
-        dialog.setOption(QFileDialog.ShowDirsOnly)
-        dialog.setOption(QFileDialog.DontResolveSymlinks)
-        download_dir = dialog.getExistingDirectory(
-            self, 'Select download location', expanduser('~')
+        self.download_button.clicked.connect(
+            self.cloudcasts.download_selected_cloudcasts
         )
-        return download_dir
 
 
 class MainWindow(QMainWindow):
