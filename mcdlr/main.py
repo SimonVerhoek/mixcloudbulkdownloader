@@ -13,7 +13,7 @@ from PySide2.QtWidgets import (
     QWidget,
 )
 
-from .custom_widgets import CloudcastQTree, SearchUserComboBox
+from .custom_widgets import CloudcastQTreeWidget, SearchUserQComboBox
 from .threading import DownloadThread
 
 
@@ -29,13 +29,13 @@ class Widget(QWidget):
         self.search_user_label = QLabel('Search account/artist:')
         search_user_layout.addWidget(self.search_user_label)
 
-        self.search_user_input = SearchUserComboBox()
+        self.search_user_input = SearchUserQComboBox()
         self.get_cloudcasts_button = QPushButton('Get cloudcasts')
         search_user_layout.addWidget(self.search_user_input)
         search_user_layout.addWidget(self.get_cloudcasts_button)
 
         user_cloudcasts_layout = QVBoxLayout()
-        self.cloudcasts = CloudcastQTree()
+        self.cloudcasts = CloudcastQTreeWidget()
         user_cloudcasts_layout.addWidget(self.cloudcasts)
 
         cloudcast_action_buttons = QHBoxLayout()
