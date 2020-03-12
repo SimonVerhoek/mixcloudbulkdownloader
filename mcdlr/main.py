@@ -1,11 +1,10 @@
 import sys
 from os.path import expanduser
-from typing import Any, Callable, Dict
+from typing import Callable
 
 from PySide2.QtCore import Qt, QTimer, Slot
 from PySide2.QtWidgets import (
     QApplication,
-    QComboBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -15,12 +14,7 @@ from PySide2.QtWidgets import (
     QWidget,
 )
 
-from .api import (
-    get_mixcloud_API_data,
-    search_user_API_url,
-)
-from .custom_widgets import CloudcastQTree
-from .data_classes import MixcloudUser
+from .custom_widgets import CloudcastQTree, SearchUserComboBox
 from .threading import DownloadThread
 
 
@@ -36,11 +30,7 @@ class Widget(QWidget):
         self.search_user_label = QLabel('Search account/artist:')
         search_user_layout.addWidget(self.search_user_label)
 
-        # self.search_user_input = QLineEdit()
-        self.search_user_input = QComboBox()
-        self.search_user_input.setEditable(True)
-        self.user_suggestions: Dict[str, MixcloudUser] = {}
-        self.selected_user: Any[MixcloudUser, None] = None
+        self.search_user_input = SearchUserComboBox()
         self.get_cloudcasts_button = QPushButton('Get cloudcasts')
         search_user_layout.addWidget(self.search_user_input)
         search_user_layout.addWidget(self.get_cloudcasts_button)
@@ -68,37 +58,19 @@ class Widget(QWidget):
         # connections
         self._connect_with_delay(
             input=self.search_user_input.lineEdit().textEdited,
-            slot=self.show_suggestions,
+            slot=self.search_user_input.show_suggestions,
         )
-        self.search_user_input.activated.connect(self.set_selected_user)
+        self.search_user_input.activated.connect(
+            self.search_user_input.set_selected_user
+        )
         self.get_cloudcasts_button.clicked.connect(
-            lambda user: self.cloudcasts.get_cloudcasts(user=self.selected_user)
+            lambda user: self.cloudcasts.get_cloudcasts(
+                user=self.search_user_input.selected_result
+            )
         )
         self.select_all_button.clicked.connect(self.cloudcasts.select_all)
         self.unselect_all_button.clicked.connect(self.cloudcasts.unselect_all)
         self.download_button.clicked.connect(self.download_selected_cloudcasts)
-
-    @Slot()
-    def set_selected_user(self) -> None:
-        selected_option = self.search_user_input.currentText()
-        username = selected_option.split('(')[1].split(')')[0]
-        self.selected_user = self.user_suggestions[username]
-
-    @Slot()
-    def show_suggestions(self) -> None:
-        phrase = self.search_user_input.currentText()
-
-        if phrase:
-            url = search_user_API_url(phrase=phrase)
-            response = get_mixcloud_API_data(url=url)
-
-            self.search_user_input.clear()
-            self.user_suggestions.clear()
-
-            for result in response['data']:
-                user = MixcloudUser(**result)
-                self.user_suggestions[user.username] = user
-                self.search_user_input.addItem(f'{user.name} ({user.username})')
 
     @Slot()
     def download_selected_cloudcasts(self) -> None:

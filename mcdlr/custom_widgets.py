@@ -1,12 +1,9 @@
-from typing import List
+from typing import Any, Dict, List
 
 from PySide2.QtCore import Qt, Slot
-from PySide2.QtWidgets import QListWidgetItem, QTreeWidget, QTreeWidgetItem
+from PySide2.QtWidgets import QComboBox, QListWidgetItem, QTreeWidget, QTreeWidgetItem
 
-from .api import (
-    get_mixcloud_API_data,
-    user_cloudcasts_API_url,
-)
+from .api import get_mixcloud_API_data, search_user_API_url, user_cloudcasts_API_url
 from .data_classes import Cloudcast, MixcloudUser
 
 
@@ -83,3 +80,34 @@ class CloudcastQTreeItem(QTreeWidgetItem):
         self.cloudcast = cloudcast
         self.setCheckState(0, Qt.Unchecked)
         self.setText(1, cloudcast.name)
+
+
+class SearchUserComboBox(QComboBox):
+    def __init__(self):
+        super().__init__()
+
+        self.setEditable(True)
+        self.results: Dict[str, MixcloudUser] = {}
+        self.selected_result: Any[MixcloudUser, None] = None
+
+    @Slot()
+    def show_suggestions(self) -> None:
+        phrase = self.currentText()
+
+        if phrase:
+            url = search_user_API_url(phrase=phrase)
+            response = get_mixcloud_API_data(url=url)
+
+            self.clear()
+            self.results.clear()
+
+            for result in response['data']:
+                user = MixcloudUser(**result)
+                self.results[user.username] = user
+                self.addItem(f'{user.name} ({user.username})')
+
+    @Slot()
+    def set_selected_user(self) -> None:
+        selected_option = self.currentText()
+        username = selected_option.split('(')[1].split(')')[0]
+        self.selected_result = self.results[username]
