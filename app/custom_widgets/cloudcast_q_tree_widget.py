@@ -7,7 +7,7 @@ from PySide2.QtWidgets import QFileDialog, QTreeWidget, QTreeWidgetItem
 from .cloudcast_q_tree_widget_item import CloudcastQTreeWidgetItem
 from ..api import get_mixcloud_API_data, user_cloudcasts_API_url
 from ..data_classes import Cloudcast, MixcloudUser
-from ..threading import DownloadThread
+from ..threads import DownloadThread
 
 
 class CloudcastQTreeWidget(QTreeWidget):

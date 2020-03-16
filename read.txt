@@ -1,5 +1,0 @@
-https://github.com/ytdl-org/youtube-dl/blob/master/README.md#readme
-
-https://www.reddit.com/r/DataHoarder/comments/ddtbee/python_script_for_grabbing_all_shows_from_a/
-
-use -a to download all URLs from file
