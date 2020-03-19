@@ -1,0 +1,32 @@
+FROM python:3.8
+
+WORKDIR app
+
+COPY ./requirements.txt /app
+COPY ./app /app
+
+RUN apt-get update && apt-get install -y \
+    bash \
+    qtbase5-dev-tools \
+    xvfb \
+    libegl1-mesa \
+    x11-xserver-utils \
+    libxkbcommon-x11-0 \
+    x11-utils \
+    && pip3 install --upgrade pip setuptools \
+    && pip3 install --no-cache-dir -r requirements.txt \
+    && rm -r /root/.cache
+
+# setup virtual display
+ENV DISPLAY=docker.for.mac.host.internal:0
+
+# turn this on for verbose qt feedback
+ENV QT_DEBUG_PLUGINS=1
+#ENV QT_VERBOSE true
+#ENV QT_TESTING true
+
+RUN adduser --disabled-login testuser
+USER testuser
+
+CMD tail -f /dev/null
+#CMD python -m app.main

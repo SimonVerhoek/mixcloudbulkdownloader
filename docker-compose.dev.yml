@@ -1,0 +1,11 @@
+version: '3.7'
+
+services:
+  app:
+    container_name: MBDLR
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+      - /tmp/.X11-unix:/tmp/.X11-unix
