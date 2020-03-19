@@ -1,4 +1,4 @@
-FROM python:3.8
+FROM python:3.8-slim
 
 WORKDIR app
 
@@ -7,6 +7,7 @@ COPY ./app /app
 
 RUN apt-get update && apt-get install -y \
     bash \
+    libgssapi-krb5-2 \
     qtbase5-dev-tools \
     xvfb \
     libegl1-mesa \
