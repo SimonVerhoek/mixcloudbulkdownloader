@@ -1,9 +1,16 @@
 .idea
 .DS_Store
 
+# caching
 *.pyc
 **/__pycache__
 
+# (test) data files
 mc_list_*
 *.csv
 *.sqlite3
+
+# build & dist files
+build
+dist
+main.spec

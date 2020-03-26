@@ -11,7 +11,7 @@ from PySide2.QtWidgets import (
     QWidget,
 )
 
-from .custom_widgets import CloudcastQTreeWidget, SearchUserQComboBox
+from app.custom_widgets import CloudcastQTreeWidget, SearchUserQComboBox
 
 
 class Widget(QWidget):

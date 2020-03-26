@@ -8,6 +8,7 @@ COPY ./app /app
 RUN apt-get update && apt-get install -y \
     bash \
     libgssapi-krb5-2 \
+    binutils \
     qtbase5-dev-tools \
     xvfb \
     libegl1-mesa \
