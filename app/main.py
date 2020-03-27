@@ -14,20 +14,21 @@ from PySide2.QtWidgets import (
 from app.custom_widgets import CloudcastQTreeWidget, SearchUserQComboBox
 
 
-class Widget(QWidget):
+class CentralWidget(QWidget):
     def __init__(self):
         QWidget.__init__(self)
 
         self.layout = QVBoxLayout()
 
+        # search user layout
         search_user_layout = QHBoxLayout()
         search_user_layout.setAlignment(Qt.AlignTop)
 
         self.search_user_label = QLabel('Search account:')
-        search_user_layout.addWidget(self.search_user_label)
-
         self.search_user_input = SearchUserQComboBox()
         self.get_cloudcasts_button = QPushButton('Get cloudcasts')
+
+        search_user_layout.addWidget(self.search_user_label)
         search_user_layout.addWidget(self.search_user_input)
         search_user_layout.addWidget(self.get_cloudcasts_button)
 
@@ -35,10 +36,12 @@ class Widget(QWidget):
         search_user_layout.setStretch(1, 3)
         search_user_layout.setStretch(2, 1)
 
+        # user cloudcasts layout
         user_cloudcasts_layout = QVBoxLayout()
         self.cloudcasts = CloudcastQTreeWidget()
         user_cloudcasts_layout.addWidget(self.cloudcasts)
 
+        # cloudcast action buttons layout
         cloudcast_action_buttons = QHBoxLayout()
         self.select_all_button = QPushButton('Select All')
         self.unselect_all_button = QPushButton('Unselect All')
@@ -72,7 +75,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         QMainWindow.__init__(self)
 
-        widget = Widget()
+        widget = CentralWidget()
 
         self.setWindowTitle('MCDLR')
         self.setMinimumSize(600, 400)
