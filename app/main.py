@@ -23,13 +23,17 @@ class Widget(QWidget):
         search_user_layout = QHBoxLayout()
         search_user_layout.setAlignment(Qt.AlignTop)
 
-        self.search_user_label = QLabel('Search account/artist:')
+        self.search_user_label = QLabel('Search account:')
         search_user_layout.addWidget(self.search_user_label)
 
         self.search_user_input = SearchUserQComboBox()
         self.get_cloudcasts_button = QPushButton('Get cloudcasts')
         search_user_layout.addWidget(self.search_user_input)
         search_user_layout.addWidget(self.get_cloudcasts_button)
+
+        search_user_layout.setStretch(0, 1)
+        search_user_layout.setStretch(1, 3)
+        search_user_layout.setStretch(2, 1)
 
         user_cloudcasts_layout = QVBoxLayout()
         self.cloudcasts = CloudcastQTreeWidget()
