@@ -11,3 +11,6 @@ class CloudcastQTreeWidgetItem(QTreeWidgetItem):
         self.cloudcast = cloudcast
         self.setCheckState(0, Qt.Unchecked)
         self.setText(1, cloudcast.name)
+
+    def update_download_progress(self, progress: str):
+        self.setText(2, progress)

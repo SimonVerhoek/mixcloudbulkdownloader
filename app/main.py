@@ -78,7 +78,7 @@ class MainWindow(QMainWindow):
         widget = CentralWidget()
 
         self.setWindowTitle('MCDLR')
-        self.setMinimumSize(600, 400)
+        self.setMinimumSize(700, 400)
 
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu('File')

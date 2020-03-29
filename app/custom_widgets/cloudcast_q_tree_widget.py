@@ -18,6 +18,7 @@ class CloudcastQTreeWidget(QTreeWidget):
         self.setHeaderLabels(['select', 'title', 'download status'])
         self.header().resizeSection(0, 50)
         self.header().resizeSection(1, 400)
+        self.header().resizeSection(2, 200)
         self.setHeaderHidden(True)
 
         self.results: List[Cloudcast] = []
@@ -80,6 +81,6 @@ class CloudcastQTreeWidget(QTreeWidget):
     @Slot()
     def download_selected_cloudcasts(self) -> None:
         download_dir = self._get_download_dir()
-        urls = [item.cloudcast.url for item in self.get_selected_cloudcasts()]
 
-        DownloadThread(urls=urls, download_dir=download_dir).start()
+        for item in self.get_selected_cloudcasts():
+            DownloadThread(item=item, download_dir=download_dir).start()
