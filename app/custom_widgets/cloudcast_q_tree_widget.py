@@ -4,10 +4,8 @@ from typing import List
 from PySide2.QtCore import Qt, Slot
 from PySide2.QtWidgets import QFileDialog, QTreeWidget, QTreeWidgetItem
 
-from .cloudcast_q_tree_widget_item import CloudcastQTreeWidgetItem
-from ..api import get_mixcloud_API_data, user_cloudcasts_API_url
 from ..data_classes import Cloudcast, MixcloudUser
-from ..threads import DownloadThread
+from ..threads import DownloadThread, GetCloudcastsThread
 
 
 class CloudcastQTreeWidget(QTreeWidget):
@@ -36,23 +34,6 @@ class CloudcastQTreeWidget(QTreeWidget):
         root = self.invisibleRootItem()
         return [root.child(i) for i in range(root.childCount())]
 
-    def _query_cloudcasts(self, user: MixcloudUser, url: str = ''):
-        if not url:
-            url = user_cloudcasts_API_url(username=user.username)
-
-        self.results.clear()
-        response = get_mixcloud_API_data(url=url)
-
-        for cloudcast in response['data']:
-            cloudcast = Cloudcast(
-                name=cloudcast['name'], url=cloudcast['url'], user=user,
-            )
-            self.results.append(cloudcast)
-
-        if response.get('paging') and response['paging'].get('next'):
-            next_url = response['paging'].get('next')
-            self._query_cloudcasts(user=user, url=next_url)
-
     def get_selected_cloudcasts(self) -> List[QTreeWidgetItem]:
         selected_cloudcasts = []
         for item in self._get_tree_items():
@@ -63,10 +44,7 @@ class CloudcastQTreeWidget(QTreeWidget):
     @Slot(MixcloudUser)
     def get_cloudcasts(self, user: MixcloudUser) -> None:
         self.clear()
-        self._query_cloudcasts(user=user)
-        for cloudcast in self.results:
-            item = CloudcastQTreeWidgetItem(cloudcast=cloudcast)
-            self.addTopLevelItem(item)
+        GetCloudcastsThread(cloudcasts_list=self, user=user).start()
 
     @Slot()
     def select_all(self) -> None:
