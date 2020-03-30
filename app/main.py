@@ -77,7 +77,7 @@ class MainWindow(QMainWindow):
 
         widget = CentralWidget()
 
-        self.setWindowTitle('MCDLR')
+        self.setWindowTitle('Mixcloud Bulk Downloader')
         self.setMinimumSize(700, 400)
 
         menu_bar = self.menuBar()
