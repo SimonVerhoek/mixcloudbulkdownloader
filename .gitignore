@@ -6,7 +6,8 @@
 **/__pycache__
 
 # logging
-error.log
+logs
+*.log
 
 # (test) data files
 mc_list_*

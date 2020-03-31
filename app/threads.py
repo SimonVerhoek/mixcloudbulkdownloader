@@ -69,7 +69,7 @@ class GetCloudcastsThread(QThread):
                 self._query_cloudcasts(user=user, url=next_url)
 
     def run(self) -> None:
-        print('get_cloudcasts_thread started')
+        logger.debug('get_cloudcasts_thread started')
         while not self.isInterruptionRequested():
             if not self.user:
                 error_msg = 'no user provided'
@@ -80,6 +80,6 @@ class GetCloudcastsThread(QThread):
             return
 
     def stop(self):
-        print("Thread Stopped")
+        logger.debug("Thread Stopped")
         self.requestInterruption()
         self.wait()
