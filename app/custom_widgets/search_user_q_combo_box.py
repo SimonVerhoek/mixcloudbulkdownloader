@@ -5,6 +5,7 @@ from PySide2.QtWidgets import QComboBox
 
 from ..api import get_mixcloud_API_data, search_user_API_url
 from ..data_classes import MixcloudUser
+from ..custom_widgets.error_dialog import ErrorDialog
 
 
 class SearchUserQComboBox(QComboBox):
@@ -33,16 +34,18 @@ class SearchUserQComboBox(QComboBox):
         phrase = self.currentText()
 
         if phrase:
-            url = search_user_API_url(phrase=phrase)
-            response = get_mixcloud_API_data(url=url)
-
             self.clear()
             self.results.clear()
 
-            for result in response['data']:
-                user = MixcloudUser(**result)
-                self.results[user.username] = user
-                self.addItem(f'{user.name} ({user.username})')
+            url = search_user_API_url(phrase=phrase)
+            response, error = get_mixcloud_API_data(url=url)
+            if error:
+                ErrorDialog(parent=self.parent(), message=error)
+            else:
+                for result in response['data']:
+                    user = MixcloudUser(**result)
+                    self.results[user.username] = user
+                    self.addItem(f'{user.name} ({user.username})')
 
     @Slot()
     def set_selected_user(self) -> None:

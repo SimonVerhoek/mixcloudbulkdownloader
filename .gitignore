@@ -5,6 +5,9 @@
 *.pyc
 **/__pycache__
 
+# logging
+error.log
+
 # (test) data files
 mc_list_*
 *.csv

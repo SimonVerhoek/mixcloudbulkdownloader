@@ -4,6 +4,7 @@ from typing import List
 from PySide2.QtCore import Qt, Slot
 from PySide2.QtWidgets import QFileDialog, QTreeWidget, QTreeWidgetItem
 
+from ..custom_widgets.error_dialog import ErrorDialog
 from ..data_classes import Cloudcast, MixcloudUser
 from ..threads import DownloadThread, GetCloudcastsThread
 
@@ -20,6 +21,9 @@ class CloudcastQTreeWidget(QTreeWidget):
         self.setHeaderHidden(True)
 
         self.results: List[Cloudcast] = []
+
+        self.get_cloudcasts_thread = GetCloudcastsThread(cloudcasts_list=self)
+        self.get_cloudcasts_thread.error_signal.connect(self.show_error)
 
     def _get_download_dir(self) -> QFileDialog:
         dialog = QFileDialog()
@@ -44,7 +48,12 @@ class CloudcastQTreeWidget(QTreeWidget):
     @Slot(MixcloudUser)
     def get_cloudcasts(self, user: MixcloudUser) -> None:
         self.clear()
-        GetCloudcastsThread(cloudcasts_list=self, user=user).start()
+        self.get_cloudcasts_thread.user = user
+        self.get_cloudcasts_thread.start()
+
+    @Slot()
+    def show_error(self, msg: str):
+        ErrorDialog(self.parent(), message=msg)
 
     @Slot()
     def select_all(self) -> None:
