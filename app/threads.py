@@ -4,7 +4,7 @@ from PySide2.QtCore import QThread, Signal
 from PySide2.QtWidgets import QTreeWidget
 from youtube_dl import YoutubeDL
 
-from .api import get_mixcloud_API_data, user_cloudcasts_API_url
+from .api import get_mixcloud_API_data, search_user_API_url, user_cloudcasts_API_url
 from .custom_widgets.cloudcast_q_tree_widget_item import CloudcastQTreeWidgetItem
 from .data_classes import Cloudcast, MixcloudUser
 from .logging import logging
@@ -81,5 +81,39 @@ class GetCloudcastsThread(QThread):
 
     def stop(self):
         logger.debug("Thread Stopped")
+        self.requestInterruption()
+        self.wait()
+
+
+class SearchArtistThread(QThread):
+    error_signal = Signal(object)
+    new_result = Signal(MixcloudUser)
+
+    phrase: str = ''
+
+    def show_suggestions(self, phrase: str) -> None:
+        url = search_user_API_url(phrase=phrase)
+        response, error = get_mixcloud_API_data(url=url)
+        if error:
+            self.error_signal.emit(error)
+            self.stop()
+        else:
+            for i, result in enumerate(response['data']):
+                user = MixcloudUser(**result)
+                self.new_result.emit(user)
+
+    def run(self) -> None:
+        logger.debug('thread started')
+        while not self.isInterruptionRequested():
+            if not self.phrase:
+                error_msg = 'no search phrase provided'
+                logger.error(error_msg)
+                self.error_signal.emit(error_msg)
+
+            self.show_suggestions(phrase=self.phrase)
+            return
+
+    def stop(self):
+        logger.debug("thread Stopped")
         self.requestInterruption()
         self.wait()
