@@ -1,11 +1,9 @@
 import threading
 
 from PySide2.QtCore import QThread, Signal
-from PySide2.QtWidgets import QTreeWidget
 from youtube_dl import YoutubeDL
 
 from .api import get_mixcloud_API_data, search_user_API_url, user_cloudcasts_API_url
-from .custom_widgets.cloudcast_q_tree_widget_item import CloudcastQTreeWidgetItem
 from .data_classes import Cloudcast, MixcloudUser
 from .logging import logging
 
@@ -42,11 +40,10 @@ class DownloadThread(threading.Thread):
 
 class GetCloudcastsThread(QThread):
     error_signal = Signal(object)
+    interrupt_signal = Signal()
+    new_result = Signal(Cloudcast)
 
-    def __init__(self, cloudcasts_list: QTreeWidget):
-        super().__init__()
-
-        self.cloudcasts_list = cloudcasts_list
+    user: MixcloudUser = None
 
     def _query_cloudcasts(self, user: MixcloudUser, url: str = ''):
         if not url:
@@ -56,32 +53,34 @@ class GetCloudcastsThread(QThread):
         if error:
             self.error_signal.emit(error)
             self.stop()
-        else:
+            return
+
+        while not self.isInterruptionRequested():
             for cloudcast in response['data']:
                 cloudcast = Cloudcast(
                     name=cloudcast['name'], url=cloudcast['url'], user=user,
                 )
-                item = CloudcastQTreeWidgetItem(cloudcast=cloudcast)
-                self.cloudcasts_list.addTopLevelItem(item)
+                self.new_result.emit(cloudcast)
 
             if response.get('paging') and response['paging'].get('next'):
                 next_url = response['paging'].get('next')
                 self._query_cloudcasts(user=user, url=next_url)
+            return
 
     def run(self) -> None:
         logger.debug('get_cloudcasts_thread started')
-        while not self.isInterruptionRequested():
-            if not self.user:
-                error_msg = 'no user provided'
-                logger.error(error_msg)
-                self.error_signal.emit(error_msg)
+        if not self.user:
+            error_msg = 'no user provided'
+            logger.error(error_msg)
+            self.error_signal.emit(error_msg)
 
-            self._query_cloudcasts(user=self.user)
-            return
+        self._query_cloudcasts(user=self.user)
+        return
 
     def stop(self):
         logger.debug("Thread Stopped")
         self.requestInterruption()
+        self.interrupt_signal.emit()
         self.wait()
 
 

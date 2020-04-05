@@ -5,6 +5,7 @@ from PySide2.QtCore import Qt, Slot
 from PySide2.QtWidgets import QFileDialog, QTreeWidget, QTreeWidgetItem
 
 from ..custom_widgets.error_dialog import ErrorDialog
+from ..custom_widgets.cloudcast_q_tree_widget_item import CloudcastQTreeWidgetItem
 from ..data_classes import Cloudcast, MixcloudUser
 from ..threads import DownloadThread, GetCloudcastsThread
 
@@ -22,8 +23,10 @@ class CloudcastQTreeWidget(QTreeWidget):
 
         self.results: List[Cloudcast] = []
 
-        self.get_cloudcasts_thread = GetCloudcastsThread(cloudcasts_list=self)
+        self.get_cloudcasts_thread = GetCloudcastsThread()
         self.get_cloudcasts_thread.error_signal.connect(self.show_error)
+        self.get_cloudcasts_thread.new_result.connect(self.add_result)
+        self.get_cloudcasts_thread.interrupt_signal.connect(self.clear)
 
     def _get_download_dir(self) -> QFileDialog:
         dialog = QFileDialog()
@@ -47,8 +50,11 @@ class CloudcastQTreeWidget(QTreeWidget):
 
     @Slot(MixcloudUser)
     def get_cloudcasts(self, user: MixcloudUser) -> None:
-        self.clear()
         self.get_cloudcasts_thread.user = user
+        self.clear()
+
+        if self.get_cloudcasts_thread.isRunning():
+            self.get_cloudcasts_thread.stop()
         self.get_cloudcasts_thread.start()
 
     @Slot()
@@ -71,3 +77,8 @@ class CloudcastQTreeWidget(QTreeWidget):
 
         for item in self.get_selected_cloudcasts():
             DownloadThread(item=item, download_dir=download_dir).start()
+
+    @Slot()
+    def add_result(self, item: Cloudcast):
+        item = CloudcastQTreeWidgetItem(cloudcast=item)
+        self.addTopLevelItem(item)
