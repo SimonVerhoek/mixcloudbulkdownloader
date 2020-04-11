@@ -17,4 +17,3 @@ mc_list_*
 # build & dist files
 build
 dist
-main.spec

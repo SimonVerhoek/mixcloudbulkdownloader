@@ -41,10 +41,28 @@ application per platform.
 1. Make sure you have `PyInstaller` installed
 2. From the project's root directory, run the following command: 
 ```shell script
-$ pyinstaller --windowed --onefile app/main.py
+$ pyinstaller --windowed --onefile --clean -y app.spec
 ```
 
 The Linux version can also be built inside a Docker container.
 
+#### MacOS DMG packaging
+For packaging a .app into a DMG, [Create-DMG](https://github.com/sindresorhus/create-dmg)
+is used. 
+1. Follow the instructions to install `create-dmg`.
+2. Then, run the following command:
+```shell script
+$ create-dmg dist/Mixcloud\ Bulk\ Downloader.app
+``` 
+With * being the app's name.
+
 ### Windows
 TBD
+
+
+---
+
+
+
+
+
