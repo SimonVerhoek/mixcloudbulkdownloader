@@ -5,10 +5,10 @@ from youtube_dl import YoutubeDL
 
 from .api import get_mixcloud_API_data, search_user_API_url, user_cloudcasts_API_url
 from .data_classes import Cloudcast, MixcloudUser
-from .logging import logging
+# from .logging import logging
 
 
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
 
 class DownloadThread(threading.Thread):
@@ -68,17 +68,17 @@ class GetCloudcastsThread(QThread):
             return
 
     def run(self) -> None:
-        logger.debug('get_cloudcasts_thread started')
+        # logger.debug('get_cloudcasts_thread started')
         if not self.user:
             error_msg = 'no user provided'
-            logger.error(error_msg)
+            # logger.error(error_msg)
             self.error_signal.emit(error_msg)
 
         self._query_cloudcasts(user=self.user)
         return
 
     def stop(self):
-        logger.debug("Thread Stopped")
+        # logger.debug("Thread Stopped")
         self.requestInterruption()
         self.interrupt_signal.emit()
         self.wait()
@@ -102,17 +102,17 @@ class SearchArtistThread(QThread):
                 self.new_result.emit(user)
 
     def run(self) -> None:
-        logger.debug('thread started')
+        # logger.debug('thread started')
         while not self.isInterruptionRequested():
             if not self.phrase:
                 error_msg = 'no search phrase provided'
-                logger.error(error_msg)
+                # logger.error(error_msg)
                 self.error_signal.emit(error_msg)
 
             self.show_suggestions(phrase=self.phrase)
             return
 
     def stop(self):
-        logger.debug("thread Stopped")
+        # logger.debug("thread Stopped")
         self.requestInterruption()
         self.wait()

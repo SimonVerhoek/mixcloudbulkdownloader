@@ -12,10 +12,10 @@ from PySide2.QtWidgets import (
 )
 
 from app.custom_widgets import CloudcastQTreeWidget, SearchUserQComboBox
-from app.logging import logging
+# from app.logging import logging
 
 
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
 
 class CentralWidget(QWidget):
