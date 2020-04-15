@@ -54,7 +54,6 @@ is used.
 ```shell script
 $ create-dmg dist/Mixcloud\ Bulk\ Downloader.app
 ``` 
-With * being the app's name.
 
 ### Windows
 TBD
