@@ -17,3 +17,6 @@ mc_list_*
 # build & dist files
 build
 dist
+
+# packaged apps
+*.dmg
