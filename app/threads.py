@@ -1,41 +1,63 @@
-import threading
+from typing import List
 
 from PySide2.QtCore import QThread, Signal
 from youtube_dl import YoutubeDL
 
 from .api import get_mixcloud_API_data, search_user_API_url, user_cloudcasts_API_url
 from .data_classes import Cloudcast, MixcloudUser
+
+
 # from .logging import logging
 
 
 # logger = logging.getLogger(__name__)
 
 
-class DownloadThread(threading.Thread):
-    def __init__(self, item, download_dir):
-        threading.Thread.__init__(self)
-        self.item = item
-        self.urls = [item.cloudcast.url]
-        self.download_dir = download_dir
+class DownloadThread(QThread):
+    urls: List[str] = []
+    download_dir: str = None
 
-    def track_progress(self, d):
+    progress_signal = Signal(str, str)
+    interrupt_signal = Signal()
+    error_signal = Signal(object)
+
+    def _track_progress(self, d):
+        item_name = (
+            d['filename']
+            .replace(f'{self.download_dir}/', '')
+            .replace('.m4a', '')
+            .replace('_', '/')
+        )
+
+        progress = 'unknown'
         if d['status'] == 'downloading':
             progress = (
                 f"{d['_percent_str']} of {d['_total_bytes_str']} at {d['_speed_str']}"
             )
-            self.item.update_download_progress(progress=progress)
-        if d['status'] == 'finished':
-            self.item.update_download_progress(progress='Done!')
+        elif d['status'] == 'finished':
+            progress = 'Done!'
+
+        self.progress_signal.emit(item_name, progress)
 
     def run(self) -> None:
+        if not self.download_dir:
+            error_msg = 'no download directory provided'
+            self.error_signal.emit(error_msg)
+            return
+
         ydl_opts = {
-            'outtmpl': f'{self.download_dir}/%(title)s.%(ext)s',
-            'progress_hooks': [self.track_progress],
+            'outtmpl': f'{self.download_dir}/%(uploader)s - %(title)s.%(ext)s',
+            'progress_hooks': [self._track_progress],
         }
         with YoutubeDL(ydl_opts) as ydl:
             ydl.download(self.urls)
 
         return
+
+    def stop(self):
+        self.terminate()
+        self.interrupt_signal.emit()
+        self.wait()
 
 
 class GetCloudcastsThread(QThread):

@@ -4,8 +4,8 @@ from typing import List
 from PySide2.QtCore import Qt, Slot
 from PySide2.QtWidgets import QFileDialog, QTreeWidget, QTreeWidgetItem
 
-from ..custom_widgets.error_dialog import ErrorDialog
 from ..custom_widgets.cloudcast_q_tree_widget_item import CloudcastQTreeWidgetItem
+from ..custom_widgets.error_dialog import ErrorDialog
 from ..data_classes import Cloudcast, MixcloudUser
 from ..threads import DownloadThread, GetCloudcastsThread
 
@@ -21,12 +21,14 @@ class CloudcastQTreeWidget(QTreeWidget):
         self.header().resizeSection(2, 200)
         self.setHeaderHidden(True)
 
-        self.results: List[Cloudcast] = []
-
         self.get_cloudcasts_thread = GetCloudcastsThread()
         self.get_cloudcasts_thread.error_signal.connect(self.show_error)
         self.get_cloudcasts_thread.new_result.connect(self.add_result)
         self.get_cloudcasts_thread.interrupt_signal.connect(self.clear)
+
+        self.download_thread = DownloadThread()
+        self.download_thread.error_signal.connect(self.show_error)
+        self.download_thread.progress_signal.connect(self.update_item_download_progress)
 
     def _get_download_dir(self) -> QFileDialog:
         dialog = QFileDialog()
@@ -74,11 +76,23 @@ class CloudcastQTreeWidget(QTreeWidget):
     @Slot()
     def download_selected_cloudcasts(self) -> None:
         download_dir = self._get_download_dir()
+        items = self.get_selected_cloudcasts()
 
-        for item in self.get_selected_cloudcasts():
-            DownloadThread(item=item, download_dir=download_dir).start()
+        self.download_thread.download_dir = download_dir
+        self.download_thread.urls = [item.cloudcast.url for item in items]
+        self.download_thread.start()
 
     @Slot()
     def add_result(self, item: Cloudcast):
         item = CloudcastQTreeWidgetItem(cloudcast=item)
         self.addTopLevelItem(item)
+
+    @Slot()
+    def cancel_cloudcasts_download(self) -> None:
+        self.download_thread.stop()
+
+    @Slot()
+    def update_item_download_progress(self, name: str, progress: str):
+        for item in self.get_selected_cloudcasts():
+            if name == f'{item.cloudcast.user.name} - {item.cloudcast.name}':
+                item.update_download_progress(progress)

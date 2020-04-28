@@ -73,6 +73,7 @@ class CentralWidget(QWidget):
         self.download_button.clicked.connect(
             self.cloudcasts.download_selected_cloudcasts
         )
+        self.cancel_button.clicked.connect(self.cloudcasts.cancel_cloudcasts_download)
 
 
 class MainWindow(QMainWindow):
