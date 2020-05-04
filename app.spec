@@ -8,8 +8,14 @@ from PyInstaller.building.osx import BUNDLE
 
 
 block_cipher = None
-
 current_dir = os.getcwd()
+
+APP_VERSION = '0.1.1'
+APP_TITLE = 'Mixcloud Bulk Downloader'
+DEBUG = False
+CONSOLE = False
+ICON_WINDOWS = 'assets/logo.ico'
+ICON_MACOS = 'assets/logo.icns'
 
 a = Analysis(
     ['main.py'],
@@ -35,23 +41,23 @@ if sys.platform == 'darwin':
         a.binaries,
         a.zipfiles,
         a.datas,
-        name='Mixcloud Bulk Downloader',
-        debug=False,
+        name=APP_TITLE,
+        debug=DEBUG,
         strip=False,
         upx=True,
         runtime_tmpdir=None,
-        console=False,
-        icon='assets/logo.icns'
+        console=CONSOLE,
+        icon=ICON_MACOS
     )
 
     app = BUNDLE(
         exe,
-        name='Mixcloud Bulk Downloader.app',
-        icon='./assets/logo.icns',
+        name=APP_TITLE,
+        icon=ICON_MACOS,
         bundle_identifier=None,
         info_plist={
             'NSHighResolutionCapable': 'True',
-            'CFBundleShortVersionString': '0.1.1'
+            'CFBundleShortVersionString': APP_VERSION
         }
     )
 
@@ -62,11 +68,11 @@ if sys.platform in ['win32', 'win64', 'linux']:
         a.binaries,
         a.zipfiles,
         a.datas,
-        name='Mixcloud Bulk Downloader',
-        debug=False,
+        name=APP_TITLE,
+        debug=DEBUG,
         strip=False,
         upx=True,
         runtime_tmpdir=None,
-        console=False,
-        icon='assets/icon.ico'
+        console=CONSOLE,
+        icon=ICON_WINDOWS
     )
