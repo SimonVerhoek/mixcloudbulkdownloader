@@ -6,3 +6,11 @@ services:
     container_name: MBDLR-windows
     volumes:
       - .:/src
+
+  app-windows-zip:
+    container_name: MBDLR-windows-zip
+    build:
+      dockerfile: Dockerfile.dist-zip
+      context: .
+    volumes:
+    - ./dist/windows:/app
