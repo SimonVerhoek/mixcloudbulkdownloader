@@ -16,39 +16,39 @@ before_script:
   - echo -n $CI_JOB_TOKEN | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
 
 stages:
-  - build
-  - package
+#  - build
+#  - package
   - tag
   - publish
 
-build-windows:
-  stage: build
-  script:
-    - docker image prune -f
-    - docker-compose -f docker-compose.build.yml build --no-cache
-    - docker-compose -f docker-compose.build.yml up --exit-code-from app-windows
-  after_script:
-    - docker-compose -f docker-compose.build.yml down
-  artifacts:
-    paths:
-      - ./dist/windows
-    expire_in: 1 week
-  except:
-    - master
+#build-windows:
+#  stage: build
+#  script:
+#    - docker image prune -f
+#    - docker-compose -f docker-compose.build.yml build --no-cache
+#    - docker-compose -f docker-compose.build.yml up --exit-code-from app-windows
+#  after_script:
+#    - docker-compose -f docker-compose.build.yml down
+#  artifacts:
+#    paths:
+#      - ./dist/windows
+#    expire_in: 1 week
+#  except:
+#    - master
 
-package-windows:
-  stage: package
-  script:
-    - ls ./dist/windows/
-    - docker image prune -f
-    - docker-compose -f docker-compose.dist.yml build --no-cache
-    - docker-compose -f docker-compose.dist.yml up --exit-code-from dist-windows
-  after_script:
-    - docker-compose -f docker-compose.dist.yml down
-  artifacts:
-    paths:
-      - ./dist/windows/Mixcloud\ Bulk\ Downloader.zip
-    expire_in: 1 week
+#package-windows:
+#  stage: package
+#  script:
+#    - ls ./dist/windows/
+#    - docker image prune -f
+#    - docker-compose -f docker-compose.dist.yml build --no-cache
+#    - docker-compose -f docker-compose.dist.yml up --exit-code-from dist-windows
+#  after_script:
+#    - docker-compose -f docker-compose.dist.yml down
+#  artifacts:
+#    paths:
+#      - ./dist/windows/Mixcloud\ Bulk\ Downloader.zip
+#    expire_in: 1 week
 #  only:
 #    - master
 
@@ -58,12 +58,13 @@ tag:
 #  only:
 #    - master
   before_script:
-    - apt-get update -qq && apt-get install -y -qq git
+    - apk update && apk add git
     - git --version
   script:
     - git config user.email "${GITLAB_USER_EMAIL}"
     - git config user.name "${GITLAB_USER_NAME}"
-    - git remote add api-origin https://oauth2:${GITLAB_ACCESS_TOKEN}@gitlab.com/${CI_PROJECT_PATH}
+    - echo ${CI_PROJECT_PATH}
+    - git remote add api-origin https://oauth2:${GITLAB_ACCESS_TOKEN}@gitlab.com/${CI_PROJECT_PATH}.git
     - git tag -a "v$(date +%Y-%m-%d)" -m "Auto-Release"
     - git push api-origin "v$(date +%Y-%m-%d)"
 
@@ -72,7 +73,7 @@ publish:
     stage: publish
 #    only:
 #        - master
-    dependencies:
-        - package-windows
+#    dependencies:
+#        - package-windows
     script:
         - gitlab-release --message 'Automatic release' ./dist/windows/Mixcloud\ Bulk\ Downloader.zip
