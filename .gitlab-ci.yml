@@ -17,7 +17,9 @@ before_script:
 
 stages:
   - build
-  - dist
+  - package
+  - tag
+  - publish
 
 build-windows:
   stage: build
@@ -34,8 +36,8 @@ build-windows:
   except:
     - master
 
-dist-windows:
-  stage: dist
+package-windows:
+  stage: package
   script:
     - ls ./dist/windows/
     - docker image prune -f
@@ -45,7 +47,29 @@ dist-windows:
     - docker-compose -f docker-compose.dist.yml down
   artifacts:
     paths:
-      - ./dist/windows
+      - ./dist/windows/Mixcloud\ Bulk\ Downloader.zip
     expire_in: 1 week
-  except:
-    - master
+#  only:
+#    - master
+
+
+tag:
+  stage: tag
+#  only:
+#    - master
+  script:
+    - git config user.email "${GITLAB_USER_EMAIL}"
+    - git config user.name "${GITLAB_USER_NAME}"
+    - git remote add api-origin https://oauth2:${GITLAB_ACCESS_TOKEN}@gitlab.com/${CI_PROJECT_PATH}
+    - git tag -a "v$(date +%Y-%m-%d)" -m "Auto-Release"
+    - git push api-origin "v$(date +%Y-%m-%d)"
+
+publish:
+    image: inetprocess/gitlab-release
+    stage: publish
+#    only:
+#        - master
+    dependencies:
+        - package-windows
+    script:
+        - gitlab-release --message 'Automatic release' ./dist/windows/Mixcloud\ Bulk\ Downloader.zip
