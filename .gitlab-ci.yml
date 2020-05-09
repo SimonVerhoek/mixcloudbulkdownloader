@@ -17,7 +17,7 @@ before_script:
 
 stages:
 #  - build
-#  - package
+  - package
   - tag
   - publish
 
@@ -36,19 +36,19 @@ stages:
 #  except:
 #    - master
 
-#package-windows:
-#  stage: package
-#  script:
-#    - ls ./dist/windows/
-#    - docker image prune -f
-#    - docker-compose -f docker-compose.dist.yml build --no-cache
-#    - docker-compose -f docker-compose.dist.yml up --exit-code-from dist-windows
-#  after_script:
-#    - docker-compose -f docker-compose.dist.yml down
-#  artifacts:
-#    paths:
-#      - ./dist/windows/Mixcloud\ Bulk\ Downloader.zip
-#    expire_in: 1 week
+package-windows:
+  stage: package
+  script:
+    - ls ./dist/windows/
+    - docker image prune -f
+    - docker-compose -f docker-compose.dist.yml build --no-cache
+    - docker-compose -f docker-compose.dist.yml up --exit-code-from dist-windows
+  after_script:
+    - docker-compose -f docker-compose.dist.yml down
+  artifacts:
+    paths:
+      - ./dist/windows/Mixcloud\ Bulk\ Downloader.zip
+    expire_in: 1 hour
 #  only:
 #    - master
 
@@ -69,11 +69,11 @@ tag:
     - git push api-origin "v$(date +%Y-%m-%d)"
 
 publish:
-    image: inetprocess/gitlab-release
-    stage: publish
+  stage: publish
+  image: inetprocess/gitlab-release
 #    only:
 #        - master
 #    dependencies:
 #        - package-windows
-    script:
-        - gitlab-release --message 'Automatic release' ./dist/windows/Mixcloud\ Bulk\ Downloader.zip
+  script:
+      - gitlab-release --message 'Automatic release' ./dist/windows/Mixcloud\ Bulk\ Downloader.zip
