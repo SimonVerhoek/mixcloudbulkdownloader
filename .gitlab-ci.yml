@@ -27,16 +27,25 @@ build-windows:
     - docker-compose -f docker-compose.build.yml up --exit-code-from app-windows
   after_script:
     - docker-compose -f docker-compose.build.yml down
+  artifacts:
+    paths:
+      - ./dist/windows
+    expire_in: 1 week
   except:
     - master
 
 dist-windows:
   stage: dist
   script:
+    - ls ./dist/windows/
     - docker image prune -f
     - docker-compose -f docker-compose.dist.yml build --no-cache
     - docker-compose -f docker-compose.dist.yml up --exit-code-from dist-windows
   after_script:
     - docker-compose -f docker-compose.dist.yml down
+  artifacts:
+    paths:
+      - ./dist/windows
+    expire_in: 1 week
   except:
     - master
