@@ -1,0 +1,8 @@
+version: '3.7'
+
+services:
+  app-windows:
+    image: cdrx/pyinstaller-windows
+    container_name: MBDLR-windows
+    volumes:
+      - .:/src

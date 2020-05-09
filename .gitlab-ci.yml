@@ -1,0 +1,42 @@
+variables:
+  DOCKER_HOST: tcp://docker:2375/
+  DOCKER_DRIVER: overlay2
+  GIT_SUBMODULE_STRATEGY: normal
+
+image:
+  name: docker/compose
+  entrypoint: ["/bin/sh", "-c"]
+
+services:
+  - docker:dind
+
+before_script:
+  - docker version
+  - docker-compose version
+  - echo -n $CI_JOB_TOKEN | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
+
+stages:
+  - build
+  - dist
+
+build-windows:
+  stage: build
+  script:
+    - docker image prune -f
+    - docker-compose -f docker-compose.build.yml build --no-cache
+    - docker-compose -f docker-compose.build.yml up --exit-code-from app-windows
+  after_script:
+    - docker-compose -f docker-compose.build.yml down
+  except:
+    - master
+
+dist-windows:
+  stage: dist
+  script:
+    - docker image prune -f
+    - docker-compose -f docker-compose.dist.yml build --no-cache
+    - docker-compose -f docker-compose.dist.yml up --exit-code-from dist-windows
+  after_script:
+    - docker-compose -f docker-compose.dist.yml down
+  except:
+    - master
