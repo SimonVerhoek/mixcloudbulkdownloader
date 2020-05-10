@@ -10,7 +10,7 @@ from PyInstaller.building.osx import BUNDLE
 block_cipher = None
 current_dir = os.getcwd()
 
-APP_VERSION = '0.1.1'
+APP_VERSION = '0.1.3'
 APP_TITLE = 'Mixcloud Bulk Downloader'
 DEBUG = False
 CONSOLE = False
