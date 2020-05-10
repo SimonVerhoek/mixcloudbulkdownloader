@@ -2,6 +2,7 @@ variables:
   DOCKER_HOST: tcp://docker:2375/
   DOCKER_DRIVER: overlay2
   GIT_SUBMODULE_STRATEGY: normal
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
 
 image:
   name: docker/compose
@@ -9,6 +10,10 @@ image:
 
 services:
   - docker:dind
+
+cache:
+  paths:
+    - .cache/pip
 
 stages:
   - build
@@ -59,7 +64,7 @@ tag:
     - apk update && apk add git && apk add py-pip
     - git --version
     - pip install bump2version
-    - ls .bump2version.cfg
+    - ls .bumpversion.cfg
   script:
     - git config user.email "${GITLAB_USER_EMAIL}"
     - git config user.name "${GITLAB_USER_NAME}"
