@@ -54,7 +54,6 @@ tag:
   stage: tag
   only:
     - master
-  image: alpine/python3
   before_script:
     - VERSION_NUMBER=`cat version.txt`
     - apk update && apk add git && apk add py-pip
