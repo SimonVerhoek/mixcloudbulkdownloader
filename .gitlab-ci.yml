@@ -63,6 +63,7 @@ package-windows:
   stage: package
   only:
     - master
+    - tags
   dependencies:
     - build-windows
   before_script:
@@ -81,7 +82,7 @@ package-windows:
 publish:
   stage: publish
   only:
-#    - master
+    - master
     - tags
   image: inetprocess/gitlab-release
   dependencies:
