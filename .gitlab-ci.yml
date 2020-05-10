@@ -10,12 +10,6 @@ image:
 services:
   - docker:dind
 
-#before_script:
-#  - docker version
-#  - docker-compose version
-#  - echo -n $CI_JOB_TOKEN | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
-#  - VERSION_NUMBER=`cat version.txt`
-
 stages:
   - build
   - package
@@ -41,6 +35,8 @@ package-windows:
   stage: package
   only:
     - master
+  dependencies:
+    - build-windows
   before_script:
     - ls ./dist/windows/
   script:
