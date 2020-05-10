@@ -61,8 +61,7 @@ tag:
   only:
     - master
   before_script:
-    - VERSION_NUMBER=`cat version.txt`
-    - apk update && apk add git && apk add py-pip
+    - apk update && apk add git py-pip
     - git --version
     - pip install bump2version
     - ls .bumpversion.cfg
@@ -73,6 +72,7 @@ tag:
     - git remote add api-origin https://oauth2:${GITLAB_ACCESS_TOKEN}@gitlab.com/${CI_PROJECT_PATH}.git
 #    - git tag -a "v${VERSION_NUMBER}" -m "Auto-Release"
     - bump2version patch
+    - VERSION_NUMBER=`cat version.txt`
     - git push api-origin "v${VERSION_NUMBER}"
 
 publish:
