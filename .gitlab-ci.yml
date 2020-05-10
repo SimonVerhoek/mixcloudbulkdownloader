@@ -19,7 +19,7 @@ services:
 stages:
   - build
   - package
-#  - tag
+  - tag
   - publish
 
 build-windows:
@@ -52,22 +52,27 @@ package-windows:
   artifacts:
     paths:
       - ./dist/windows/Mixcloud\ Bulk\ Downloader.zip
+    expire_in: 1 week
 
-#tag:
-#  stage: tag
-#  only:
-#    - master
-#  before_script:
-#    - VERSION_NUMBER=`cat version.txt`
-#    - apk update && apk add git
-#    - git --version
-#  script:
-#    - git config user.email "${GITLAB_USER_EMAIL}"
-#    - git config user.name "${GITLAB_USER_NAME}"
-#    - echo ${CI_PROJECT_PATH}
-#    - git remote add api-origin https://oauth2:${GITLAB_ACCESS_TOKEN}@gitlab.com/${CI_PROJECT_PATH}.git
+tag:
+  stage: tag
+  only:
+    - master
+  image: alpine/python3
+  before_script:
+    - VERSION_NUMBER=`cat version.txt`
+    - apk update && apk add git && apk add py-pip
+    - git --version
+    - pip install bump2version
+    - ls .bump2version.cfg
+  script:
+    - git config user.email "${GITLAB_USER_EMAIL}"
+    - git config user.name "${GITLAB_USER_NAME}"
+    - echo ${CI_PROJECT_PATH}
+    - git remote add api-origin https://oauth2:${GITLAB_ACCESS_TOKEN}@gitlab.com/${CI_PROJECT_PATH}.git
 #    - git tag -a "v${VERSION_NUMBER}" -m "Auto-Release"
-#    - git push api-origin "v${VERSION_NUMBER}"
+    - bump2version patch
+    - git push api-origin "v${VERSION_NUMBER}"
 
 publish:
   stage: publish
