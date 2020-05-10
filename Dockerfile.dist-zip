@@ -1,0 +1,8 @@
+FROM alpine
+
+WORKDIR app
+
+RUN apk add zip
+
+CMD zip -r "Mixcloud Bulk Downloader.zip" Mixcloud\ Bulk\ Downloader
+#CMD tail -f /dev/null

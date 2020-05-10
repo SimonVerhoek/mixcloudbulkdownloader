@@ -1,8 +1,10 @@
 version: '3.7'
 
 services:
-  app-windows:
-    image: cdrx/pyinstaller-windows
-    container_name: MBDLR-windows
+  dist-windows:
+    container_name: MBDLR-windows-zip
+    build:
+      dockerfile: Dockerfile.dist-zip
+      context: .
     volumes:
-      - .:/src
+    - ./dist/windows:/app
