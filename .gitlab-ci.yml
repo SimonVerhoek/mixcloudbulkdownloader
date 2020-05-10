@@ -12,6 +12,7 @@ services:
   - docker:dind
 
 cache:
+  key: ${CI_JOB_NAME}
   paths:
     - .cache/pip
 
@@ -77,8 +78,8 @@ tag:
 publish:
   stage: publish
   only:
-    - master
-#    - tags
+#    - master
+    - tags
   image: inetprocess/gitlab-release
   dependencies:
     - package-windows
