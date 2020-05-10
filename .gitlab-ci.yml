@@ -39,8 +39,11 @@ build-windows:
 
 package-windows:
   stage: package
-  script:
+  only:
+    - master
+  before_script:
     - ls ./dist/windows/
+  script:
     - docker image prune -f
     - docker-compose -f docker-compose.dist.yml build --no-cache
     - docker-compose -f docker-compose.dist.yml up --exit-code-from dist-windows
@@ -49,15 +52,11 @@ package-windows:
   artifacts:
     paths:
       - ./dist/windows/Mixcloud\ Bulk\ Downloader.zip
-    expire_in: 1 hour
-#  only:
-#    - master
-
 
 tag:
   stage: tag
-#  only:
-#    - master
+  only:
+    - master
   before_script:
     - VERSION_NUMBER=`cat version.txt`
     - apk update && apk add git
@@ -72,12 +71,14 @@ tag:
 
 publish:
   stage: publish
+  only:
+    - master
+    - tags
   image: inetprocess/gitlab-release
-#    only:
-#        - master
-#    dependencies:
-#        - package-windows
+  dependencies:
+    - package-windows
   before_script:
     - VERSION_NUMBER=`cat version.txt`
   script:
-    - gitlab-release --message 'Automatic release' ./dist/windows/Mixcloud\ Bulk\ Downloader.zip
+    - mv ./dist/windows/Mixcloud\ Bulk\ Downloader.zip ./dist/windows/Mixcloud\ Bulk\ Downloader\ ${VERSION_NUMBER}.zip
+    - gitlab-release --message 'Automatic release' ./dist/windows/Mixcloud\ Bulk\ Downloader\ ${VERSION_NUMBER}.zip
