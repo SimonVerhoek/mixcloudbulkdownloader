@@ -28,8 +28,8 @@ build-windows:
     paths:
       - ./dist/windows
     expire_in: 1 week
-  except:
-    - master
+#  except:
+#    - master
 
 package-windows:
   stage: package
