@@ -29,6 +29,7 @@ tag:
     - master
   except:
     - tags
+    - merge_requests
   before_script:
     - apk update && apk add git py-pip
     - git --version
@@ -62,7 +63,7 @@ build-windows:
 package-windows:
   stage: package
   only:
-    - master
+#    - master
     - tags
   dependencies:
     - build-windows
@@ -79,10 +80,12 @@ package-windows:
       - ./dist/windows/Mixcloud\ Bulk\ Downloader.zip
     expire_in: 1 week
 
+
+
 publish:
   stage: publish
   only:
-    - master
+#    - master
     - tags
   image: inetprocess/gitlab-release
   dependencies:
