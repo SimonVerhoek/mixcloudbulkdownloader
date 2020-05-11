@@ -44,7 +44,6 @@ tag:
     - VERSION_NUMBER=`cat version.txt`
     - git push api-origin "v${VERSION_NUMBER}"
 
-
 build-windows:
   stage: build
   except:
@@ -59,13 +58,10 @@ build-windows:
     paths:
       - ./dist/windows
     expire_in: 1 week
-#  except:
-#    - master
 
 package-windows:
   stage: package
   only:
-#    - master
     - tags
   dependencies:
     - build-windows
@@ -82,12 +78,9 @@ package-windows:
       - ./dist/windows/Mixcloud\ Bulk\ Downloader.zip
     expire_in: 1 week
 
-
-
 publish:
   stage: publish
   only:
-#    - master
     - tags
   image: inetprocess/gitlab-release
   dependencies:
