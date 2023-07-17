@@ -1,7 +1,7 @@
 from typing import Any, Callable, List
 
-from PySide2.QtCore import QTimer, Slot
-from PySide2.QtWidgets import QComboBox
+from PySide6.QtCore import QTimer, Slot
+from PySide6.QtWidgets import QComboBox
 
 from ..custom_widgets.error_dialog import ErrorDialog
 from ..data_classes import MixcloudUser

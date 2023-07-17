@@ -1,6 +1,6 @@
 from typing import List
 
-from PySide2.QtCore import QThread, Signal
+from PySide6.QtCore import QThread, Signal
 from youtube_dl import YoutubeDL
 
 from .api import get_mixcloud_API_data, search_user_API_url, user_cloudcasts_API_url

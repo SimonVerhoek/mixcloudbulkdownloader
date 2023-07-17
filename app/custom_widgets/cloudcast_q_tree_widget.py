@@ -1,8 +1,8 @@
 from os.path import expanduser
 from typing import List
 
-from PySide2.QtCore import Qt, Slot
-from PySide2.QtWidgets import QFileDialog, QTreeWidget, QTreeWidgetItem
+from PySide6.QtCore import Qt, Slot
+from PySide6.QtWidgets import QFileDialog, QTreeWidget, QTreeWidgetItem
 
 from ..custom_widgets.cloudcast_q_tree_widget_item import CloudcastQTreeWidgetItem
 from ..custom_widgets.error_dialog import ErrorDialog

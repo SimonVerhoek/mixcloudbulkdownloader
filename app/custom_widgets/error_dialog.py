@@ -1,4 +1,4 @@
-from PySide2.QtWidgets import QErrorMessage
+from PySide6.QtWidgets import QErrorMessage
 
 
 class ErrorDialog(QErrorMessage):
