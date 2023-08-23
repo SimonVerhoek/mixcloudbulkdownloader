@@ -4,7 +4,14 @@
 
 ## Development
 
-### Run in Docker
+### Local install
+Make sure you have `pyenv` installed
+```shell
+env PYTHON_CONFIGURE_OPTS="--enable-framework" pyenv install 3.8
+```
+
+
+### Run in Docker (deprecated for now)
 Based on the info found [here](https://github.com/moby/moby/issues/8710) 
 
 Install libraries:
@@ -41,7 +48,7 @@ application per platform.
 1. Make sure you have `PyInstaller` installed
 2. From the project's root directory, run the following command: 
 ```shell script
-$ pyinstaller --windowed --onefile --clean -y app.spec
+$ pyinstaller --clean -y app.spec
 ```
 
 The Linux version can also be built inside a Docker container.

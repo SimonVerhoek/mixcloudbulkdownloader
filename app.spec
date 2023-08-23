@@ -10,7 +10,7 @@ from PyInstaller.building.osx import BUNDLE
 block_cipher = None
 current_dir = os.getcwd()
 
-APP_VERSION = '0.1.4'
+APP_VERSION = '0.1.5'
 APP_TITLE = 'Mixcloud Bulk Downloader'
 DEBUG = False
 CONSOLE = False
@@ -30,7 +30,7 @@ a = Analysis(
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
-    noarchive=False
+    noarchive=False,
 )
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
@@ -42,18 +42,25 @@ if sys.platform == 'darwin':
         a.binaries,
         a.zipfiles,
         a.datas,
+        [],
         name=APP_TITLE,
         debug=DEBUG,
+        bootloader_ignore_signals=False,
         strip=False,
         upx=True,
+        upx_exclude=[],
         runtime_tmpdir=None,
         console=CONSOLE,
-        icon=ICON_MACOS
+        disable_windowed_traceback=False,
+        argv_emulation=False,
+        target_arch=None,
+        codesign_identity=None,
+        entitlements_file=None,
     )
 
     app = BUNDLE(
         exe,
-        name=APP_TITLE,
+        name=f"{APP_TITLE}.app",
         icon=ICON_MACOS,
         bundle_identifier=None,
         info_plist={

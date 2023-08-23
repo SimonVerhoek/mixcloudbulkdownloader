@@ -1,7 +1,7 @@
 import sys
 
-from PySide2.QtCore import Qt
-from PySide2.QtWidgets import (
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
     QLabel,
@@ -97,4 +97,4 @@ if __name__ == '__main__':
 
     window = MainWindow()
     window.show()
-    sys.exit(application.exec_())
+    sys.exit(application.exec())

@@ -3,6 +3,7 @@ version: '3.7'
 services:
   app:
     container_name: MBDLR
+    platform: linux/amd64
     build:
       context: .
       dockerfile: Dockerfile.dev
