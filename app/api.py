@@ -1,7 +1,7 @@
 from typing import Dict, Tuple
 
 import requests
-from youtube_dl import YoutubeDL
+import yt_dlp
 
 # from .logging import logging
 
@@ -40,5 +40,5 @@ def get_mixcloud_API_data(url: str) -> Tuple[Dict, str]:
 
 def download_cloudcasts(urls, download_dir):
     ydl_opts = {'outtmpl': f'{download_dir}/%(title)s.%(ext)s'}
-    with YoutubeDL(ydl_opts) as ydl:
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download(urls)

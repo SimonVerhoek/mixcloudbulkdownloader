@@ -17,32 +17,26 @@ cache:
     - .cache/pip
 
 stages:
-  - tag
+  - check
   - build
+  - tag
   - package
   - publish
 
-
-tag:
-  stage: tag
+Version Check:
+  stage: check
+  image: python:3.12
   only:
-    - master
+    - branches
   except:
-    - tags
-    - merge_requests
+    - master
   before_script:
-    - apk update && apk add git py-pip
-    - git --version
-    - pip install bump2version
-    - ls .bumpversion.cfg
+    - pip install poetry
+    - poetry check
   script:
-    - git config user.email "${GITLAB_USER_EMAIL}"
-    - git config user.name "${GITLAB_USER_NAME}"
-    - echo ${CI_PROJECT_PATH}
-    - git remote add api-origin https://oauth2:${GITLAB_ACCESS_TOKEN}@gitlab.com/${CI_PROJECT_PATH}.git
-    - bump2version patch
-    - VERSION_NUMBER=`cat version.txt`
-    - git push api-origin "v${VERSION_NUMBER}"
+    - git fetch --tags
+    - sed -i -e 's/\r$//' scripts/check_version_update.sh
+    - scripts/check_version_update.sh
 
 build-windows:
   stage: build
@@ -78,6 +72,23 @@ package-windows:
       - ./dist/windows/Mixcloud\ Bulk\ Downloader.zip
     expire_in: 1 week
 
+tag:
+  stage: tag
+  only:
+    - master
+  except:
+    - tags
+    - merge_requests
+  before_script:
+    - git --version
+  script:
+    - git config user.email "${GITLAB_USER_EMAIL}"
+    - git config user.name "${GITLAB_USER_NAME}"
+    - echo ${CI_PROJECT_PATH}
+    - git remote add api-origin https://oauth2:${GITLAB_ACCESS_TOKEN}@gitlab.com/${CI_PROJECT_PATH}.git
+    - VERSION_NUMBER=$(grep pyproject.toml -e '(?<=^version = ")(.*)(?=")' -Po)
+    - git push api-origin "${VERSION_NUMBER}"
+
 publish:
   stage: publish
   only:
@@ -86,7 +97,7 @@ publish:
   dependencies:
     - package-windows
   before_script:
-    - VERSION_NUMBER=`cat version.txt`
+    - VERSION_NUMBER=$(grep pyproject.toml -e '(?<=^version = ")(.*)(?=")' -Po)
     - echo ${CI_COMMIT_TAG}
   script:
     - mv ./dist/windows/Mixcloud\ Bulk\ Downloader.zip ./dist/windows/Mixcloud\ Bulk\ Downloader\ ${VERSION_NUMBER}.zip

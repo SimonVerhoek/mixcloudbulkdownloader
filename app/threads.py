@@ -1,7 +1,7 @@
 from typing import List
 
 from PySide6.QtCore import QThread, Signal
-from youtube_dl import YoutubeDL
+import yt_dlp
 
 from .api import get_mixcloud_API_data, search_user_API_url, user_cloudcasts_API_url
 from .data_classes import Cloudcast, MixcloudUser
@@ -48,8 +48,9 @@ class DownloadThread(QThread):
         ydl_opts = {
             'outtmpl': f'{self.download_dir}/%(uploader)s - %(title)s.%(ext)s',
             'progress_hooks': [self._track_progress],
+            "verbose": False
         }
-        with YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download(self.urls)
 
         return
