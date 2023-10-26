@@ -72,23 +72,22 @@ package-windows:
       - ./dist/windows/Mixcloud\ Bulk\ Downloader.zip
     expire_in: 1 week
 
-tag:
+Tag Release:
   stage: tag
   image: python:3.12
   only:
     - master
-  except:
-    - tags
-    - merge_requests
   before_script:
-    - git --version
+    - pip install poetry
+    - poetry config virtualenvs.create false
   script:
-    - git config user.email "${GITLAB_USER_EMAIL}"
-    - git config user.name "${GITLAB_USER_NAME}"
-    - echo ${CI_PROJECT_PATH}
-    - git remote add api-origin https://oauth2:${GITLAB_ACCESS_TOKEN}@gitlab.com/${CI_PROJECT_PATH}.git
-    - VERSION_NUMBER=$(grep pyproject.toml -e '(?<=^version = ")(.*)(?=")' -Po)
-    - git push api-origin "${VERSION_NUMBER}"
+    - git config --global user.email "${GITLAB_USER_EMAIL}"
+    - git config --global user.name "${GITLAB_USER_NAME}"
+    - project_url=$(echo $CI_PROJECT_URL | sed 's/https:\/\///')
+    - git remote add api-origin https://oauth2:${OAUTH2_TOKEN}@${project_url} || echo "remote already set"
+    - version=$(poetry version --short)
+    - git tag $version
+    - git push api-origin $version
 
 publish:
   stage: publish
