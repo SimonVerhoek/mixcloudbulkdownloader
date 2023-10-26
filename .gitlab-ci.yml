@@ -74,6 +74,7 @@ package-windows:
 
 tag:
   stage: tag
+  image: python:3.12
   only:
     - master
   except:
