@@ -48,9 +48,10 @@ build-windows:
     - docker-compose -f docker-compose.build.yml up --exit-code-from app-windows
   after_script:
     - docker-compose -f docker-compose.build.yml down
+    - ls -la .
   artifacts:
     paths:
-      - ./dist/windows
+      - ${CI_PROJECT_DIR}/dist/windows
     expire_in: 1 week
 
 package-windows:
@@ -65,11 +66,15 @@ package-windows:
     - docker image prune -f
     - docker-compose -f docker-compose.dist.yml build --no-cache
     - docker-compose -f docker-compose.dist.yml up --exit-code-from dist-windows
+    - ls -la ./dist/windows
   after_script:
     - docker-compose -f docker-compose.dist.yml down
+    - pwd
+    - echo ${CI_PROJECT_DIR}
+    - ls -la ${CI_PROJECT_DIR}/dist/windows
   artifacts:
     paths:
-      - ./dist/windows/Mixcloud\ Bulk\ Downloader.zip
+      - ${CI_PROJECT_DIR}/dist/windows
     expire_in: 1 week
 
 Tag Release:
@@ -84,7 +89,7 @@ Tag Release:
     - git config --global user.email "${GITLAB_USER_EMAIL}"
     - git config --global user.name "${GITLAB_USER_NAME}"
     - project_url=$(echo $CI_PROJECT_URL | sed 's/https:\/\///')
-    - git remote add api-origin https://oauth2:${OAUTH2_TOKEN}@${project_url} || echo "remote already set"
+    - git remote add api-origin https://oauth2:${GITLAB_ACCESS_TOKEN}@${project_url} || echo "remote already set"
     - version=$(poetry version --short)
     - git tag $version
     - git push api-origin $version
@@ -102,6 +107,7 @@ publish:
     - VERSION_NUMBER=$(perl -nle'print $& while m{(?<=^version = ")(.*)(?=")}g' pyproject.toml)
     - echo ${CI_COMMIT_TAG}
   script:
+    - ls -la ./dist/windows/
     - mv ./dist/windows/Mixcloud\ Bulk\ Downloader.zip ./dist/windows/Mixcloud\ Bulk\ Downloader\ ${VERSION_NUMBER}.zip
-    - ls ./dist/windows/
+    - ls -la ./dist/windows/
     - gitlab-release --message 'Automatic release' ./dist/windows/Mixcloud\ Bulk\ Downloader\ ${VERSION_NUMBER}.zip
