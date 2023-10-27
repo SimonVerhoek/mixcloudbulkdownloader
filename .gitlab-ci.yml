@@ -97,6 +97,7 @@ publish:
   dependencies:
     - package-windows
   before_script:
+    - apk add perl
     - VERSION_NUMBER=$(perl -nle'print $& while m{(?<=^version = ")(.*)(?=")}g' pyproject.toml)
     - echo ${CI_COMMIT_TAG}
   script:
