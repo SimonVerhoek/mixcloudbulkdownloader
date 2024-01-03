@@ -97,23 +97,23 @@ package-windows:
       - ${CI_PROJECT_DIR}/dist/windows
 #    expire_in: 1 week
 
-publish:
-  stage: release
-  only:
-    - tags
-  image: inetprocess/gitlab-release
-  dependencies:
-    - package-windows
-  before_script:
-    - apk update
-    - apk add perl
-    - VERSION_NUMBER=$(perl -nle'print $& while m{(?<=^version = ")(.*)(?=")}g' pyproject.toml)
-    - echo ${CI_COMMIT_TAG}
-  script:
-    - ls -la ./dist/windows/
-    - mv ./dist/windows/Mixcloud\ Bulk\ Downloader.zip ./dist/windows/Mixcloud\ Bulk\ Downloader\ ${VERSION_NUMBER}.zip
-    - ls -la ./dist/windows/
-    - gitlab-release --message 'Automatic release' ./dist/windows/Mixcloud\ Bulk\ Downloader\ ${VERSION_NUMBER}.zip
+#publish:
+#  stage: release
+#  only:
+#    - tags
+#  image: inetprocess/gitlab-release
+#  dependencies:
+#    - package-windows
+#  before_script:
+#    - apk update
+#    - apk add perl
+#    - VERSION_NUMBER=$(perl -nle'print $& while m{(?<=^version = ")(.*)(?=")}g' pyproject.toml)
+#    - echo ${CI_COMMIT_TAG}
+#  script:
+#    - ls -la ./dist/windows/
+#    - mv ./dist/windows/Mixcloud\ Bulk\ Downloader.zip ./dist/windows/Mixcloud\ Bulk\ Downloader\ ${VERSION_NUMBER}.zip
+#    - ls -la ./dist/windows/
+#    - gitlab-release --message 'Automatic release' ./dist/windows/Mixcloud\ Bulk\ Downloader\ ${VERSION_NUMBER}.zip
 
 release:
   stage: release
@@ -137,4 +137,4 @@ release:
     assets:
       links:
         - name: Mixcloud_Bulk_Downloader_${CI_COMMIT_TAG}.zip
-          url: ${CI_JOB_URL}/artifacts/download
+          url: ${CI_PROJECT_DIR}/dist/windows/Mixcloud_Bulk_Downloader_${CI_COMMIT_TAG}.zip
