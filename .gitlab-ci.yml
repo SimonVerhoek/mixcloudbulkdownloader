@@ -140,4 +140,4 @@ release:
     assets:
       links:
         - name: Mixcloud_Bulk_Downloader_${CI_COMMIT_TAG}.zip
-          url: ${CI_PROJECT_URL}/-/jobs/`cat CI_JOB_ID.txt`/artifacts/file/dist/windows/Mixcloud_Bulk_Downloader_${CI_COMMIT_TAG}.zip
+          url: ${CI_PROJECT_URL}/-/jobs/`cat CI_JOB_ID.txt`/artifacts/raw/dist/windows/Mixcloud_Bulk_Downloader_${CI_COMMIT_TAG}.zip
