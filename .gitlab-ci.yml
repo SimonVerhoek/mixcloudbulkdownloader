@@ -97,27 +97,8 @@ package-windows:
     paths:
       - ${CI_PROJECT_DIR}/dist/windows
       - CI_JOB_ID.txt
-    expire_in: 1 week
 
-#publish:
-#  stage: release
-#  only:
-#    - tags
-#  image: inetprocess/gitlab-release
-#  dependencies:
-#    - package-windows
-#  before_script:
-#    - apk update
-#    - apk add perl
-#    - VERSION_NUMBER=$(perl -nle'print $& while m{(?<=^version = ")(.*)(?=")}g' pyproject.toml)
-#    - echo ${CI_COMMIT_TAG}
-#  script:
-#    - ls -la ./dist/windows/
-#    - mv ./dist/windows/Mixcloud\ Bulk\ Downloader.zip ./dist/windows/Mixcloud\ Bulk\ Downloader\ ${VERSION_NUMBER}.zip
-#    - ls -la ./dist/windows/
-#    - gitlab-release --message 'Automatic release' ./dist/windows/Mixcloud\ Bulk\ Downloader\ ${VERSION_NUMBER}.zip
-
-release:
+release-windows:
   stage: release
   image: registry.gitlab.com/gitlab-org/release-cli:latest
   dependencies:
