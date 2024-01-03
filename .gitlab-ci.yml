@@ -55,29 +55,6 @@ build-windows:
       - ${CI_PROJECT_DIR}/dist/windows
     expire_in: 1 week
 
-package-windows:
-  stage: package
-  only:
-    - tags
-  dependencies:
-    - build-windows
-  before_script:
-    - ls ./dist/windows/
-  script:
-    - docker image prune -f
-    - docker-compose -f docker-compose.dist.yml build --no-cache
-    - docker-compose -f docker-compose.dist.yml up --exit-code-from dist-windows
-    - ls -la ./dist/windows
-  after_script:
-    - docker-compose -f docker-compose.dist.yml down
-    - pwd
-    - echo ${CI_PROJECT_DIR}
-    - ls -la ${CI_PROJECT_DIR}/dist/windows
-  artifacts:
-    paths:
-      - ${CI_PROJECT_DIR}/dist/windows
-    expire_in: 1 week
-
 Tag Release:
   stage: tag
   image: python:3.12
@@ -94,6 +71,31 @@ Tag Release:
     - version=$(poetry version --short)
     - git tag $version
     - git push api-origin $version
+
+package-windows:
+  stage: package
+  only:
+    - tags
+  dependencies:
+    - build-windows
+  before_script:
+    - ls ./dist/windows/
+  script:
+    - docker image prune -f
+    - docker-compose -f docker-compose.dist.yml build --no-cache
+    - docker-compose -f docker-compose.dist.yml up --exit-code-from dist-windows
+    - ls -la ./dist/windows
+    - mv ./dist/windows/Mixcloud\ Bulk\ Downloader.zip ./dist/windows/Mixcloud_Bulk_Downloader_${CI_COMMIT_TAG}.zip
+    - ls -la ./dist/windows
+  after_script:
+    - docker-compose -f docker-compose.dist.yml down
+    - pwd
+    - echo ${CI_PROJECT_DIR}
+    - ls -la ${CI_PROJECT_DIR}/dist/windows
+  artifacts:
+    paths:
+      - ${CI_PROJECT_DIR}/dist/windows
+#    expire_in: 1 week
 
 publish:
   stage: release
@@ -126,8 +128,8 @@ release:
   script:
     - echo "running release_job"
     - ls -la ./dist/windows/
-    - mv ./dist/windows/Mixcloud\ Bulk\ Downloader.zip ./dist/windows/Mixcloud_Bulk_Downloader_${CI_COMMIT_TAG}.zip
-    - ls -la ./dist/windows/
+#    - mv ./dist/windows/Mixcloud\ Bulk\ Downloader.zip ./dist/windows/Mixcloud_Bulk_Downloader_${CI_COMMIT_TAG}.zip
+#    - ls -la ./dist/windows/
   release: # See https://docs.gitlab.com/ee/ci/yaml/#release for available properties
     tag_name: '$CI_COMMIT_TAG'
     name: 'Release $CI_COMMIT_TAG'
