@@ -132,7 +132,7 @@ release:
     - echo "running release_job"
     - ls -la ./dist/windows/
   after_script:
-    - wget --spider -r --no-parent ${CI_PROJECT_URL}/-/jobs/`cat CI_JOB_ID.txt`/artifacts
+    - wget --spider --no-parent ${CI_PROJECT_URL}/-/jobs/`cat CI_JOB_ID.txt`/artifacts
   release: # See https://docs.gitlab.com/ee/ci/yaml/#release for available properties
     tag_name: '$CI_COMMIT_TAG'
     name: 'Release $CI_COMMIT_TAG'
@@ -140,4 +140,4 @@ release:
     assets:
       links:
         - name: Mixcloud_Bulk_Downloader_${CI_COMMIT_TAG}.zip
-          url: ${CI_PROJECT_URL}/-/jobs/`cat CI_JOB_ID.txt`/artifacts/file/Mixcloud_Bulk_Downloader_${CI_COMMIT_TAG}.zip
+          url: ${CI_PROJECT_URL}/-/jobs/`cat CI_JOB_ID.txt`/artifacts/file/dist/windows/Mixcloud_Bulk_Downloader_${CI_COMMIT_TAG}.zip
