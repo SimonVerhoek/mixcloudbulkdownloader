@@ -1,6 +1,6 @@
 from typing import Dict, Tuple
 
-import requests
+import httpx
 import yt_dlp
 
 # from .logging import logging
@@ -23,9 +23,9 @@ def get_mixcloud_API_data(url: str) -> Tuple[Dict, str]:
     response = None
     error = ''
     try:
-        req = requests.get(url=url)
+        req = httpx.get(url=url)
         response = req.json()
-    except requests.exceptions.RequestException as e:
+    except httpx.RequestError as e:
         error = 'Failed to query Mixcloud API'
         # logger.error(msg=f'{error}: {e}', exc_info=True)
 
