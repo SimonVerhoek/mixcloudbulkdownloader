@@ -39,6 +39,19 @@ Version Check:
     - sed -i -e 's/\r$//' scripts/check_version_update.sh
     - scripts/check_version_update.sh
 
+Requirements Export Check:
+  stage: check
+  image: python:3.12
+  only:
+    - branches
+  except:
+    - master
+  before_script:
+    - pip install poetry
+    - poetry check
+  script:
+    - scripts/check_requirements_export.sh
+
 build-windows:
   stage: build
   except:

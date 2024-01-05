@@ -2,7 +2,7 @@ version: '3.7'
 
 services:
   app-windows:
-    image: cdrx/pyinstaller-windows
+    image: ghcr.io/white-gecko/docker-pyinstaller:feature-buildwithga-py3-win64
     container_name: MBDLR-windows
     volumes:
       - .:/src
