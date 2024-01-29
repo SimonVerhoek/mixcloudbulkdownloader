@@ -28,7 +28,10 @@ class DownloadThread(QThread):
 
         progress = "unknown"
         if d["status"] == "downloading":
-            progress = f"{d['_percent_str']} of {d['_total_bytes_str']} at {d['_speed_str']}"
+            # TODO: find out why _total_bytes_str only shows "N/A" and find an alternative
+            progress = (
+                f"{d['_percent_str']} of {d['_total_bytes_estimate_str']} at {d['_speed_str']}"
+            )
         elif d["status"] == "finished":
             progress = "Done!"
 

@@ -94,5 +94,8 @@ class CloudcastQTreeWidget(QTreeWidget):
     @Slot()
     def update_item_download_progress(self, name: str, progress: str):
         for item in self.get_selected_cloudcasts():
-            if name == f"{item.cloudcast.user.name} - {item.cloudcast.name}":
+            if (
+                name.lower()
+                == f"{item.cloudcast.user.name.lower()} - {item.cloudcast.name.lower()}"
+            ):
                 item.update_download_progress(progress)
