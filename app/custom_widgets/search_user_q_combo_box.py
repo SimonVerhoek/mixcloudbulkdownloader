@@ -19,7 +19,8 @@ class SearchUserQComboBox(QComboBox):
 
         # Connections
         self._connect_with_delay(
-            input=self.lineEdit().textEdited, slot=self.get_suggestions,
+            input=self.lineEdit().textEdited,
+            slot=self.get_suggestions,
         )
         self.currentIndexChanged.connect(
             lambda user: self.set_selected_result(index=self.currentIndex())
@@ -57,7 +58,7 @@ class SearchUserQComboBox(QComboBox):
         if len(self.results) == 1:
             self.set_selected_result(index=0)
 
-        self.addItem(f'{item.name} ({item.username})')
+        self.addItem(f"{item.name} ({item.username})")
 
     @Slot(MixcloudUser)
     def set_selected_result(self, index: int):

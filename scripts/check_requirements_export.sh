@@ -2,7 +2,7 @@
 set -eu
 
 echo "Exporting Poetry requirements to test.txt..."
-poetry export -f requirements.txt --output test.txt
+poetry export -f requirements.txt --with dev --output test.txt
 
 if cmp "requirements.txt" "test.txt"; then
   echo "No changes found, requirements.txt is up to date!"

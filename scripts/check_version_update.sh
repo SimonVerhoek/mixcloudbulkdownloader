@@ -3,7 +3,7 @@ set -eu
 
 latest_tag=$(git describe --tags "$(git rev-list --tags --max-count=1)")
 poetry_version=$(poetry version --short)
-spec_version=$(grep app.spec -e "(?<=^APP_VERSION = ')(.*)(?=')" -Po)
+spec_version=$(python scripts/get_poetry_version.py)
 
 echo "Most recent tag found: ${latest_tag}, current Poetry version: ${poetry_version}, current app.spec version: ${spec_version}"
 

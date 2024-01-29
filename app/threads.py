@@ -1,7 +1,7 @@
 from typing import List
 
-from PySide6.QtCore import QThread, Signal
 import yt_dlp
+from PySide6.QtCore import QThread, Signal
 
 from .api import get_mixcloud_API_data, search_user_API_url, user_cloudcasts_API_url
 from .data_classes import Cloudcast, MixcloudUser
@@ -23,32 +23,27 @@ class DownloadThread(QThread):
 
     def _track_progress(self, d):
         item_name = (
-            d['filename']
-            .replace(f'{self.download_dir}/', '')
-            .replace('.m4a', '')
-            .replace('_', '/')
+            d["filename"].replace(f"{self.download_dir}/", "").replace(".m4a", "").replace("_", "/")
         )
 
-        progress = 'unknown'
-        if d['status'] == 'downloading':
-            progress = (
-                f"{d['_percent_str']} of {d['_total_bytes_str']} at {d['_speed_str']}"
-            )
-        elif d['status'] == 'finished':
-            progress = 'Done!'
+        progress = "unknown"
+        if d["status"] == "downloading":
+            progress = f"{d['_percent_str']} of {d['_total_bytes_str']} at {d['_speed_str']}"
+        elif d["status"] == "finished":
+            progress = "Done!"
 
         self.progress_signal.emit(item_name, progress)
 
     def run(self) -> None:
         if not self.download_dir:
-            error_msg = 'no download directory provided'
+            error_msg = "no download directory provided"
             self.error_signal.emit(error_msg)
             return
 
         ydl_opts = {
-            'outtmpl': f'{self.download_dir}/%(uploader)s - %(title)s.%(ext)s',
-            'progress_hooks': [self._track_progress],
-            "verbose": False
+            "outtmpl": f"{self.download_dir}/%(uploader)s - %(title)s.%(ext)s",
+            "progress_hooks": [self._track_progress],
+            "verbose": False,
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download(self.urls)
@@ -68,7 +63,7 @@ class GetCloudcastsThread(QThread):
 
     user: MixcloudUser = None
 
-    def _query_cloudcasts(self, user: MixcloudUser, url: str = ''):
+    def _query_cloudcasts(self, user: MixcloudUser, url: str = ""):
         if not url:
             url = user_cloudcasts_API_url(username=user.username)
 
@@ -79,21 +74,23 @@ class GetCloudcastsThread(QThread):
             return
 
         while not self.isInterruptionRequested():
-            for cloudcast in response['data']:
+            for cloudcast in response["data"]:
                 cloudcast = Cloudcast(
-                    name=cloudcast['name'], url=cloudcast['url'], user=user,
+                    name=cloudcast["name"],
+                    url=cloudcast["url"],
+                    user=user,
                 )
                 self.new_result.emit(cloudcast)
 
-            if response.get('paging') and response['paging'].get('next'):
-                next_url = response['paging'].get('next')
+            if response.get("paging") and response["paging"].get("next"):
+                next_url = response["paging"].get("next")
                 self._query_cloudcasts(user=user, url=next_url)
             return
 
     def run(self) -> None:
         # logger.debug('get_cloudcasts_thread started')
         if not self.user:
-            error_msg = 'no user provided'
+            error_msg = "no user provided"
             # logger.error(error_msg)
             self.error_signal.emit(error_msg)
 
@@ -111,7 +108,7 @@ class SearchArtistThread(QThread):
     error_signal = Signal(object)
     new_result = Signal(MixcloudUser)
 
-    phrase: str = ''
+    phrase: str = ""
 
     def show_suggestions(self, phrase: str) -> None:
         url = search_user_API_url(phrase=phrase)
@@ -120,7 +117,7 @@ class SearchArtistThread(QThread):
             self.error_signal.emit(error)
             self.stop()
         else:
-            for i, result in enumerate(response['data']):
+            for i, result in enumerate(response["data"]):
                 user = MixcloudUser(**result)
                 self.new_result.emit(user)
 
@@ -128,7 +125,7 @@ class SearchArtistThread(QThread):
         # logger.debug('thread started')
         while not self.isInterruptionRequested():
             if not self.phrase:
-                error_msg = 'no search phrase provided'
+                error_msg = "no search phrase provided"
                 # logger.error(error_msg)
                 self.error_signal.emit(error_msg)
 

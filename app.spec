@@ -1,22 +1,25 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 import sys
+import tomllib
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
 
+from environs import Env
 from PyInstaller.building.api import COLLECT, EXE, PYZ
 from PyInstaller.building.build_main import Analysis
 from PyInstaller.building.osx import BUNDLE
+from PyInstaller.utils.hooks import collect_submodules
 
+
+# load .env file
+env = Env()
+env.read_env()
 
 block_cipher = None
+
 current_dir = os.getcwd()
 
-APP_VERSION = '0.1.23'
-APP_TITLE = 'Mixcloud Bulk Downloader'
-DEBUG = False
-CONSOLE = False
-ICON_WINDOWS = 'assets/logo.ico'
-ICON_MACOS = 'assets/logo.icns'
-WINDOWS_EXE_ONLY = False
 
 a = Analysis(
     ['main.py'],
@@ -32,6 +35,27 @@ a = Analysis(
     cipher=block_cipher,
     noarchive=False,
 )
+
+# Dynamically import get_poetry_version.py so we can grab the project's version
+module_path = Path("/src/scripts/get_poetry_version.py")
+spec = spec_from_file_location("get_poetry_version", module_path)
+poetry_version_module = module_from_spec(spec)
+spec.loader.exec_module(poetry_version_module)
+
+APP_VERSION = poetry_version_module.get_poetry_version(root_dir=Path(current_dir))
+APP_TITLE = 'Mixcloud Bulk Downloader'
+DEBUG = env.bool("DEBUG", False)
+CONSOLE = env.bool("CONSOLE", False)
+ICON_WINDOWS = 'assets/logo.ico'
+ICON_MACOS = 'assets/logo.icns'
+WINDOWS_EXE_ONLY = False
+
+print()
+print(f"{sys.platform = }")
+print(f"{APP_VERSION = }")
+print(f"{DEBUG = }")
+print(f"{CONSOLE = }")
+print()
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 

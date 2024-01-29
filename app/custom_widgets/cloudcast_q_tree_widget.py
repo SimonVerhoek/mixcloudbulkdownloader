@@ -15,7 +15,7 @@ class CloudcastQTreeWidget(QTreeWidget):
         super().__init__()
 
         self.setColumnCount(3)
-        self.setHeaderLabels(['select', 'title', 'download status'])
+        self.setHeaderLabels(["select", "title", "download status"])
         self.header().resizeSection(0, 50)
         self.header().resizeSection(1, 400)
         self.header().resizeSection(2, 200)
@@ -35,7 +35,7 @@ class CloudcastQTreeWidget(QTreeWidget):
         dialog.setOption(QFileDialog.ShowDirsOnly)
         dialog.setOption(QFileDialog.DontResolveSymlinks)
         download_dir = dialog.getExistingDirectory(
-            self, 'Select download location', expanduser('~')
+            self, "Select download location", expanduser("~")
         )
         return download_dir
 
@@ -94,5 +94,5 @@ class CloudcastQTreeWidget(QTreeWidget):
     @Slot()
     def update_item_download_progress(self, name: str, progress: str):
         for item in self.get_selected_cloudcasts():
-            if name == f'{item.cloudcast.user.name} - {item.cloudcast.name}':
+            if name == f"{item.cloudcast.user.name} - {item.cloudcast.name}":
                 item.update_download_progress(progress)

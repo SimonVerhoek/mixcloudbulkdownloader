@@ -2,7 +2,9 @@ version: '3.7'
 
 services:
   app-windows:
-    image: ghcr.io/white-gecko/docker-pyinstaller:feature-buildwithga-py3-win64
+    # uncomment when working on a M1 machine locally
+    # platform: linux/amd64
+    image: ghcr.io/tkgmomosheep/docker-pyinstaller:master-py3-win64
     container_name: MBDLR-windows
     volumes:
       - .:/src

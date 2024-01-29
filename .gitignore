@@ -1,4 +1,7 @@
+# IDE config
 .idea
+
+# filesystem
 .DS_Store
 
 # caching
@@ -20,3 +23,9 @@ dist
 
 # packaged apps
 *.dmg
+
+# environment variables
+.env
+
+# virtual environments
+venv*
