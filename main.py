@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from PySide6.QtGui import QGuiApplication
 
 from app.custom_widgets import CloudcastQTreeWidget, SearchUserQComboBox
 
@@ -88,10 +89,17 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(widget)
 
+        # Activate the application explicitly
+        QGuiApplication.instance().setQuitOnLastWindowClosed(True)
+        QGuiApplication.instance().setApplicationDisplayName("Mixcloud Bulk Downloader")
+        QGuiApplication.instance().processEvents()
+
 
 if __name__ == "__main__":
     application = QApplication(sys.argv)
 
     window = MainWindow()
     window.show()
+    window.activateWindow()
+    window.raise_()
     sys.exit(application.exec())

@@ -7,7 +7,7 @@
 ### Local install
 Make sure you have `pyenv` installed
 ```shell
-env PYTHON_CONFIGURE_OPTS="--enable-framework" pyenv install 3.8
+env PYTHON_CONFIGURE_OPTS="--enable-framework" pyenv install 3.11
 ```
 
 

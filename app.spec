@@ -10,6 +10,12 @@ from PyInstaller.building.api import COLLECT, EXE, PYZ
 from PyInstaller.building.build_main import Analysis
 from PyInstaller.building.osx import BUNDLE
 from PyInstaller.utils.hooks import collect_submodules
+from PySide6.QtCore import QCoreApplication, Qt
+
+
+# Enable high DPI scaling
+QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
+QCoreApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
 
 
 # load .env file
@@ -37,7 +43,7 @@ a = Analysis(
 )
 
 # Dynamically import get_poetry_version.py so we can grab the project's version
-module_path = Path("/src/scripts/get_poetry_version.py")
+module_path = Path("./scripts/get_poetry_version.py")
 spec = spec_from_file_location("get_poetry_version", module_path)
 poetry_version_module = module_from_spec(spec)
 spec.loader.exec_module(poetry_version_module)
@@ -60,6 +66,10 @@ print()
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 if sys.platform == 'darwin':
+    import ctypes
+    app_bundle_path = os.path.abspath(".")
+    ctypes.cdll.LoadLibrary("/System/Library/Frameworks/Cocoa.framework/Cocoa").NSApplicationLoad()
+
     exe = EXE(
         pyz,
         a.scripts,
@@ -88,8 +98,12 @@ if sys.platform == 'darwin':
         icon=ICON_MACOS,
         bundle_identifier=None,
         info_plist={
-            'NSHighResolutionCapable': 'True',
-            'CFBundleShortVersionString': APP_VERSION
+            "CFBundleIdentifier": "com.simonic_software_intelligence.mixcloud_bulk_downloader",
+            "CFBundleName": "Mixcloud Bulk Downloader",
+            "CFBundleDisplayName": "Mixcloud Bulk Downloader",
+            "CFBundleVersion": APP_VERSION,
+            "CFBundleShortVersionString": APP_VERSION,
+            "NSHighResolutionCapable": "True",
         }
     )
 

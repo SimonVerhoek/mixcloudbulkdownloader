@@ -1,6 +1,6 @@
-from typing import Any, Callable, List
+from typing import Any
 
-from PySide6.QtCore import QTimer, Slot
+from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtWidgets import QComboBox
 
 from ..custom_widgets.error_dialog import ErrorDialog
@@ -13,28 +13,26 @@ class SearchUserQComboBox(QComboBox):
         super().__init__()
 
         self.setEditable(True)
-        self.results: List[MixcloudUser] = []
+        self.results: list[MixcloudUser] = []
         self.selected_result: Any[MixcloudUser, None] = None
         self.search_artist_thread = SearchArtistThread()
 
+        self.timer = QTimer()
+        self.timer.setInterval(750)
+        self.timer.setSingleShot(True)
+
         # Connections
-        self._connect_with_delay(
-            input=self.lineEdit().textEdited,
-            slot=self.get_suggestions,
-        )
-        self.currentIndexChanged.connect(
-            lambda user: self.set_selected_result(index=self.currentIndex())
-        )
+        self.timer.timeout.connect(self.get_suggestions)
+        self.lineEdit().textEdited.connect(self.timer.start)
+
+        self.currentIndexChanged.connect(self.on_index_changed)
         self.search_artist_thread.new_result.connect(self.add_result)
         self.search_artist_thread.error_signal.connect(self.show_error)
 
-    def _connect_with_delay(self, input: Callable, slot: Slot, delay_ms: int = 750):
-        """Connects a given input to a given Slot with a given delay."""
-        self.timer = QTimer()
-        self.timer.setInterval(delay_ms)
-        self.timer.setSingleShot(True)
-        self.timer.timeout.connect(slot)
-        input.connect(self.timer.start)
+        # set focus policy
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.lineEdit().setFocusPolicy(Qt.StrongFocus)
+        self.lineEdit().setFocus()
 
     @Slot()
     def get_suggestions(self) -> None:
@@ -49,7 +47,7 @@ class SearchUserQComboBox(QComboBox):
 
     @Slot()
     def show_error(self, msg: str):
-        ErrorDialog(self.parent(), message=msg)
+        ErrorDialog(self, message=msg)
 
     @Slot()
     def add_result(self, item: MixcloudUser):
@@ -59,6 +57,10 @@ class SearchUserQComboBox(QComboBox):
             self.set_selected_result(index=0)
 
         self.addItem(f"{item.name} ({item.username})")
+
+    @Slot(int)
+    def on_index_changed(self, index: int):
+        self.set_selected_result(index)
 
     @Slot(MixcloudUser)
     def set_selected_result(self, index: int):

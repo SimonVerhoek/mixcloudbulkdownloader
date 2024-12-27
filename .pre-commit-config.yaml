@@ -22,8 +22,8 @@ repos:
     rev: 1.7.1
     hooks:
       - id: poetry-check
-      -   id: poetry-export
-          args: [ "-f", "requirements.txt", "-o", "requirements.txt" ]
+      - id: poetry-export
+        args: [ "-f", "requirements.txt", "--with", "dev", "-o", "requirements.txt" ]
 
   - repo: https://github.com/psf/black-pre-commit-mirror
     rev: 23.12.0
