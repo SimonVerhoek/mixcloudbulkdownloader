@@ -98,9 +98,9 @@ if sys.platform == 'darwin':
         icon=ICON_MACOS,
         bundle_identifier=None,
         info_plist={
-            "CFBundleIdentifier": "com.simonic_software_intelligence.mixcloud_bulk_downloader",
-            "CFBundleName": "Mixcloud Bulk Downloader",
-            "CFBundleDisplayName": "Mixcloud Bulk Downloader",
+            "CFBundleIdentifier": "com.simonic-software-intelligence.MixcloudBulkDownloader",
+            "CFBundleName": APP_TITLE,
+            "CFBundleDisplayName": APP_TITLE,
             "CFBundleVersion": APP_VERSION,
             "CFBundleShortVersionString": APP_VERSION,
             "NSHighResolutionCapable": "True",

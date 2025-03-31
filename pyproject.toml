@@ -1,21 +1,28 @@
 [tool.poetry]
 name = "mixcloud-bulk-downloader"
-version = "0.2.2"
+version = "0.2.3"
 description = "Download for FREE all cloudcasts of your favorite Mixcloud artist at one go!"
 authors = ["Simon Verhoek <simon@simonic.nl>"]
 readme = "README.md"
 packages = [{include = "app"}]
 
 [tool.poetry.dependencies]
-python = ">=3.11,<3.12"
+python = "3.11.5"
 pyinstaller = "^5.13.1,<6.0.0"
 yt-dlp = "^2024.12.23"
 httpx = "^0.26.0"
-pyside6 = "6.8.1"
+pyside6 = "^6.8.3"
 
 [tool.poetry.group.dev.dependencies]
 environs = "^10.0.0"
 pre-commit = "^3.6.0"
+
+# For some reason, this is broken. Will produce the following error:
+# The Poetry configuration is invalid:
+#   - Additional properties are not allowed ('requires-plugins' was unexpected
+# Until this is fixed, leave this code commented out
+#[tool.poetry.requires-plugins]
+#poetry-plugin-export = ">=1.8"
 
 [build-system]
 requires = ["poetry-core"]

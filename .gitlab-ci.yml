@@ -48,6 +48,7 @@ Requirements Export Check:
     - master
   before_script:
     - pip install poetry
+    - poetry self add poetry-plugin-export
     - poetry check
   script:
     - scripts/check_requirements_export.sh
