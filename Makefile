@@ -7,7 +7,9 @@ export
 # Define variables
 APP_NAME = Mixcloud\ Bulk\ Downloader.app
 DIST_PATH = dist/$(APP_NAME)
-DMG_NAME = Mixcloud\ Bulk\ Downloader.dmg
+VERSION := $(shell grep '^version =' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+DMG_NAME = Mixcloud\ Bulk\ Downloader\ ${VERSION}.dmg
+
 
 # Setup a proper development environment
 setupdev:
@@ -16,23 +18,23 @@ setupdev:
 	source venv/bin/activate
 	pip install --upgrade pip
 	pip install poetry
-	venv/bin/poetry install --with dev
+	poetry install --with dev
 
 # Target to clean the existing installation
 clean:
-	venv/bin/poetry remove pyside6
+	poetry remove pyside6
 
 # Target to install the latest PySide6 version
 install:
-	venv/bin/poetry add pyside6@latest
+	poetry add pyside6@latest
 
 # Target to build the app using PyInstaller
 build:
-	venv/bin/pyinstaller --clean -y app.spec
+	pyinstaller --clean -y --log-level ${PYINSTALLER_LOG_LEVEL} app.spec
 
 # Target to create the DMG file
 dmg:
-	create-dmg --overwrite $(DIST_PATH)
+	create-dmg ${DMG_NAME} $(DIST_PATH)
 
 # Verify the certificate used for code signing
 verify-certificate:
@@ -48,4 +50,12 @@ verify-codesign:
 # Codesign the MacOS app
 # NOTE: as `make dmg` already attempts to codesign the app, this command is not necessary in practice
 codesign-app:
-	codesign --deep --force --verify --verbose --sign $(APPLE_DEVELOPER_ID) --options runtime $(DIST_PATH)
+	codesign --strict --deep --force --verify --verbose --sign $(APPLE_DEVELOPER_ID) --options runtime $(DIST_PATH)
+
+notarize:
+	xcrun notarytool submit $(DMG_NAME) --keychain-profile ${KEYCHAIN_PROFILE} --wait
+
+staple:
+	xcrun stapler staple $(DMG_NAME)
+
+prepare-release: build dmg notarize staple

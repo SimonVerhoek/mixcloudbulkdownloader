@@ -70,6 +70,9 @@ if sys.platform == 'darwin':
     app_bundle_path = os.path.abspath(".")
     ctypes.cdll.LoadLibrary("/System/Library/Frameworks/Cocoa.framework/Cocoa").NSApplicationLoad()
 
+    # .env values should always be quoted, but we do not want double quoting here so strip the duplicates
+    APPLE_DEVELOPER_ID = env.str("APPLE_DEVELOPER_ID").strip("'").strip('"')
+
     exe = EXE(
         pyz,
         a.scripts,
@@ -88,7 +91,7 @@ if sys.platform == 'darwin':
         disable_windowed_traceback=False,
         argv_emulation=False,
         target_arch=None,
-        codesign_identity=None,
+        codesign_identity=APPLE_DEVELOPER_ID,
         entitlements_file=None,
     )
 

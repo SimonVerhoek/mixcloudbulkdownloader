@@ -29,3 +29,7 @@ dist
 
 # virtual environments
 venv*
+
+# Apple Developer ID
+CertificateSigningRequest.certSigningRequest
+developerID_application.cer
