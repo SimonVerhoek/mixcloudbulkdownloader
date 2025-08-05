@@ -2,7 +2,7 @@ version: '3.7'
 
 services:
   app:
-    container_name: MBDLR
+    container_name: MBD
     platform: linux/amd64
     build:
       context: .

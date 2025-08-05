@@ -1,141 +1,192 @@
-from typing import List
+"""Threading classes for background operations in Mixcloud Bulk Downloader."""
 
-import yt_dlp
 from PySide6.QtCore import QThread, Signal
 
-from .api import get_mixcloud_API_data, search_user_API_url, user_cloudcasts_API_url
-from .data_classes import Cloudcast, MixcloudUser
+from app.consts import ERROR_NO_SEARCH_PHRASE, ERROR_NO_USER_PROVIDED
+from app.data_classes import Cloudcast, MixcloudUser
+from app.services.api_service import MixcloudAPIService
+from app.services.download_service import DownloadService
 
 
 # from .logging import logging
-
-
 # logger = logging.getLogger(__name__)
 
 
 class DownloadThread(QThread):
-    urls: List[str] = []
-    download_dir: str = None
+    """Thread for downloading cloudcasts in the background.
+
+    This thread handles the actual downloading of selected cloudcasts using
+    the DownloadService, providing progress updates through Qt signals.
+
+    Attributes:
+        urls: List of cloudcast URLs to download
+        download_dir: Directory path where files should be saved
+        download_service: Service for handling downloads with dependency injection
+        progress_signal: Signal emitted with (item_name, progress_info)
+        interrupt_signal: Signal emitted when download is interrupted
+        error_signal: Signal emitted when an error occurs
+    """
+
+    urls: list[str] = []
+    download_dir: str | None = None
 
     progress_signal = Signal(str, str)
     interrupt_signal = Signal()
-    error_signal = Signal(object)
+    error_signal = Signal(str)
 
-    def _track_progress(self, d):
-        item_name = (
-            d["filename"].replace(f"{self.download_dir}/", "").replace(".m4a", "").replace("_", "/")
-        )
+    def __init__(self, download_service: DownloadService | None = None) -> None:
+        """Initialize download thread with optional service injection.
 
-        progress = "unknown"
-        if d["status"] == "downloading":
-            # TODO: find out why _total_bytes_str only shows "N/A" and find an alternative
-            progress = (
-                f"{d['_percent_str']} of {d['_total_bytes_estimate_str']} at {d['_speed_str']}"
-            )
-        elif d["status"] == "finished":
-            progress = "Done!"
+        Args:
+            download_service: Service for handling downloads. If None, creates default.
+        """
+        super().__init__()
+        self.download_service = download_service or DownloadService()
 
-        self.progress_signal.emit(item_name, progress)
+        # Set up service callbacks to emit signals
+        self.download_service.set_progress_callback(self.progress_signal.emit)
+        self.download_service.set_error_callback(self.error_signal.emit)
 
     def run(self) -> None:
-        if not self.download_dir:
-            error_msg = "no download directory provided"
-            self.error_signal.emit(error_msg)
-            return
+        """Main thread execution method for downloading cloudcasts."""
+        try:
+            self.download_service.download_cloudcasts(self.urls, self.download_dir)
+        except Exception as e:
+            self.error_signal.emit(str(e))
 
-        ydl_opts = {
-            "outtmpl": f"{self.download_dir}/%(uploader)s - %(title)s.%(ext)s",
-            "progress_hooks": [self._track_progress],
-            "verbose": False,
-        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download(self.urls)
-
-        return
-
-    def stop(self):
+    def stop(self) -> None:
+        """Stop the download thread and emit interrupt signal."""
+        self.download_service.cancel_downloads()
         self.terminate()
         self.interrupt_signal.emit()
         self.wait()
 
 
 class GetCloudcastsThread(QThread):
-    error_signal = Signal(object)
+    """Thread for fetching cloudcasts from a user's profile.
+
+    This thread uses the MixcloudAPIService to retrieve all cloudcasts for a given user,
+    handling pagination automatically.
+
+    Attributes:
+        user: MixcloudUser whose cloudcasts to fetch
+        api_service: Service for API operations with dependency injection
+        error_signal: Signal emitted when an error occurs
+        interrupt_signal: Signal emitted when operation is interrupted
+        new_result: Signal emitted for each cloudcast found
+    """
+
+    error_signal = Signal(str)
     interrupt_signal = Signal()
     new_result = Signal(Cloudcast)
 
-    user: MixcloudUser = None
+    user: MixcloudUser | None = None
 
-    def _query_cloudcasts(self, user: MixcloudUser, url: str = ""):
+    def __init__(self, api_service: MixcloudAPIService | None = None) -> None:
+        """Initialize cloudcasts thread with optional service injection.
+
+        Args:
+            api_service: Service for API operations. If None, creates default.
+        """
+        super().__init__()
+        self.api_service = api_service or MixcloudAPIService()
+
+    def _query_cloudcasts(self, user: MixcloudUser, url: str = "") -> None:
+        """Query cloudcasts from API, handling pagination recursively.
+
+        Args:
+            user: The user whose cloudcasts to fetch
+            url: API URL to query (if empty, generates from username)
+        """
+        if self.isInterruptionRequested():
+            return
+
         if not url:
-            url = user_cloudcasts_API_url(username=user.username)
+            cloudcasts, error, next_url = self.api_service.get_user_cloudcasts(user.username)
+        else:
+            cloudcasts, error, next_url = self.api_service.get_next_cloudcasts_page(url)
 
-        response, error = get_mixcloud_API_data(url=url)
         if error:
             self.error_signal.emit(error)
-            self.stop()
             return
 
-        while not self.isInterruptionRequested():
-            for cloudcast in response["data"]:
-                cloudcast = Cloudcast(
-                    name=cloudcast["name"],
-                    url=cloudcast["url"],
-                    user=user,
-                )
-                self.new_result.emit(cloudcast)
+        # Emit each cloudcast as a result
+        for cloudcast in cloudcasts:
+            if self.isInterruptionRequested():
+                return
+            self.new_result.emit(cloudcast)
 
-            if response.get("paging") and response["paging"].get("next"):
-                next_url = response["paging"].get("next")
-                self._query_cloudcasts(user=user, url=next_url)
-            return
+        # Handle pagination - recursively fetch next page if available
+        if next_url and not self.isInterruptionRequested():
+            self._query_cloudcasts(user, next_url)
 
     def run(self) -> None:
-        # logger.debug('get_cloudcasts_thread started')
+        """Main thread execution method for fetching cloudcasts."""
         if not self.user:
-            error_msg = "no user provided"
-            # logger.error(error_msg)
-            self.error_signal.emit(error_msg)
+            self.error_signal.emit(ERROR_NO_USER_PROVIDED)
+            return
 
         self._query_cloudcasts(user=self.user)
-        return
 
-    def stop(self):
-        # logger.debug("Thread Stopped")
+    def stop(self) -> None:
+        """Stop the cloudcast fetching thread."""
         self.requestInterruption()
         self.interrupt_signal.emit()
         self.wait()
 
 
 class SearchArtistThread(QThread):
-    error_signal = Signal(object)
+    """Thread for searching Mixcloud users/artists.
+
+    This thread uses MixcloudAPIService to search for users based on a search phrase
+    and emits results as they are found.
+
+    Attributes:
+        phrase: Search term to look for
+        api_service: Service for API operations with dependency injection
+        error_signal: Signal emitted when an error occurs
+        new_result: Signal emitted for each user found
+    """
+
+    error_signal = Signal(str)
     new_result = Signal(MixcloudUser)
 
     phrase: str = ""
 
+    def __init__(self, api_service: MixcloudAPIService | None = None) -> None:
+        """Initialize search thread with optional service injection.
+
+        Args:
+            api_service: Service for API operations. If None, creates default.
+        """
+        super().__init__()
+        self.api_service = api_service or MixcloudAPIService()
+
     def show_suggestions(self, phrase: str) -> None:
-        url = search_user_API_url(phrase=phrase)
-        response, error = get_mixcloud_API_data(url=url)
+        """Search for users and emit results.
+
+        Args:
+            phrase: Search term to look for users
+        """
+        users, error = self.api_service.search_users(phrase)
         if error:
             self.error_signal.emit(error)
-            self.stop()
-        else:
-            for i, result in enumerate(response["data"]):
-                user = MixcloudUser(**result)
-                self.new_result.emit(user)
-
-    def run(self) -> None:
-        # logger.debug('thread started')
-        while not self.isInterruptionRequested():
-            if not self.phrase:
-                error_msg = "no search phrase provided"
-                # logger.error(error_msg)
-                self.error_signal.emit(error_msg)
-
-            self.show_suggestions(phrase=self.phrase)
             return
 
-    def stop(self):
-        # logger.debug("thread Stopped")
+        for user in users:
+            if self.isInterruptionRequested():
+                return
+            self.new_result.emit(user)
+
+    def run(self) -> None:
+        """Main thread execution method for searching users."""
+        if not self.phrase:
+            self.error_signal.emit(ERROR_NO_SEARCH_PHRASE)
+            return
+
+        self.show_suggestions(phrase=self.phrase)
+
+    def stop(self) -> None:
+        """Stop the search thread."""
         self.requestInterruption()
         self.wait()

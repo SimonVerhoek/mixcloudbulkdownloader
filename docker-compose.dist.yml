@@ -2,7 +2,7 @@ version: '3.7'
 
 services:
   dist-windows:
-    container_name: MBDLR-windows-zip
+    container_name: MBD-windows-zip
     build:
       dockerfile: Dockerfile.dist-zip
       context: .

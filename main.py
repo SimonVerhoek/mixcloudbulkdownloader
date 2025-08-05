@@ -1,3 +1,5 @@
+"""Main application entry point for Mixcloud Bulk Downloader."""
+
 import sys
 
 from PySide6.QtCore import Qt
@@ -12,42 +14,75 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QGuiApplication
 
+from app.consts import (
+    MAIN_WINDOW_MIN_WIDTH,
+    MAIN_WINDOW_MIN_HEIGHT,
+    SEARCH_LABEL_STRETCH,
+    SEARCH_INPUT_STRETCH,
+    SEARCH_BUTTON_STRETCH,
+)
 from app.custom_widgets import CloudcastQTreeWidget, SearchUserQComboBox
+from app.services.api_service import MixcloudAPIService
+from app.services.download_service import DownloadService
+from app.services.file_service import FileService
 
 # from app.logging import logging
-
-
 # logger = logging.getLogger(__name__)
 
 
 class CentralWidget(QWidget):
-    def __init__(self):
-        QWidget.__init__(self)
+    """Main central widget containing the application's UI components.
+    
+    This widget contains the search interface, cloudcast tree, and action buttons
+    for the Mixcloud Bulk Downloader application.
+    """
+    
+    def __init__(self, 
+                 api_service: MixcloudAPIService | None = None,
+                 download_service: DownloadService | None = None, 
+                 file_service: FileService | None = None) -> None:
+        """Initialize the central widget with all UI components and connections.
+        
+        Args:
+            api_service: Service for API operations. If None, creates default.
+            download_service: Service for downloads. If None, creates default.
+            file_service: Service for file operations. If None, creates default.
+        """
+        super().__init__()
+
+        # Create services with dependency injection support
+        self.api_service = api_service or MixcloudAPIService()
+        self.download_service = download_service or DownloadService()
+        self.file_service = file_service or FileService()
 
         self.layout = QVBoxLayout()
 
-        # search user layout
+        # Search user layout
         search_user_layout = QHBoxLayout()
         search_user_layout.setAlignment(Qt.AlignTop)
 
         self.search_user_label = QLabel("Search account:")
-        self.search_user_input = SearchUserQComboBox()
+        self.search_user_input = SearchUserQComboBox(api_service=self.api_service)
         self.get_cloudcasts_button = QPushButton("Get cloudcasts")
 
         search_user_layout.addWidget(self.search_user_label)
         search_user_layout.addWidget(self.search_user_input)
         search_user_layout.addWidget(self.get_cloudcasts_button)
 
-        search_user_layout.setStretch(0, 1)
-        search_user_layout.setStretch(1, 3)
-        search_user_layout.setStretch(2, 1)
+        search_user_layout.setStretch(0, SEARCH_LABEL_STRETCH)
+        search_user_layout.setStretch(1, SEARCH_INPUT_STRETCH)
+        search_user_layout.setStretch(2, SEARCH_BUTTON_STRETCH)
 
-        # user cloudcasts layout
+        # User cloudcasts layout
         user_cloudcasts_layout = QVBoxLayout()
-        self.cloudcasts = CloudcastQTreeWidget()
+        self.cloudcasts = CloudcastQTreeWidget(
+            api_service=self.api_service,
+            download_service=self.download_service,
+            file_service=self.file_service
+        )
         user_cloudcasts_layout.addWidget(self.cloudcasts)
 
-        # cloudcast action buttons layout
+        # Cloudcast action buttons layout
         cloudcast_action_buttons = QHBoxLayout()
         self.select_all_button = QPushButton("Select All")
         self.unselect_all_button = QPushButton("Unselect All")
@@ -64,9 +99,9 @@ class CentralWidget(QWidget):
 
         self.setLayout(self.layout)
 
-        # connections
+        # Signal connections
         self.get_cloudcasts_button.clicked.connect(
-            lambda user: self.cloudcasts.get_cloudcasts(user=self.search_user_input.selected_result)
+            lambda: self.cloudcasts.get_cloudcasts(user=self.search_user_input.selected_result)
         )
         self.select_all_button.clicked.connect(self.cloudcasts.select_all)
         self.unselect_all_button.clicked.connect(self.cloudcasts.unselect_all)
@@ -75,13 +110,20 @@ class CentralWidget(QWidget):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
-        QMainWindow.__init__(self)
+    """Main application window for Mixcloud Bulk Downloader.
+    
+    This is the top-level window that contains all the application UI
+    and handles window-level operations like menus and window properties.
+    """
+    
+    def __init__(self) -> None:
+        """Initialize the main window with UI components and application settings."""
+        super().__init__()
 
         widget = CentralWidget()
 
         self.setWindowTitle("Mixcloud Bulk Downloader")
-        self.setMinimumSize(700, 400)
+        self.setMinimumSize(MAIN_WINDOW_MIN_WIDTH, MAIN_WINDOW_MIN_HEIGHT)
 
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu("File")
@@ -89,17 +131,25 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(widget)
 
-        # Activate the application explicitly
-        QGuiApplication.instance().setQuitOnLastWindowClosed(True)
-        QGuiApplication.instance().setApplicationDisplayName("Mixcloud Bulk Downloader")
-        QGuiApplication.instance().processEvents()
+        # Configure application behavior
+        app_instance = QGuiApplication.instance()
+        if app_instance:
+            app_instance.setQuitOnLastWindowClosed(True)
+            app_instance.setApplicationDisplayName("Mixcloud Bulk Downloader")
+            app_instance.processEvents()
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Main application entry point."""
     application = QApplication(sys.argv)
 
     window = MainWindow()
     window.show()
     window.activateWindow()
     window.raise_()
+    
     sys.exit(application.exec())
+
+
+if __name__ == "__main__":
+    main()

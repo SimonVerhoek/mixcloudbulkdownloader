@@ -1,5 +1,7 @@
 # Mixcloud Bulk Downloader
 
+A desktop application for downloading multiple mixes and playlists from Mixcloud in bulk. This tool allows you to efficiently download your favorite DJ sets, radio shows, and podcasts from Mixcloud for offline listening.
+
 ---
 
 ## Development

@@ -10,18 +10,45 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
-      - id: check-ast
-      - id: trailing-whitespace
+      # filesystem
+      - id: end-of-file-fixer
       - id: mixed-line-ending
         args: [
           --fix=lf,
         ]
+      - id: check-symlinks
+      - id: destroyed-symlinks
+      - id: check-executables-have-shebangs
+      - id: check-illegal-windows-names
+      - id: trailing-whitespace
+      - id: check-case-conflict
+      - id: name-tests-test
+        args: [
+          --pytest-test-first
+        ]
+        exclude: stubs
+      # linting
+      - id: check-ast
+      - id: check-toml
+      - id: check-yaml
+      - id: detect-private-key
+      # git quality
+      - id: check-merge-conflict
       - id: no-commit-to-branch
+      - id: check-added-large-files
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.28.0
+    hooks:
+      - id: gitleaks
 
   - repo: https://github.com/python-poetry/poetry
     rev: 2.1.2
     hooks:
       - id: poetry-check
+        language_version: python3.11
+      - id: poetry-lock
+        language_version: python3.11
 
   - repo: https://github.com/python-poetry/poetry-plugin-export
     rev: '1.9.0'  # add version here
@@ -43,3 +70,12 @@ repos:
     hooks:
       - id: isort
         name: isort (python)
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: Run pytest tests
+        entry: pytest
+        language: system  # use system python environment
+        pass_filenames: false  # don't pass filenames (pytest runs all tests)
+        always_run: true       # run on every commit, regardless of files changed
