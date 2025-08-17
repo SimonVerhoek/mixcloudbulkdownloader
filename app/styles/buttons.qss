@@ -1,0 +1,37 @@
+/* Button Styles for Mixcloud Bulk Downloader */
+
+/* Primary Button (Donate, Download, etc.) */
+QPushButton#donateButton {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-weight: bold;
+}
+
+QPushButton#donateButton:hover {
+    background-color: #45a049;
+}
+
+QPushButton#donateButton:pressed {
+    background-color: #3d8b40;
+}
+
+/* Secondary Button (No thanks, Cancel, etc.) */
+QPushButton#secondaryButton {
+    background-color: #f0f0f0;
+    color: #333;
+    border: 1px solid #ccc;
+    padding: 10px 20px;
+    border-radius: 5px;
+}
+
+QPushButton#secondaryButton:hover {
+    background-color: #e0e0e0;
+}
+
+QPushButton#secondaryButton:pressed {
+    background-color: #d0d0d0;
+    border-color: #999;
+}

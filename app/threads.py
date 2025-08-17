@@ -4,12 +4,9 @@ from PySide6.QtCore import QThread, Signal
 
 from app.consts import ERROR_NO_SEARCH_PHRASE, ERROR_NO_USER_PROVIDED
 from app.data_classes import Cloudcast, MixcloudUser
+from app.qt_logger import log_error, log_thread
 from app.services.api_service import MixcloudAPIService
 from app.services.download_service import DownloadService
-
-
-# from .logging import logging
-# logger = logging.getLogger(__name__)
 
 
 class DownloadThread(QThread):
@@ -25,6 +22,7 @@ class DownloadThread(QThread):
         progress_signal: Signal emitted with (item_name, progress_info)
         interrupt_signal: Signal emitted when download is interrupted
         error_signal: Signal emitted when an error occurs
+        completion_signal: Signal emitted when all downloads complete successfully
     """
 
     urls: list[str] = []
@@ -33,6 +31,7 @@ class DownloadThread(QThread):
     progress_signal = Signal(str, str)
     interrupt_signal = Signal()
     error_signal = Signal(str)
+    completion_signal = Signal()
 
     def __init__(self, download_service: DownloadService | None = None) -> None:
         """Initialize download thread with optional service injection.
@@ -49,13 +48,18 @@ class DownloadThread(QThread):
 
     def run(self) -> None:
         """Main thread execution method for downloading cloudcasts."""
+        log_thread(f"Starting download of {len(self.urls)} cloudcasts", "INFO")
         try:
             self.download_service.download_cloudcasts(self.urls, self.download_dir)
+            log_thread("Download completed successfully", "INFO")
+            self.completion_signal.emit()
         except Exception as e:
+            log_error(f"Download thread error: {str(e)}", "CRITICAL")
             self.error_signal.emit(str(e))
 
     def stop(self) -> None:
         """Stop the download thread and emit interrupt signal."""
+        log_thread("Stopping download thread", "WARNING")
         self.download_service.cancel_downloads()
         self.terminate()
         self.interrupt_signal.emit()
@@ -107,6 +111,7 @@ class GetCloudcastsThread(QThread):
             cloudcasts, error, next_url = self.api_service.get_next_cloudcasts_page(url)
 
         if error:
+            log_error(f"Cloudcasts query error: {error}", "CRITICAL")
             self.error_signal.emit(error)
             return
 
@@ -123,9 +128,11 @@ class GetCloudcastsThread(QThread):
     def run(self) -> None:
         """Main thread execution method for fetching cloudcasts."""
         if not self.user:
+            log_error(ERROR_NO_USER_PROVIDED, "CRITICAL")
             self.error_signal.emit(ERROR_NO_USER_PROVIDED)
             return
 
+        log_thread(f"Starting cloudcast fetch for user: {self.user.username}", "INFO")
         self._query_cloudcasts(user=self.user)
 
     def stop(self) -> None:
@@ -170,6 +177,7 @@ class SearchArtistThread(QThread):
         """
         users, error = self.api_service.search_users(phrase)
         if error:
+            log_error(f"User search error: {error}", "CRITICAL")
             self.error_signal.emit(error)
             return
 
@@ -181,9 +189,11 @@ class SearchArtistThread(QThread):
     def run(self) -> None:
         """Main thread execution method for searching users."""
         if not self.phrase:
+            log_error(ERROR_NO_SEARCH_PHRASE, "CRITICAL")
             self.error_signal.emit(ERROR_NO_SEARCH_PHRASE)
             return
 
+        log_thread(f"Starting user search for phrase: {self.phrase}", "INFO")
         self.show_suggestions(phrase=self.phrase)
 
     def stop(self) -> None:

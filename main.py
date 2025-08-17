@@ -21,13 +21,13 @@ from app.consts import (
     SEARCH_INPUT_STRETCH,
     SEARCH_BUTTON_STRETCH,
 )
-from app.custom_widgets import CloudcastQTreeWidget, SearchUserQComboBox
+from app.custom_widgets import CloudcastQTreeWidget, SearchUserQComboBox, SettingsDialog
 from app.services.api_service import MixcloudAPIService
 from app.services.download_service import DownloadService
 from app.services.file_service import FileService
-
-# from app.logging import logging
-# logger = logging.getLogger(__name__)
+from app.settings import MBDSettings
+from app.qt_logger import QtLogger, log_ui
+from app.styles import load_application_styles
 
 
 class CentralWidget(QWidget):
@@ -120,13 +120,24 @@ class MainWindow(QMainWindow):
         """Initialize the main window with UI components and application settings."""
         super().__init__()
 
+        # Initialize settings
+        self.settings = MBDSettings()
+        self.settings._initialize_from_env()
+
         widget = CentralWidget()
 
         self.setWindowTitle("Mixcloud Bulk Downloader")
         self.setMinimumSize(MAIN_WINDOW_MIN_WIDTH, MAIN_WINDOW_MIN_HEIGHT)
 
+        # Create menu bar
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu("File")
+        
+        # Add Settings menu item (only if feature flag is enabled)
+        if self.settings.settings_pane_enabled:
+            file_menu.addAction("Settings...", self._show_settings_dialog)
+            file_menu.addSeparator()
+        
         file_menu.addAction("Exit", QApplication.quit)
 
         self.setCentralWidget(widget)
@@ -137,18 +148,60 @@ class MainWindow(QMainWindow):
             app_instance.setQuitOnLastWindowClosed(True)
             app_instance.setApplicationDisplayName("Mixcloud Bulk Downloader")
             app_instance.processEvents()
+    
+    def _show_settings_dialog(self) -> None:
+        """Display the settings configuration dialog.
+        
+        Creates and shows a modal settings dialog that allows users to
+        configure application preferences. The dialog is centered on the
+        main window and uses OS-native styling.
+        """
+        settings_dialog = SettingsDialog(self)
+        settings_dialog.exec()
 
 
 def main() -> None:
     """Main application entry point."""
-    application = QApplication(sys.argv)
+    try:
+        application = QApplication(sys.argv)
+        
+        # Initialize Qt logging system after QApplication
+        qt_logger = QtLogger()
+        log_ui("Application starting up", "INFO")
 
-    window = MainWindow()
-    window.show()
-    window.activateWindow()
-    window.raise_()
-    
-    sys.exit(application.exec())
+        # Load application stylesheets
+        log_ui("Loading application styles", "INFO")
+        load_application_styles(application)
+
+        log_ui("Creating main window", "INFO")
+        window = MainWindow()
+        window.show()
+        window.activateWindow()
+        window.raise_()
+        
+        log_ui("Application ready", "INFO")
+        sys.exit(application.exec())
+    except Exception as e:
+        # Fallback error handling for bundled apps
+        import traceback
+        error_msg = f"""
+            Application startup error: {e}\n
+            {traceback.format_exc()}
+        """
+        
+        # Try to write to log file directly if Qt logging fails
+        try:
+            from pathlib import Path
+            log_dir = Path.home() / "Library" / "Logs" / "MixcloudBulkDownloader"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            with open(log_dir / "crash.log", "w") as f:
+                f.write(error_msg)
+        except:
+            pass
+            
+        # Also output to stderr
+        sys.stderr.write(error_msg)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

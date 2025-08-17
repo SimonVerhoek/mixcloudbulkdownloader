@@ -14,7 +14,8 @@ from app.consts import (
     TREE_TITLE_COLUMN_WIDTH,
 )
 from app.custom_widgets.cloudcast_q_tree_widget_item import CloudcastQTreeWidgetItem
-from app.custom_widgets.error_dialog import ErrorDialog
+from app.custom_widgets.dialogs.donation_dialog import DonationDialog
+from app.custom_widgets.dialogs.error_dialog import ErrorDialog
 from app.data_classes import Cloudcast, MixcloudUser
 from app.services.api_service import MixcloudAPIService
 from app.services.download_service import DownloadService
@@ -67,6 +68,7 @@ class CloudcastQTreeWidget(QTreeWidget):
         self.download_thread = DownloadThread(download_service=self.download_service)
         self.download_thread.error_signal.connect(self.show_error)
         self.download_thread.progress_signal.connect(self.update_item_download_progress)
+        self.download_thread.completion_signal.connect(self.show_donation_dialog)
 
     def _get_download_dir(self) -> str:
         """Show directory selection dialog and return selected path.
@@ -122,6 +124,12 @@ class CloudcastQTreeWidget(QTreeWidget):
             msg: Error message to display
         """
         ErrorDialog(self.parent(), message=msg)
+
+    @Slot()
+    def show_donation_dialog(self) -> None:
+        """Display donation dialog after successful download completion."""
+        dialog = DonationDialog(self.parent())
+        dialog.exec()
 
     @Slot()
     def select_all(self) -> None:

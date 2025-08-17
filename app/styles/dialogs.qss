@@ -1,0 +1,17 @@
+/* Dialog Styles for Mixcloud Bulk Downloader */
+
+/* Settings Dialog Placeholder Label - this needs custom styling */
+QLabel#placeholderLabel {
+    font-size: 24px;
+    color: #666666;
+    background-color: #f0f0f0;
+    border: 2px dashed #cccccc;
+    border-radius: 8px;
+    padding: 40px;
+    margin: 20px;
+}
+
+/* General Dialog Content Styling - only set layout properties */
+QDialog QLabel {
+    line-height: 1.4;
+}

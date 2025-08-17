@@ -8,6 +8,7 @@ from PySide6.QtTest import QTest
 
 from app.custom_widgets.search_user_q_combo_box import SearchUserQComboBox
 from app.custom_widgets.cloudcast_q_tree_widget import CloudcastQTreeWidget
+from app.custom_widgets.dialogs.donation_dialog import DonationDialog
 from app.data_classes import MixcloudUser, Cloudcast
 from tests.stubs import StubMixcloudAPIService, StubDownloadService, StubFileService
 
@@ -356,3 +357,52 @@ class TestWidgetIntegration:
         
         selected = widget.get_selected_cloudcasts()
         assert len(selected) == 2
+
+
+@pytest.mark.qt
+class TestDonationDialog:
+    """Test cases for DonationDialog widget."""
+
+    def test_init_creates_dialog(self, qt_app):
+        """Test donation dialog initialization."""
+        parent = QWidget()
+        dialog = DonationDialog(parent)
+        
+        assert dialog.parent() is parent
+        assert dialog.windowTitle() == "Support Mixcloud Bulk Downloader"
+        assert dialog.isModal()
+
+    def test_dialog_has_buttons(self, qt_app):
+        """Test that dialog has donate and no thanks buttons."""
+        dialog = DonationDialog()
+        
+        assert hasattr(dialog, 'donate_button')
+        assert hasattr(dialog, 'no_thanks_button')
+        assert dialog.donate_button.text() == "Donate"
+        assert dialog.no_thanks_button.text() == "No thank you"
+
+    def test_completion_signal_shows_dialog(self, qt_app):
+        """Test that CloudcastQTreeWidget shows donation dialog on completion signal."""
+        widget = CloudcastQTreeWidget()
+        
+        # Track show_donation_dialog method calls
+        dialog_shown = []
+        original_method = widget.show_donation_dialog
+        
+        def mock_show_dialog():
+            dialog_shown.append(True)
+        
+        widget.show_donation_dialog = mock_show_dialog
+        
+        try:
+            # Emit completion signal
+            widget.download_thread.completion_signal.emit()
+            
+            # Process Qt events to handle signal
+            QApplication.processEvents()
+            
+            # Check if dialog method was called
+            assert len(dialog_shown) == 1
+        finally:
+            # Restore original method
+            widget.show_donation_dialog = original_method

@@ -4,10 +4,7 @@ import httpx
 import yt_dlp
 
 from app.consts import ERROR_API_REQUEST_FAILED, MIXCLOUD_API_URL
-
-
-# from .logging import logging
-# logger = logging.getLogger(__name__)
+from app.qt_logger import log_api, log_error
 
 
 def search_user_API_url(phrase: str) -> str:
@@ -49,17 +46,19 @@ def get_mixcloud_API_data(url: str) -> tuple[dict, str]:
     error = ""
 
     try:
+        log_api(f"Making API request to: {url}", "DEBUG")
         req = httpx.get(url=url)
         response = req.json()
-    except httpx.RequestError as e:
+        log_api(f"API request successful for: {url}", "INFO")
+    except (httpx.RequestError, httpx.HTTPStatusError, httpx.TimeoutException) as e:
         error = ERROR_API_REQUEST_FAILED
-        # logger.error(msg=f'{error}: {e}', exc_info=True)
+        log_error(f"{error}: {e}", "CRITICAL")
 
     if response and "error" in response:
         error_type = response["error"]["type"]
         error_msg = response["error"]["message"]
         error = f"{error_type}: {error_msg}"
-        # logger.error(msg=error, exc_info=True)
+        log_error(error, "CRITICAL")
 
     return response, error
 

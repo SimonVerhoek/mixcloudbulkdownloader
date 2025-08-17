@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mixcloud-bulk-downloader"
-version = "0.2.5"
+version = "1.0.0"
 description = "Download for FREE all cloudcasts of your favorite Mixcloud artist at one go!"
 authors = ["Simon Verhoek <simon@simonic.nl>"]
 readme = "README.md"
@@ -11,9 +11,9 @@ python = "3.11.5"
 yt-dlp = "^2025.7.21"
 httpx = "^0.28.1"
 pyside6 = "^6.8.3"
+environs = "^14.3.0"
 
 [tool.poetry.group.dev.dependencies]
-environs = "^10.0.0"
 pre-commit = "^3.6.0"
 pyinstaller = "^6.12.0"
 

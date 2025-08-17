@@ -38,6 +38,21 @@ class TestDownloadThread:
         assert stub_service.downloaded_urls == thread.urls
         assert stub_service.download_directory == thread.download_dir
 
+    def test_run_emits_completion_signal(self):
+        """Test that completion signal is emitted on successful download."""
+        stub_service = StubDownloadService()
+        thread = DownloadThread(download_service=stub_service)
+        
+        completion_signals = []
+        thread.completion_signal.connect(lambda: completion_signals.append(True))
+        
+        thread.urls = ["https://example.com/mix1/"]
+        thread.download_dir = "/fake/downloads"
+        
+        thread.run()
+        
+        assert len(completion_signals) == 1
+
     def test_run_with_error(self):
         """Test download execution with error."""
         stub_service = StubDownloadService()

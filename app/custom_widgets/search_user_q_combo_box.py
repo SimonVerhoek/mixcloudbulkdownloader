@@ -3,7 +3,7 @@
 from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtWidgets import QComboBox
 
-from app.custom_widgets.error_dialog import ErrorDialog
+from app.custom_widgets.dialogs.error_dialog import ErrorDialog
 from app.data_classes import MixcloudUser
 from app.services.api_service import MixcloudAPIService
 from app.threads import SearchArtistThread

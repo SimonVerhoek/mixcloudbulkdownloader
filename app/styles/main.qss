@@ -1,0 +1,12 @@
+/* Main Application Styles for Mixcloud Bulk Downloader */
+
+/* Global Application Styling - only set font, let OS handle colors */
+QApplication {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+}
+
+/* Layout Spacing - this doesn't affect colors */
+QVBoxLayout, QHBoxLayout {
+    spacing: 8px;
+}

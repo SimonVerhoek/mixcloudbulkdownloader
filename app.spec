@@ -31,7 +31,9 @@ a = Analysis(
     ['main.py'],
     pathex=[current_dir],
     binaries=[],
-    datas=[],
+    datas=[
+        ("app/styles/*.qss", "styles"),
+    ],
     hiddenimports=[],
     hookspath=[],
     runtime_hooks=[],
