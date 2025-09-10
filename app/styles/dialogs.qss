@@ -15,3 +15,37 @@ QLabel#placeholderLabel {
 QDialog QLabel {
     line-height: 1.4;
 }
+
+/* Dialog Separator - for dividing sections */
+QLabel#separator {
+    border-bottom: 1px solid #ccc;
+    margin: 10px 0;
+}
+
+/* Form Input Fields */
+QLineEdit#emailEdit, QLineEdit#licenseKeyEdit {
+    min-height: 35px;
+    min-width: 300px;
+}
+
+/* Form Labels */
+QLabel#formLabel {
+    min-width: 80px;
+}
+
+
+/* Dialog Sizing */
+QDialog#licenseSuccessDialog {
+    width: 450px;
+    height: 350px;
+}
+
+QDialog#licenseFailureDialog {
+    width: 450px;
+    height: 350px;
+}
+
+QDialog#proPersuasionDialog {
+    min-width: 350px;
+    max-width: 500px;
+}

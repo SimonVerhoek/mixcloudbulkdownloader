@@ -1,6 +1,5 @@
 """Stylesheet loading system for Mixcloud Bulk Downloader."""
 
-import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -64,7 +63,7 @@ class StylesheetLoader:
         Returns:
             Combined stylesheet content
         """
-        stylesheet_files = ["main.qss", "buttons.qss", "dialogs.qss"]
+        stylesheet_files = ["main.qss", "buttons.qss", "dialogs.qss", "labels.qss"]
         combined_styles = []
 
         for filename in stylesheet_files:

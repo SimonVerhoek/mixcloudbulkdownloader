@@ -3,8 +3,19 @@
 import pytest
 import sys
 import os
+from pathlib import Path
 
-from tests.stubs import StubMixcloudAPIService, StubDownloadService, StubFileService
+# Load test environment variables at import time, before any app modules are imported
+from environs import Env
+_project_root = Path(__file__).parent.parent
+_test_env_file = _project_root / ".env.test"
+if _test_env_file.exists():
+    _env = Env()
+    _env.read_env(str(_test_env_file))
+
+from tests.stubs.api_stubs import StubMixcloudAPIService
+from tests.stubs.download_stubs import StubDownloadService
+from tests.stubs.file_stubs import StubFileService
 
 
 @pytest.fixture(scope="session")

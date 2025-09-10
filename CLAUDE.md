@@ -35,6 +35,26 @@ Mixcloud Bulk Downloader is a desktop application built with PySide6 that allows
 - **Constants**: Define magic numbers and strings in `app/consts.py`
 - **Line Length**: 100 characters (configured in pyproject.toml)
 - **Imports**: **ALWAYS** use absolute imports (`from app.module import Item`) instead of relative imports (`from .module import Item`)
+- **Import Placement**: **ALL** imports must be placed at the top of the module after docstrings and before any other code. **Exception**: Platform-specific or optional dependency imports may be placed at the top of the specific method/function that uses them, but only when:
+  - The import is platform-conditional (e.g., Windows-only, macOS-only)
+  - The import is an optional dependency that may not be available
+  - The import would cause circular dependencies if placed at module level
+  This ensures better performance, clearer dependencies, and easier static analysis while allowing for necessary conditional imports.
+- **File Path Handling**: **ALWAYS** use `pathlib.Path` for file path operations instead of `os.path` when possible. This provides better cross-platform compatibility, more readable code, and modern Python best practices. Use `Path` objects for path construction, joining, existence checks, and file operations.
+
+### Styling Guidelines
+
+- **QSS Files**: All styling should be defined in `.qss` files in `./app/styles/`
+- **Modular Styling**: Modularize QSS files by component type (`buttons.qss`, `labels.qss`, `dialogs.qss`, etc.)
+- **No Inline Styles**: Avoid inline `setStyleSheet()` calls in widget code when possible
+- **Component-Based Organization**: Group related styles in dedicated files for maintainability
+
+### Error Handling and Logging
+
+- **Always Log Exceptions**: All exceptions should be logged using the configured logging system
+- **Prefer Logging**: Always choose logging over print statements for debugging and error reporting
+- **Use Appropriate Log Levels**: Use `log_error()`, `log_api()`, `log_ui()` functions from `app.qt_logger`
+- **Structured Error Messages**: Use error message constants from `app/consts.py` for consistency
 
 ### File Organization
 
@@ -235,6 +255,7 @@ Key endpoints:
 
 - `LOGGING_LEVEL`: Set logging verbosity (default: INFO)
 - `DEVELOPMENT`: Enable development mode logging to console
+- `CUSTOM_SETTINGS_PATH`: Override default storage location for settings and credentials (filepath)
 
 ### Application Settings
 
@@ -243,6 +264,40 @@ Key configuration values are stored in `app/consts.py`:
 - API URLs and endpoints
 - File extensions and paths
 - Error messages and user-facing text
+
+#### Custom Settings Storage
+
+By default, application settings and credentials are stored in platform-specific locations:
+- **macOS**: `~/Library/Preferences/com.mixcloud-bulk-downloader.plist` 
+- **Windows**: `HKEY_CURRENT_USER\Software\mixcloud-bulk-downloader`
+- **Linux**: `~/.config/mixcloud-bulk-downloader.conf`
+
+To override the default location, set the `CUSTOM_SETTINGS_PATH` environment variable to a directory path. When set:
+- QSettings will use `<CUSTOM_SETTINGS_PATH>/mixcloud-bulk-downloader.conf`
+- Keyring credentials will be isolated using a custom service name
+- The custom directory will be created automatically if it doesn't exist
+- Both absolute and relative paths are supported (relative paths are resolved relative to the current working directory)
+- Home directory expansion (`~`) is supported
+
+**Examples:**
+```bash
+# Absolute path
+export CUSTOM_SETTINGS_PATH="/opt/mixcloud-settings"
+
+# Relative path (resolved from current directory)
+export CUSTOM_SETTINGS_PATH="./config"
+
+# Home directory
+export CUSTOM_SETTINGS_PATH="~/Documents/MixcloudSettings"
+
+# Portable drive (Windows example)
+set CUSTOM_SETTINGS_PATH="D:\PortableApps\MixcloudSettings"
+```
+
+This is useful for:
+- Portable installations on USB drives
+- Multi-user environments requiring isolated settings
+- Development and testing with separate configurations
 
 ## Troubleshooting
 

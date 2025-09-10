@@ -1,10 +1,11 @@
 """Download service for cloudcast downloads with dependency injection."""
 
+from pathlib import Path
 from typing import Callable
 
 import yt_dlp
 
-from app.consts import AUDIO_EXTENSION, ERROR_NO_DOWNLOAD_DIR, PROGRESS_DONE, PROGRESS_UNKNOWN
+from app.consts import ERROR_NO_DOWNLOAD_DIR, PROGRESS_DONE, PROGRESS_UNKNOWN
 
 
 class DownloadService:
@@ -102,9 +103,7 @@ class DownloadService:
                 return
 
             # Get just the filename without path and extension
-            import os
-
-            base_filename = os.path.basename(filename)
+            base_filename = Path(filename).name
 
             # Remove file extension (e.g., .webm, .mp3, etc.)
             if "." in base_filename:
@@ -115,7 +114,7 @@ class DownloadService:
             # Remove temporary filename parts if present
             tmpfilename = progress_data.get("tmpfilename", "")
             if tmpfilename:
-                tmp_base = os.path.basename(tmpfilename)
+                tmp_base = Path(tmpfilename).name
                 item_name = item_name.replace(tmp_base, "").strip()
 
             # Determine progress status
@@ -162,3 +161,7 @@ class DownloadService:
     def is_cancelled(self) -> bool:
         """Check if downloads have been cancelled."""
         return self._is_cancelled
+
+
+# Create module-level singleton instance
+download_service = DownloadService()

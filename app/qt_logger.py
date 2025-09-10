@@ -1,12 +1,22 @@
 """Qt-native logging system for the Mixcloud Bulk Downloader application."""
 
+import logging
 import os
 import sys
+import time
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import QLoggingCategory, QtMsgType, qInstallMessageHandler
+from PySide6.QtCore import (
+    QLoggingCategory,
+    QtMsgType,
+    qCCritical,
+    qCDebug,
+    qCInfo,
+    qCWarning,
+    qInstallMessageHandler,
+)
 
 
 class QtLogger:
@@ -95,9 +105,6 @@ class QtLogger:
 
         # Write to file using the rotating file handler
         try:
-            import logging
-            import time
-
             # Create a basic log record compatible with RotatingFileHandler
             record = logging.LogRecord(
                 name=category,
@@ -158,9 +165,6 @@ class QtLogger:
 
     def _log_to_category(self, category: QLoggingCategory, message: str, level: str) -> None:
         """Log message to specified category."""
-        # Import Qt category logging functions
-        from PySide6.QtCore import qCCritical, qCDebug, qCInfo, qCWarning
-
         # Route to appropriate Qt logging function
         if level == "DEBUG" and category.isDebugEnabled():
             qCDebug(category, message)

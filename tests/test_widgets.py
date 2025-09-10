@@ -8,9 +8,11 @@ from PySide6.QtTest import QTest
 
 from app.custom_widgets.search_user_q_combo_box import SearchUserQComboBox
 from app.custom_widgets.cloudcast_q_tree_widget import CloudcastQTreeWidget
-from app.custom_widgets.dialogs.donation_dialog import DonationDialog
+from app.custom_widgets.dialogs.get_pro_persuasion_dialog import GetProPersuasionDialog
 from app.data_classes import MixcloudUser, Cloudcast
-from tests.stubs import StubMixcloudAPIService, StubDownloadService, StubFileService
+from tests.stubs.api_stubs import StubMixcloudAPIService
+from tests.stubs.download_stubs import StubDownloadService
+from tests.stubs.file_stubs import StubFileService
 
 
 @pytest.fixture
@@ -360,29 +362,29 @@ class TestWidgetIntegration:
 
 
 @pytest.mark.qt
-class TestDonationDialog:
-    """Test cases for DonationDialog widget."""
+class TestGetProPersuasionDialog:
+    """Test cases for GetProPersuasionDialog widget."""
 
     def test_init_creates_dialog(self, qt_app):
-        """Test donation dialog initialization."""
+        """Test Pro persuasion dialog initialization."""
         parent = QWidget()
-        dialog = DonationDialog(parent)
+        dialog = GetProPersuasionDialog(parent)
         
         assert dialog.parent() is parent
-        assert dialog.windowTitle() == "Support Mixcloud Bulk Downloader"
+        assert dialog.windowTitle() == "Upgrade to MBD Pro"
         assert dialog.isModal()
 
     def test_dialog_has_buttons(self, qt_app):
-        """Test that dialog has donate and no thanks buttons."""
-        dialog = DonationDialog()
+        """Test that dialog has Get Pro and no thanks buttons."""
+        dialog = GetProPersuasionDialog()
         
-        assert hasattr(dialog, 'donate_button')
+        assert hasattr(dialog, 'get_pro_button')
         assert hasattr(dialog, 'no_thanks_button')
-        assert dialog.donate_button.text() == "Donate"
+        assert dialog.get_pro_button.text() == "Get Pro"
         assert dialog.no_thanks_button.text() == "No thank you"
 
     def test_completion_signal_shows_dialog(self, qt_app):
-        """Test that CloudcastQTreeWidget shows donation dialog on completion signal."""
+        """Test that CloudcastQTreeWidget shows Pro persuasion dialog on completion signal."""
         widget = CloudcastQTreeWidget()
         
         # Track show_donation_dialog method calls

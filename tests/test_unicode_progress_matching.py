@@ -8,7 +8,9 @@ from app.consts import KNOWN_MEDIA_EXTENSIONS
 from app.custom_widgets.cloudcast_q_tree_widget import CloudcastQTreeWidget
 from app.custom_widgets.cloudcast_q_tree_widget_item import CloudcastQTreeWidgetItem
 from app.data_classes import MixcloudUser, Cloudcast
-from tests.stubs import StubMixcloudAPIService, StubDownloadService, StubFileService
+from tests.stubs.api_stubs import StubMixcloudAPIService
+from tests.stubs.download_stubs import StubDownloadService
+from tests.stubs.file_stubs import StubFileService
 
 
 @pytest.fixture

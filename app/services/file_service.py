@@ -1,7 +1,6 @@
 """File service for file system operations with dependency injection."""
 
-import os
-from os.path import expanduser
+from pathlib import Path
 
 from PySide6.QtWidgets import QFileDialog, QWidget
 
@@ -29,7 +28,7 @@ class FileService:
         dialog.setOption(QFileDialog.ShowDirsOnly)
         dialog.setOption(QFileDialog.DontResolveSymlinks)
 
-        directory = dialog.getExistingDirectory(parent, title, expanduser("~"))
+        directory = dialog.getExistingDirectory(parent, title, str(Path.home()))
 
         return directory if directory else ""
 
@@ -47,14 +46,22 @@ class FileService:
 
         try:
             # Check if path exists and is a directory
-            if not os.path.exists(path):
+            path_obj = Path(path)
+            if not path_obj.exists():
                 return False
 
-            if not os.path.isdir(path):
+            if not path_obj.is_dir():
                 return False
 
-            # Check if directory is writable
-            return os.access(path, os.W_OK)
+            # Check if directory is writable using pathlib method
+            try:
+                # Test write access by attempting to create a temporary file
+                test_file = path_obj / ".write_test"
+                test_file.touch()
+                test_file.unlink()
+                return True
+            except (OSError, PermissionError):
+                return False
 
         except (OSError, TypeError):
             return False
@@ -72,11 +79,12 @@ class FileService:
             return False
 
         try:
-            if os.path.exists(path):
-                return os.path.isdir(path)
+            path_obj = Path(path)
+            if path_obj.exists():
+                return path_obj.is_dir()
 
             # Create directory and any necessary parent directories
-            os.makedirs(path, exist_ok=True)
+            path_obj.mkdir(parents=True, exist_ok=True)
             return True
 
         except (OSError, TypeError):
@@ -88,7 +96,7 @@ class FileService:
         Returns:
             User's home directory path
         """
-        return expanduser("~")
+        return str(Path.home())
 
     def join_paths(self, *paths: str) -> str:
         """Join multiple path components safely.
@@ -99,7 +107,12 @@ class FileService:
         Returns:
             Joined path string
         """
-        return os.path.join(*paths)
+        if not paths:
+            return ""
+        path_obj = Path(paths[0])
+        for part in paths[1:]:
+            path_obj = path_obj / part
+        return str(path_obj)
 
     def get_directory_size(self, path: str) -> int:
         """Get the total size of all files in a directory.
@@ -115,11 +128,11 @@ class FileService:
 
         total_size = 0
         try:
-            for dirpath, dirnames, filenames in os.walk(path):
-                for filename in filenames:
-                    file_path = os.path.join(dirpath, filename)
+            path_obj = Path(path)
+            for file_path in path_obj.rglob("*"):
+                if file_path.is_file():
                     try:
-                        total_size += os.path.getsize(file_path)
+                        total_size += file_path.stat().st_size
                     except (OSError, FileNotFoundError):
                         continue
         except (OSError, TypeError):
@@ -142,11 +155,11 @@ class FileService:
 
         try:
             files = []
-            for item in os.listdir(path):
-                item_path = os.path.join(path, item)
-                if os.path.isfile(item_path):
-                    if extension is None or item.lower().endswith(extension.lower()):
-                        files.append(item_path)
+            path_obj = Path(path)
+            for item in path_obj.iterdir():
+                if item.is_file():
+                    if extension is None or item.name.lower().endswith(extension.lower()):
+                        files.append(str(item))
             return sorted(files)
         except (OSError, TypeError):
             return []
@@ -161,7 +174,7 @@ class FileService:
             True if file exists
         """
         try:
-            return os.path.isfile(path)
+            return Path(path).is_file()
         except TypeError:
             return False
 
@@ -176,7 +189,11 @@ class FileService:
         """
         try:
             if self.file_exists(path):
-                return os.path.getsize(path)
+                return Path(path).stat().st_size
         except (OSError, TypeError):
             pass
         return 0
+
+
+# Create module-level singleton instance
+file_service = FileService()

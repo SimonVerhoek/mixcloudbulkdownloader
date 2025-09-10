@@ -1,0 +1,6 @@
+title = "gitleaks config"
+
+[allowlist]
+  paths = [
+    '''tests/test_license_api_integration\.py$'''
+  ]

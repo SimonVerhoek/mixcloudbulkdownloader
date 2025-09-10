@@ -5,8 +5,8 @@ from PySide6.QtWidgets import QComboBox
 
 from app.custom_widgets.dialogs.error_dialog import ErrorDialog
 from app.data_classes import MixcloudUser
-from app.services.api_service import MixcloudAPIService
-from app.threads import SearchArtistThread
+from app.services.api_service import MixcloudAPIService, api_service
+from app.threads.search_artist_thread import SearchArtistThread
 
 
 class SearchUserQComboBox(QComboBox):
@@ -16,18 +16,18 @@ class SearchUserQComboBox(QComboBox):
     with a debounced search mechanism to avoid excessive API calls.
     """
 
-    def __init__(self, api_service: MixcloudAPIService | None = None) -> None:
+    def __init__(self, api_service: MixcloudAPIService = api_service) -> None:
         """Initialize the search combo box with auto-complete functionality.
 
         Args:
-            api_service: Service for API operations. If None, creates default.
+            api_service: Service for API operations.
         """
         super().__init__()
 
         self.setEditable(True)
         self.results: list[MixcloudUser] = []
         self.selected_result: MixcloudUser | None = None
-        self.api_service = api_service or MixcloudAPIService()
+        self.api_service = api_service
         self.search_artist_thread = SearchArtistThread(api_service=self.api_service)
 
         # Configure search debounce timer (750ms delay)

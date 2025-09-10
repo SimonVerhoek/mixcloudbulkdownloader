@@ -2,10 +2,9 @@
 
 import re
 import unicodedata
-from os.path import expanduser
 
 from PySide6.QtCore import Qt, Slot
-from PySide6.QtWidgets import QFileDialog, QTreeWidget, QTreeWidgetItem
+from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem
 
 from app.consts import (
     KNOWN_MEDIA_EXTENSIONS,
@@ -14,13 +13,14 @@ from app.consts import (
     TREE_TITLE_COLUMN_WIDTH,
 )
 from app.custom_widgets.cloudcast_q_tree_widget_item import CloudcastQTreeWidgetItem
-from app.custom_widgets.dialogs.donation_dialog import DonationDialog
 from app.custom_widgets.dialogs.error_dialog import ErrorDialog
+from app.custom_widgets.dialogs.get_pro_persuasion_dialog import GetProPersuasionDialog
 from app.data_classes import Cloudcast, MixcloudUser
-from app.services.api_service import MixcloudAPIService
-from app.services.download_service import DownloadService
-from app.services.file_service import FileService
-from app.threads import DownloadThread, GetCloudcastsThread
+from app.services.api_service import MixcloudAPIService, api_service
+from app.services.download_service import DownloadService, download_service
+from app.services.file_service import FileService, file_service
+from app.threads.download_thread import DownloadThread
+from app.threads.get_cloudcasts_thread import GetCloudcastsThread
 
 
 class CloudcastQTreeWidget(QTreeWidget):
@@ -32,23 +32,23 @@ class CloudcastQTreeWidget(QTreeWidget):
 
     def __init__(
         self,
-        api_service: MixcloudAPIService | None = None,
-        download_service: DownloadService | None = None,
-        file_service: FileService | None = None,
+        api_service: MixcloudAPIService = api_service,
+        download_service: DownloadService = download_service,
+        file_service: FileService = file_service,
     ) -> None:
         """Initialize the cloudcast tree widget with columns and background threads.
 
         Args:
-            api_service: Service for API operations. If None, creates default.
-            download_service: Service for downloads. If None, creates default.
-            file_service: Service for file operations. If None, creates default.
+            api_service: Service for API operations.
+            download_service: Service for downloads.
+            file_service: Service for file operations.
         """
         super().__init__()
 
         # Store services
-        self.api_service = api_service or MixcloudAPIService()
-        self.download_service = download_service or DownloadService()
-        self.file_service = file_service or FileService()
+        self.api_service = api_service
+        self.download_service = download_service
+        self.file_service = file_service
 
         # Configure tree widget columns
         self.setColumnCount(3)
@@ -127,9 +127,10 @@ class CloudcastQTreeWidget(QTreeWidget):
 
     @Slot()
     def show_donation_dialog(self) -> None:
-        """Display donation dialog after successful download completion."""
-        dialog = DonationDialog(self.parent())
-        dialog.exec()
+        """Display Pro persuasion dialog after successful download completion."""
+        if GetProPersuasionDialog.should_show():
+            dialog = GetProPersuasionDialog(self.parent())
+            dialog.exec()
 
     @Slot()
     def select_all(self) -> None:

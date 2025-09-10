@@ -4,13 +4,8 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from app.services.download_service import DownloadService
-from tests.stubs import (
-    StubYoutubeDL, 
-    EnhancedStubDownloadService,
-    DownloadError,
-    ExtractorError,
-    UnsupportedError
-)
+from tests.stubs.download_stubs import EnhancedStubDownloadService
+from tests.stubs.ytdlp_stubs import StubYoutubeDL, DownloadError, ExtractorError, UnsupportedError
 
 
 class TestDownloadServiceErrorPaths:

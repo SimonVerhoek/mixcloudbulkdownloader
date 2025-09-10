@@ -9,13 +9,13 @@ from app.data_classes import Cloudcast, MixcloudUser
 class MixcloudAPIService:
     """Service for Mixcloud API operations with injectable HTTP client for testing."""
 
-    def __init__(self, http_client: httpx.Client | None = None) -> None:
+    def __init__(self, http_client: httpx.Client = httpx.Client()) -> None:
         """Initialize API service with optional HTTP client injection.
 
         Args:
             http_client: HTTP client for making requests. If None, creates default client.
         """
-        self.client = http_client or httpx.Client()
+        self.client = http_client
 
     def search_users(self, phrase: str) -> tuple[list[MixcloudUser], str]:
         """Search for Mixcloud users by phrase.
@@ -189,3 +189,7 @@ class MixcloudAPIService:
         """Close the HTTP client connection."""
         if hasattr(self.client, "close"):
             self.client.close()
+
+
+# Create module-level singleton instance
+api_service = MixcloudAPIService()

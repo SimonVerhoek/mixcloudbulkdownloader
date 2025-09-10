@@ -3,7 +3,7 @@
 import pytest
 
 from app.services.file_service import FileService
-from tests.stubs import StubFileService
+from tests.stubs.file_stubs import StubFileService
 
 
 class TestFileService:

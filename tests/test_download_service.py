@@ -4,7 +4,7 @@ import pytest
 from typing import Callable
 
 from app.services.download_service import DownloadService
-from tests.stubs import StubDownloadService
+from tests.stubs.download_stubs import StubDownloadService
 
 
 class TestDownloadService:

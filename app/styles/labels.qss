@@ -1,0 +1,63 @@
+/* Label Styles for Mixcloud Bulk Downloader */
+
+/* Success Label - for confirmation messages */
+QLabel#successLabel {
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+/* Success Title - for larger success messages */
+QLabel#successTitle {
+    font-weight: bold;
+    font-size: 18px;
+    color: #4CAF50;
+    margin-bottom: 10px;
+}
+
+/* Error Title - for error messages */
+QLabel#errorTitle {
+    font-weight: bold;
+    font-size: 18px;
+    color: #F44336;
+    margin-bottom: 10px;
+}
+
+/* Section Title - for dialog section headers */
+QLabel#sectionTitle {
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+/* Standard Message - for dialog content */
+QLabel#message {
+    font-size: 14px;
+    margin-bottom: 20px;
+}
+
+/* Feature List - for Pro features display */
+QLabel#featureList {
+    margin: 10px 0;
+    padding-left: 20px;
+}
+
+/* Price Text - for pricing display */
+QLabel#priceText {
+    font-weight: bold;
+    color: #2196F3;
+    margin: 10px 0;
+}
+
+/* Price Text Top Margin - for pricing with top margin */
+QLabel#priceTextTop {
+    font-weight: bold;
+    color: #2196F3;
+    margin-top: 10px;
+}
+
+/* Suggestions List - for error dialog suggestions */
+QLabel#suggestions {
+    margin: 10px 0;
+    padding-left: 20px;
+}

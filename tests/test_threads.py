@@ -4,9 +4,12 @@ import pytest
 from unittest.mock import Mock
 from PySide6.QtCore import QCoreApplication, QTimer
 
-from app.threads import DownloadThread, GetCloudcastsThread, SearchArtistThread
+from app.threads.download_thread import DownloadThread
+from app.threads.get_cloudcasts_thread import GetCloudcastsThread
+from app.threads.search_artist_thread import SearchArtistThread
 from app.data_classes import MixcloudUser, Cloudcast
-from tests.stubs import StubMixcloudAPIService, StubDownloadService
+from tests.stubs.api_stubs import StubMixcloudAPIService
+from tests.stubs.download_stubs import StubDownloadService
 
 
 class TestDownloadThread:

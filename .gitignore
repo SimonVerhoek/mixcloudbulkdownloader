@@ -38,3 +38,11 @@ developerID_application.cer
 .coverage
 htmlcov
 coverage.xml
+
+# Claude
+.claude
+private_plans
+
+# local secrets & settings
+local_settings
+~/

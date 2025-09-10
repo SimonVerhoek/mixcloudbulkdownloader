@@ -4,7 +4,7 @@ import pytest
 
 from app.services.api_service import MixcloudAPIService
 from app.data_classes import MixcloudUser, Cloudcast
-from tests.stubs import StubMixcloudAPIService
+from tests.stubs.api_stubs import StubMixcloudAPIService
 
 
 class TestMixcloudAPIService:

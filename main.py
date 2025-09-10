@@ -2,111 +2,21 @@
 
 import sys
 
-from PySide6.QtCore import Qt
+from PySide6.QtGui import QCloseEvent, QGuiApplication
 from PySide6.QtWidgets import (
     QApplication,
-    QHBoxLayout,
-    QLabel,
     QMainWindow,
-    QPushButton,
-    QVBoxLayout,
-    QWidget,
 )
-from PySide6.QtGui import QGuiApplication
 
-from app.consts import (
-    MAIN_WINDOW_MIN_WIDTH,
-    MAIN_WINDOW_MIN_HEIGHT,
-    SEARCH_LABEL_STRETCH,
-    SEARCH_INPUT_STRETCH,
-    SEARCH_BUTTON_STRETCH,
-)
-from app.custom_widgets import CloudcastQTreeWidget, SearchUserQComboBox, SettingsDialog
-from app.services.api_service import MixcloudAPIService
-from app.services.download_service import DownloadService
-from app.services.file_service import FileService
-from app.settings import MBDSettings
-from app.qt_logger import QtLogger, log_ui
+from app.consts import (MAIN_WINDOW_MIN_HEIGHT, MAIN_WINDOW_MIN_WIDTH)
+from app.custom_widgets.central_widget import CentralWidget
+from app.custom_widgets.dialogs.settings_dialog import SettingsDialog
+from app.custom_widgets.dialogs.get_pro_dialog import GetProDialog
+from app.qt_logger import log_ui, QtLogger
+from app.services.license_manager import license_manager
+from app.services.settings_manager import settings
 from app.styles import load_application_styles
-
-
-class CentralWidget(QWidget):
-    """Main central widget containing the application's UI components.
-    
-    This widget contains the search interface, cloudcast tree, and action buttons
-    for the Mixcloud Bulk Downloader application.
-    """
-    
-    def __init__(self, 
-                 api_service: MixcloudAPIService | None = None,
-                 download_service: DownloadService | None = None, 
-                 file_service: FileService | None = None) -> None:
-        """Initialize the central widget with all UI components and connections.
-        
-        Args:
-            api_service: Service for API operations. If None, creates default.
-            download_service: Service for downloads. If None, creates default.
-            file_service: Service for file operations. If None, creates default.
-        """
-        super().__init__()
-
-        # Create services with dependency injection support
-        self.api_service = api_service or MixcloudAPIService()
-        self.download_service = download_service or DownloadService()
-        self.file_service = file_service or FileService()
-
-        self.layout = QVBoxLayout()
-
-        # Search user layout
-        search_user_layout = QHBoxLayout()
-        search_user_layout.setAlignment(Qt.AlignTop)
-
-        self.search_user_label = QLabel("Search account:")
-        self.search_user_input = SearchUserQComboBox(api_service=self.api_service)
-        self.get_cloudcasts_button = QPushButton("Get cloudcasts")
-
-        search_user_layout.addWidget(self.search_user_label)
-        search_user_layout.addWidget(self.search_user_input)
-        search_user_layout.addWidget(self.get_cloudcasts_button)
-
-        search_user_layout.setStretch(0, SEARCH_LABEL_STRETCH)
-        search_user_layout.setStretch(1, SEARCH_INPUT_STRETCH)
-        search_user_layout.setStretch(2, SEARCH_BUTTON_STRETCH)
-
-        # User cloudcasts layout
-        user_cloudcasts_layout = QVBoxLayout()
-        self.cloudcasts = CloudcastQTreeWidget(
-            api_service=self.api_service,
-            download_service=self.download_service,
-            file_service=self.file_service
-        )
-        user_cloudcasts_layout.addWidget(self.cloudcasts)
-
-        # Cloudcast action buttons layout
-        cloudcast_action_buttons = QHBoxLayout()
-        self.select_all_button = QPushButton("Select All")
-        self.unselect_all_button = QPushButton("Unselect All")
-        self.cancel_button = QPushButton("Cancel")
-        self.download_button = QPushButton("Download")
-        cloudcast_action_buttons.addWidget(self.select_all_button)
-        cloudcast_action_buttons.addWidget(self.unselect_all_button)
-        cloudcast_action_buttons.addWidget(self.cancel_button)
-        cloudcast_action_buttons.addWidget(self.download_button)
-
-        self.layout.addLayout(search_user_layout)
-        self.layout.addLayout(user_cloudcasts_layout)
-        self.layout.addLayout(cloudcast_action_buttons)
-
-        self.setLayout(self.layout)
-
-        # Signal connections
-        self.get_cloudcasts_button.clicked.connect(
-            lambda: self.cloudcasts.get_cloudcasts(user=self.search_user_input.selected_result)
-        )
-        self.select_all_button.clicked.connect(self.cloudcasts.select_all)
-        self.unselect_all_button.clicked.connect(self.cloudcasts.unselect_all)
-        self.download_button.clicked.connect(self.cloudcasts.download_selected_cloudcasts)
-        self.cancel_button.clicked.connect(self.cloudcasts.cancel_cloudcasts_download)
+from app.threads.startup_verification_thread import StartupVerificationThread
 
 
 class MainWindow(QMainWindow):
@@ -120,11 +30,12 @@ class MainWindow(QMainWindow):
         """Initialize the main window with UI components and application settings."""
         super().__init__()
 
-        # Initialize settings
-        self.settings = MBDSettings()
-        self.settings._initialize_from_env()
+        # import services
+        self.settings = settings
+        self.license_manager = license_manager
 
-        widget = CentralWidget()
+        widget = CentralWidget(license_manager=self.license_manager)
+        self.central_widget = widget
 
         self.setWindowTitle("Mixcloud Bulk Downloader")
         self.setMinimumSize(MAIN_WINDOW_MIN_WIDTH, MAIN_WINDOW_MIN_HEIGHT)
@@ -138,9 +49,19 @@ class MainWindow(QMainWindow):
             file_menu.addAction("Settings...", self._show_settings_dialog)
             file_menu.addSeparator()
         
+        # Add Get MBD Pro menu item (only shown for non-Pro users)
+        self.get_mbd_pro_action = file_menu.addAction("Get MBD Pro...", self._show_get_pro_dialog)
+        file_menu.addSeparator()
+        
         file_menu.addAction("Exit", QApplication.quit)
 
         self.setCentralWidget(widget)
+        
+        # Initialize Pro UI state
+        self.refresh_pro_ui_elements()
+        
+        # Perform startup license verification
+        self.startup_license_verification()
 
         # Configure application behavior
         app_instance = QGuiApplication.instance()
@@ -158,6 +79,76 @@ class MainWindow(QMainWindow):
         """
         settings_dialog = SettingsDialog(self)
         settings_dialog.exec()
+
+    def _show_get_pro_dialog(self) -> None:
+        """Show the Get Pro dialog from the menu."""
+        dialog = GetProDialog(self)
+        result = dialog.exec()
+        if result:  # Dialog accepted (successful verification)
+            self.refresh_pro_ui_elements()
+
+    def refresh_pro_ui_elements(self) -> None:
+        """Refresh Pro UI elements based on current license status."""
+        # Update central widget Pro elements
+        if hasattr(self, 'central_widget'):
+            self.central_widget.refresh_pro_ui_elements()
+        
+        # Update menu items
+        self.update_menu_items()
+
+    def update_menu_items(self) -> None:
+        """Update menu items visibility based on Pro status."""
+        is_pro = self.license_manager.is_pro
+        
+        # Show/hide Get MBD Pro menu item based on Pro status
+        if hasattr(self, 'get_mbd_pro_action'):
+            self.get_mbd_pro_action.setVisible(not is_pro)
+
+    def startup_license_verification(self) -> None:
+        """Perform startup license verification in background thread."""
+        self.verification_thread = StartupVerificationThread(self.license_manager, self)
+        self.verification_thread.verification_completed.connect(self._handle_startup_verification_result)
+        self.verification_thread.start()
+
+    def _handle_startup_verification_result(self, success: bool, notify_user: bool) -> None:
+        """Handle the result of startup license verification.
+        
+        Args:
+            success: Whether verification was successful
+            notify_user: Whether to notify user of verification failure
+        """
+        from app.custom_widgets.dialogs.error_dialog import ErrorDialog
+        
+        # Refresh UI elements based on new Pro status
+        self.refresh_pro_ui_elements()
+        
+        # Notify user if needed (first-time verification failure)
+        if notify_user:
+            ErrorDialog(
+                self, 
+                message="License verification failed. Some features may be limited. "
+                       "Check your internet connection and license credentials."
+            )
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """Handle application close event with proper cleanup."""
+        try:
+            # Stop any running verification threads
+            if hasattr(self, 'verification_thread') and self.verification_thread.isRunning():
+                self.verification_thread.terminate()
+                self.verification_thread.wait(1000)  # Wait up to 1 second
+            
+            # Disable keyring operations during shutdown to prevent crash
+            if hasattr(self, 'license_manager') and hasattr(self.license_manager, 'settings'):
+                # Mark settings as shutting down to prevent keyring access
+                self.license_manager.settings._shutting_down = True
+                
+        except Exception:
+            # Ignore any errors during cleanup to ensure app can exit
+            pass
+        finally:
+            # Always accept the close event
+            event.accept()
 
 
 def main() -> None:

@@ -7,7 +7,7 @@ import httpx
 
 from app import api
 from app.consts import MIXCLOUD_API_URL, ERROR_API_REQUEST_FAILED
-from tests.stubs import StubYoutubeDL, DownloadError
+from tests.stubs.ytdlp_stubs import StubYoutubeDL, DownloadError
 
 
 class TestAPIURLGeneration:
