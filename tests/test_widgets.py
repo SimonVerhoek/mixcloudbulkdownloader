@@ -9,6 +9,8 @@ from PySide6.QtTest import QTest
 from app.custom_widgets.search_user_q_combo_box import SearchUserQComboBox
 from app.custom_widgets.cloudcast_q_tree_widget import CloudcastQTreeWidget
 from app.custom_widgets.dialogs.get_pro_persuasion_dialog import GetProPersuasionDialog
+from app.custom_widgets.footer_widget import FooterWidget
+from app.custom_widgets.dialogs.feedback_dialog import FeedbackDialog
 from app.data_classes import MixcloudUser, Cloudcast
 from tests.stubs.api_stubs import StubMixcloudAPIService
 from tests.stubs.download_stubs import StubDownloadService
@@ -127,25 +129,28 @@ class TestCloudcastQTreeWidget:
         assert widget.get_cloudcasts_thread.api_service is api_service
         assert widget.download_thread.download_service is download_service
 
-    def test_get_download_dir_uses_file_service(self, qt_app):
-        """Test that directory selection uses file service."""
+    def test_get_download_dir_uses_download_service(self, qt_app):
+        """Test that directory selection uses download service."""
+        from unittest.mock import patch
         file_service = StubFileService()
         widget = CloudcastQTreeWidget(file_service=file_service)
         
-        result = widget._get_download_dir()
+        with patch('app.services.download_service.download_service.get_download_directory', return_value="/fake/download/path"):
+            result = widget._get_download_dir()
         
         assert result == "/fake/download/path"
 
     def test_get_download_dir_cancelled(self, qt_app):
         """Test directory selection when cancelled."""
+        from unittest.mock import patch
         file_service = StubFileService()
-        file_service.set_cancel_dialog(True)
         
         widget = CloudcastQTreeWidget(file_service=file_service)
         
-        result = widget._get_download_dir()
+        with patch('app.services.download_service.download_service.get_download_directory', return_value=None):
+            result = widget._get_download_dir()
         
-        assert result == ""
+        assert result is None
 
     def test_get_tree_items_empty(self, qt_app):
         """Test getting tree items when empty."""
@@ -408,3 +413,86 @@ class TestGetProPersuasionDialog:
         finally:
             # Restore original method
             widget.show_donation_dialog = original_method
+
+
+class TestFooterWidget:
+    """Test cases for FooterWidget."""
+
+    def test_footer_widget_initialization(self, qt_app):
+        """Test footer widget basic initialization."""
+        mock_license_manager = Mock()
+        mock_license_manager.is_pro = False
+        mock_license_manager.license_status_changed.connect = Mock()
+        
+        widget = FooterWidget(license_manager=mock_license_manager)
+        
+        assert widget.objectName() == "footerWidget"
+        assert widget.license_manager is mock_license_manager
+        
+    def test_footer_status_display(self, qt_app):
+        """Test footer status display for different license states."""
+        mock_license_manager = Mock()
+        mock_license_manager.license_status_changed.connect = Mock()
+        
+        # Test Free user
+        mock_license_manager.is_pro = False
+        widget = FooterWidget(license_manager=mock_license_manager)
+        assert widget.status_label.text() == "MBD Free"
+        
+        # Test Pro user
+        mock_license_manager.is_pro = True
+        widget2 = FooterWidget(license_manager=mock_license_manager)
+        assert widget2.status_label.text() == "MBD Pro"
+        
+    def test_footer_feedback_button(self, qt_app):
+        """Test footer feedback button properties."""
+        mock_license_manager = Mock()
+        mock_license_manager.is_pro = False
+        mock_license_manager.license_status_changed.connect = Mock()
+        
+        widget = FooterWidget(license_manager=mock_license_manager)
+        
+        assert widget.feedback_button.text() == "Feedback?"
+        assert widget.feedback_button.objectName() == "feedbackButton"
+
+
+class TestFeedbackDialog:
+    """Test cases for FeedbackDialog."""
+    
+    def test_feedback_dialog_initialization(self, qt_app):
+        """Test feedback dialog basic initialization."""
+        parent = QWidget()
+        dialog = FeedbackDialog(parent)
+        
+        assert dialog.parent() is parent
+        assert dialog.windowTitle() == "Send Feedback"
+        assert dialog.isModal()
+        assert dialog.objectName() == "feedbackDialog"
+        
+    def test_feedback_dialog_buttons(self, qt_app):
+        """Test feedback dialog button configuration."""
+        dialog = FeedbackDialog()
+        
+        assert hasattr(dialog, 'cancel_button')
+        assert hasattr(dialog, 'send_button')
+        assert dialog.cancel_button.text() == "Cancel"
+        assert dialog.send_button.text() == "Send Feedback"
+        assert dialog.send_button.isDefault()
+        
+    def test_feedback_dialog_text_field(self, qt_app):
+        """Test feedback dialog text field properties."""
+        dialog = FeedbackDialog()
+        
+        assert hasattr(dialog, 'feedback_text')
+        assert dialog.feedback_text.objectName() == "feedbackText"
+        placeholder = dialog.feedback_text.placeholderText()
+        assert len(placeholder) > 0
+        
+    def test_feedback_dialog_email_field(self, qt_app):
+        """Test feedback dialog email field properties."""
+        dialog = FeedbackDialog()
+        
+        assert hasattr(dialog, 'email_field')
+        assert dialog.email_field.objectName() == "emailField"
+        placeholder = dialog.email_field.placeholderText()
+        assert placeholder == "Enter your email if you'd like a response"

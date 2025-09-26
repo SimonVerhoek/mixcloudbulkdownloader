@@ -95,6 +95,9 @@ build-windows:
   stage: build
   except:
     - master
+  before_script:
+    - chmod +x ./scripts/download_ffmpeg.sh
+    - ./scripts/download_ffmpeg.sh
   script:
     - docker image prune -f
     - docker-compose -f docker-compose.build.yml build --no-cache

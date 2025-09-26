@@ -1,0 +1,59 @@
+/* Pro feature styling for disabled/locked features */
+
+/* Disabled pro features - greyed out appearance */
+QWidget#proFeatureDisabled {
+    color: #888888;
+    background-color: #f0f0f0;
+}
+
+QWidget#proFeatureDisabled:disabled {
+    color: #cccccc;
+}
+
+/* Pro feature lock icons */
+QLabel#proFeatureLockIcon {
+    color: #888888;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+QLabel#proFeatureLockIcon:hover {
+    color: #666666;
+    cursor: pointer;
+}
+
+/* Pro feature buttons when disabled */
+QPushButton#proFeatureDisabled {
+    color: #cccccc;
+    background-color: #f5f5f5;
+    border: 1px solid #dddddd;
+}
+
+QPushButton#proFeatureDisabled:hover {
+    background-color: #f0f0f0;
+    cursor: not-allowed;
+}
+
+/* Pro feature input fields when disabled */
+QLineEdit#proFeatureDisabled,
+QComboBox#proFeatureDisabled,
+QSpinBox#proFeatureDisabled {
+    color: #999999;
+    background-color: #f8f8f8;
+    border: 1px solid #dddddd;
+}
+
+/* Pro feature checkboxes when disabled */
+QCheckBox#proFeatureDisabled {
+    color: #999999;
+}
+
+QCheckBox#proFeatureDisabled::indicator {
+    background-color: #f0f0f0;
+    border: 1px solid #cccccc;
+}
+
+/* Pro feature labels when disabled */
+QLabel#proFeatureDisabled {
+    color: #999999;
+}

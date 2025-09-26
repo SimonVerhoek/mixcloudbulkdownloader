@@ -15,7 +15,7 @@ class TestDownloadServiceErrorPaths:
         """Test that empty directory raises ValueError."""
         service = DownloadService()
         
-        with pytest.raises(ValueError, match="no download directory provided"):
+        with pytest.raises(ValueError, match="No download directory provided"):
             service.download_cloudcasts(["http://example.com"], "")
             
     def test_download_cloudcasts_no_directory_calls_error_callback(self):
@@ -26,7 +26,7 @@ class TestDownloadServiceErrorPaths:
         with pytest.raises(ValueError):
             service.download_cloudcasts(["http://example.com"], "")
             
-        error_callback.assert_called_once_with("no download directory provided")
+        error_callback.assert_called_once_with("No download directory provided")
 
     def test_download_single_cloudcast_delegates_to_download_cloudcasts(self):
         """Test that single download delegates to batch download."""

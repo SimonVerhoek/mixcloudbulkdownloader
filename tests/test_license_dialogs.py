@@ -9,10 +9,9 @@ from app.custom_widgets.dialogs.get_pro_dialog import GetProDialog
 from app.custom_widgets.dialogs.license_verification_success_dialog import LicenseVerificationSuccessDialog
 from app.custom_widgets.dialogs.license_verification_failure_dialog import LicenseVerificationFailureDialog
 from app.custom_widgets.dialogs.get_pro_persuasion_dialog import GetProPersuasionDialog
-from app.consts import (
+from app.consts.license import (
     LICENSE_VERIFICATION_SUCCESS,
     LICENSE_INVALID_CREDENTIALS,
-    STRIPE_CHECKOUT_URL,
 )
 
 
@@ -37,6 +36,7 @@ def mock_license_manager():
         
         # Configure mock verification
         mock_lm.verify_license = Mock(return_value=True)
+        mock_lm.get_checkout_url = Mock()
         mock_lm.is_pro = False
         mock_lm2.is_pro = False
         
@@ -129,10 +129,7 @@ class TestGetProDialog:
             mock_license_manager.settings.license_key = "valid-key-123"
             
             # Check that verification was called
-            mock_license_manager.verify_license.assert_called_once_with(
-                email="test@example.com", 
-                license_key="valid-key-123"
-            )
+            mock_license_manager.verify_license.assert_called_once_with()
             
             # Check that success dialog was shown
             mock_success_dialog.assert_called_once_with(dialog)
@@ -169,25 +166,42 @@ class TestGetProDialog:
         dialog = GetProDialog(parent_widget)
         qtbot.addWidget(dialog)
         
+        # Mock the checkout URL retrieval
+        test_checkout_url = "https://checkout.stripe.com/test-checkout-url"
+        mock_license_manager.get_checkout_url.return_value = test_checkout_url
+        
         with patch('webbrowser.open') as mock_open:
             dialog._handle_get_pro_now()
             
-            mock_open.assert_called_once_with(STRIPE_CHECKOUT_URL)
+            # Verify license manager method was called
+            mock_license_manager.get_checkout_url.assert_called_once()
+            # Verify browser opened with returned URL
+            mock_open.assert_called_once_with(test_checkout_url)
 
     @pytest.mark.qt
     def test_get_pro_dialog_browser_opening_failure(self, qtbot, parent_widget, mock_license_manager):
-        """Test graceful handling of browser opening failure."""
+        """Test graceful handling of checkout URL retrieval failure."""
         dialog = GetProDialog(parent_widget)
         qtbot.addWidget(dialog)
         
-        with patch('webbrowser.open', side_effect=Exception("Browser failed")), \
+        # Mock the checkout URL method to raise an exception
+        mock_license_manager.get_checkout_url.side_effect = Exception("Checkout server error")
+        
+        with patch('app.custom_widgets.dialogs.get_pro_dialog.ErrorDialog') as mock_error_dialog, \
              patch('app.custom_widgets.dialogs.get_pro_dialog.log_error') as mock_log:
+            
+            mock_dialog_instance = Mock()
+            mock_error_dialog.return_value = mock_dialog_instance
             
             dialog._handle_get_pro_now()
             
+            # Check that error dialog was shown
+            mock_error_dialog.assert_called_once()
+            mock_dialog_instance.exec.assert_called_once()
+            
             # Check that error was logged
             mock_log.assert_called_once()
-            assert "Failed to open browser for Pro checkout" in mock_log.call_args[1]['message']
+            assert "Failed to retrieve checkout URL" in mock_log.call_args[1]['message']
 
 
 class TestLicenseVerificationSuccessDialog:
@@ -293,32 +307,51 @@ class TestGetProPersuasionDialog:
         dialog = GetProPersuasionDialog(parent_widget)
         qtbot.addWidget(dialog)
         
-        # Mock the accept method and webbrowser
+        # Mock the checkout URL retrieval and accept method
+        test_checkout_url = "https://checkout.stripe.com/test-checkout-url"
         dialog.accept = Mock()
         
-        with patch('webbrowser.open') as mock_open:
+        with patch('app.custom_widgets.dialogs.get_pro_persuasion_dialog.license_manager') as mock_lm, \
+             patch('webbrowser.open') as mock_open:
+            
+            mock_lm.get_checkout_url.return_value = test_checkout_url
+            
             dialog._handle_get_pro()
             
-            mock_open.assert_called_once_with(STRIPE_CHECKOUT_URL)
+            # Verify license manager method was called
+            mock_lm.get_checkout_url.assert_called_once()
+            # Verify browser opened with returned URL
+            mock_open.assert_called_once_with(test_checkout_url)
+            # Verify dialog was closed
             dialog.accept.assert_called_once()
 
     @pytest.mark.qt
     def test_pro_persuasion_dialog_get_pro_button_handles_browser_failure(self, qtbot, parent_widget):
-        """Test graceful handling of browser opening failure."""
+        """Test graceful handling of checkout URL retrieval failure."""
         dialog = GetProPersuasionDialog(parent_widget)
         qtbot.addWidget(dialog)
         
         # Mock the accept method
         dialog.accept = Mock()
         
-        with patch('webbrowser.open', side_effect=Exception("Browser failed")), \
+        with patch('app.custom_widgets.dialogs.get_pro_persuasion_dialog.license_manager') as mock_lm, \
+             patch('app.custom_widgets.dialogs.get_pro_persuasion_dialog.ErrorDialog') as mock_error_dialog, \
              patch('app.custom_widgets.dialogs.get_pro_persuasion_dialog.log_error') as mock_log:
+            
+            # Mock the checkout URL method to raise an exception
+            mock_lm.get_checkout_url.side_effect = Exception("Checkout server error")
+            mock_dialog_instance = Mock()
+            mock_error_dialog.return_value = mock_dialog_instance
             
             dialog._handle_get_pro()
             
+            # Check that error dialog was shown
+            mock_error_dialog.assert_called_once()
+            mock_dialog_instance.exec.assert_called_once()
+            
             # Check that error was logged and dialog still closed
             mock_log.assert_called_once()
-            assert "Failed to open browser for Pro checkout" in mock_log.call_args[1]['message']
+            assert "Failed to retrieve checkout URL" in mock_log.call_args[1]['message']
             dialog.accept.assert_called_once()
 
     @pytest.mark.qt

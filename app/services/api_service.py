@@ -2,7 +2,7 @@
 
 import httpx
 
-from app.consts import ERROR_API_REQUEST_FAILED, MIXCLOUD_API_URL
+from app.consts.api import ERROR_API_REQUEST_FAILED, MIXCLOUD_API_URL
 from app.data_classes import Cloudcast, MixcloudUser
 
 

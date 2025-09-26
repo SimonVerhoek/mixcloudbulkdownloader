@@ -33,6 +33,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ("app/styles/*.qss", "styles"),
+        ("app/resources/ffmpeg/", "app/resources/ffmpeg"),
     ],
     hiddenimports=[],
     hookspath=[],

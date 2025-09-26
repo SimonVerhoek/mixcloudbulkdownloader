@@ -2,7 +2,7 @@
 
 from PySide6.QtCore import QThread, Signal
 
-from app.consts import ERROR_NO_SEARCH_PHRASE
+from app.consts.messages import ERROR_NO_SEARCH_PHRASE
 from app.data_classes import MixcloudUser
 from app.qt_logger import log_error, log_thread
 from app.services.api_service import MixcloudAPIService, api_service

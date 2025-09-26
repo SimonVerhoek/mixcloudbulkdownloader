@@ -1,9 +1,12 @@
 """Download service test stubs."""
 
+from pathlib import Path
 from typing import Any, Callable
+from unittest.mock import Mock
 
 from app.services.download_service import DownloadService
 from .ytdlp_stubs import StubYoutubeDL
+from .ffmpeg_stubs import StubFFmpegService
 
 
 class StubDownloadService(DownloadService):
@@ -18,12 +21,13 @@ class StubDownloadService(DownloadService):
         self.error_message = "Simulated download error"
         self.simulate_progress = True
         
-    def download_cloudcasts(self, urls: list[str], directory: str) -> None:
+    def download_cloudcasts(self, urls: list[str], directory: str | None = None, parent_widget=None) -> None:
         """Simulate cloudcast downloads.
         
         Args:
             urls: List of URLs to download
-            directory: Target directory
+            directory: Target directory for downloads. If None, uses Pro default or shows picker.
+            parent_widget: Parent widget for dialogs (unused in stub)
             
         Raises:
             ValueError: If directory not provided
@@ -118,12 +122,13 @@ class EnhancedStubDownloadService(DownloadService):
         
         return self.stub_yt_dlp
         
-    def download_cloudcasts(self, urls: list[str], directory: str) -> None:
+    def download_cloudcasts(self, urls: list[str], directory: str | None = None, parent_widget=None) -> None:
         """Override to use stub yt-dlp while keeping real service logic.
         
         Args:
             urls: List of cloudcast URLs to download
-            directory: Target directory for downloads
+            directory: Target directory for downloads. If None, uses Pro default or shows picker.
+            parent_widget: Parent widget for dialogs (unused in stub)
             
         Raises:
             ValueError: If directory is not provided
@@ -196,3 +201,185 @@ class EnhancedStubDownloadService(DownloadService):
         self._is_cancelled = False
         if self.stub_yt_dlp:
             self.stub_yt_dlp.reset()
+
+
+class FFmpegAwareDownloadService(DownloadService):
+    """Download service stub with FFmpeg integration testing capabilities.
+    
+    This stub allows comprehensive testing of audio conversion functionality
+    including FFmpeg path detection, availability checking, and conversion.
+    """
+    
+    def __init__(
+        self,
+        progress_callback: Callable[[str, str], None] = None,
+        error_callback: Callable[[str], None] = None
+    ) -> None:
+        """Initialize FFmpeg-aware download service stub.
+        
+        Args:
+            progress_callback: Progress update callback
+            error_callback: Error reporting callback
+        """
+        super().__init__(progress_callback, error_callback)
+        
+        # FFmpeg stub for testing
+        self.ffmpeg_stub = StubFFmpegService()
+        
+        # Track method calls for verification
+        self.ffmpeg_path_calls: list[str] = []
+        self.availability_checks: list[dict[str, Any]] = []
+        self.conversions: list[dict[str, Any]] = []
+        
+        # Configuration for testing scenarios
+        self.mock_platform = None  # Override platform detection
+        
+    def _get_ffmpeg_path(self) -> Path:
+        """Get FFmpeg path using stub for testing.
+        
+        Returns:
+            Path to FFmpeg executable
+            
+        Raises:
+            RuntimeError: If platform is unsupported
+        """
+        platform = self.mock_platform or None
+        self.ffmpeg_path_calls.append(platform or "default")
+        return self.ffmpeg_stub.get_ffmpeg_path(platform)
+        
+    def verify_ffmpeg_availability(self) -> bool:
+        """Verify FFmpeg availability using stub.
+        
+        Returns:
+            True if FFmpeg is available
+        """
+        platform = self.mock_platform or None
+        result = self.ffmpeg_stub.verify_ffmpeg_availability(platform)
+        
+        self.availability_checks.append({
+            "platform": platform or "default",
+            "available": result
+        })
+        
+        return result
+        
+    def convert_audio(
+        self,
+        input_path: str,
+        output_path: str,
+        target_format: str,
+        bitrate_k: int = 192
+    ) -> None:
+        """Convert audio using FFmpeg stub.
+        
+        Args:
+            input_path: Source file path
+            output_path: Target file path
+            target_format: Target audio format
+            bitrate_k: Bitrate in kbps for lossy formats
+            
+        Raises:
+            RuntimeError: If conversion fails
+        """
+        conversion_info = {
+            "input_path": input_path,
+            "output_path": output_path,
+            "target_format": target_format,
+            "bitrate_k": bitrate_k
+        }
+        self.conversions.append(conversion_info)
+        
+        # Use FFmpeg stub for conversion
+        self.ffmpeg_stub.convert_audio(
+            input_path,
+            output_path,
+            target_format,
+            bitrate_k,
+            self.progress_callback
+        )
+        
+    # Test configuration methods
+        
+    def set_platform(self, platform: str) -> None:
+        """Set platform for testing platform-specific behavior.
+        
+        Args:
+            platform: Platform name (windows, darwin, linux)
+        """
+        self.mock_platform = platform
+        
+    def set_ffmpeg_availability(self, available: bool) -> None:
+        """Configure FFmpeg availability for testing.
+        
+        Args:
+            available: Whether FFmpeg should be available
+        """
+        self.ffmpeg_stub.set_availability(available)
+        
+    def set_ffmpeg_path_exists(self, exists: bool) -> None:
+        """Configure whether FFmpeg executable exists.
+        
+        Args:
+            exists: Whether FFmpeg executable should exist
+        """
+        self.ffmpeg_stub.set_path_exists(exists)
+        
+    def set_conversion_failure(self, should_fail: bool, error_message: str = None) -> None:
+        """Configure audio conversion to fail for testing.
+        
+        Args:
+            should_fail: Whether conversion should fail
+            error_message: Custom error message
+        """
+        self.ffmpeg_stub.set_conversion_failure(should_fail, error_message)
+        
+    def get_ffmpeg_stub(self) -> StubFFmpegService:
+        """Get the FFmpeg stub for advanced configuration.
+        
+        Returns:
+            FFmpeg service stub instance
+        """
+        return self.ffmpeg_stub
+        
+    # Verification methods for tests
+        
+    def get_ffmpeg_path_calls(self) -> list[str]:
+        """Get list of platforms used in FFmpeg path calls.
+        
+        Returns:
+            List of platform names used in path resolution
+        """
+        return self.ffmpeg_path_calls.copy()
+        
+    def get_availability_checks(self) -> list[dict[str, Any]]:
+        """Get history of FFmpeg availability checks.
+        
+        Returns:
+            List of availability check records
+        """
+        return self.availability_checks.copy()
+        
+    def get_conversions(self) -> list[dict[str, Any]]:
+        """Get history of audio conversions.
+        
+        Returns:
+            List of conversion records
+        """
+        return self.conversions.copy()
+        
+    def get_conversion_progress_calls(self) -> list[tuple[str, str]]:
+        """Get progress callbacks made during conversions.
+        
+        Returns:
+            List of (item_name, progress_message) tuples
+        """
+        return self.ffmpeg_stub.progress_calls.copy()
+        
+    def reset(self) -> None:
+        """Reset stub state for new test."""
+        self.ffmpeg_path_calls.clear()
+        self.availability_checks.clear()
+        self.conversions.clear()
+        self.mock_platform = None
+        self.ffmpeg_stub.reset()
+        self._is_cancelled = False

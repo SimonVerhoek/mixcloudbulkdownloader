@@ -3,7 +3,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QLabel, QPushButton, QVBoxLayout, QWidget
 
-from app.consts import (
+from app.consts.ui import (
     LICENSE_FAILURE_DIALOG_HEIGHT,
     LICENSE_FAILURE_DIALOG_WIDTH,
 )

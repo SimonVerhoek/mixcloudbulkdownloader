@@ -15,15 +15,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.consts import (
-    GET_PRO_DIALOG_HEIGHT,
-    GET_PRO_DIALOG_WIDTH,
+from app.consts.license import (
+    LICENSE_CHECKOUT_ERROR,
     LICENSE_INVALID_CREDENTIALS,
     LICENSE_VERIFICATION_FAILED,
     PRO_FEATURES_LIST,
     PRO_PRICE_TEXT,
-    STRIPE_CHECKOUT_URL,
 )
+from app.consts.ui import (
+    GET_PRO_DIALOG_HEIGHT,
+    GET_PRO_DIALOG_WIDTH,
+)
+from app.custom_widgets.dialogs.error_dialog import ErrorDialog
 from app.custom_widgets.dialogs.license_verification_failure_dialog import (
     LicenseVerificationFailureDialog,
 )
@@ -207,15 +210,13 @@ class GetProDialog(QDialog):
         license_manager.settings.license_key = license_key
 
         # Perform verification
-        success = license_manager.verify_license(email=email, license_key=license_key)
+        success = license_manager.verify_license()
 
         if success:
-            # Show success dialog
             success_dialog = LicenseVerificationSuccessDialog(self)
             success_dialog.exec()
             self.accept()  # Close GetPro dialog
         else:
-            # Show failure dialog
             failure_dialog = LicenseVerificationFailureDialog(self, LICENSE_VERIFICATION_FAILED)
             failure_dialog.exec()
             # Keep GetPro dialog open for retry
@@ -223,7 +224,10 @@ class GetProDialog(QDialog):
     def _handle_get_pro_now(self) -> None:
         """Handle the Get MBD Pro now button click."""
         try:
-            webbrowser.open(STRIPE_CHECKOUT_URL)
+            checkout_url = license_manager.get_checkout_url()
+            webbrowser.open(checkout_url)
         except Exception as e:
-            log_error(message=f"Failed to open browser for Pro checkout: {e}")
+            log_error(message=f"Failed to retrieve checkout URL: {e}")
+            error_dialog = ErrorDialog(self, LICENSE_CHECKOUT_ERROR, "Checkout Error")
+            error_dialog.exec()
         # Keep dialog open so user can enter credentials after purchase

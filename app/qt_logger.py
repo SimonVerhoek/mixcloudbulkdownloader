@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import time
+import traceback
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional
@@ -163,6 +164,26 @@ class QtLogger:
         """Log error messages."""
         self._log_to_category(self.ERROR_CATEGORY, message, level)
 
+    def log_error_with_traceback(self, message: str, level: str = "ERROR") -> None:
+        """Log error messages with full stack trace."""
+        tb = traceback.format_exc()
+        full_message = f"{message}\nStack trace:\n{tb}"
+        self._log_to_category(self.ERROR_CATEGORY, full_message, level)
+
+    def log_exception(self, message: str, exc_info=None, level: str = "ERROR") -> None:
+        """Log exception with stack trace. If exc_info is None, uses current exception."""
+        if exc_info is None:
+            exc_info = sys.exc_info()
+
+        if exc_info[0] is not None:
+            tb_lines = traceback.format_exception(*exc_info)
+            tb_string = "".join(tb_lines)
+            full_message = f"{message}\nException details:\n{tb_string}"
+        else:
+            full_message = f"{message} (No exception context available)"
+
+        self._log_to_category(self.ERROR_CATEGORY, full_message, level)
+
     def _log_to_category(self, category: QLoggingCategory, message: str, level: str) -> None:
         """Log message to specified category."""
         # Route to appropriate Qt logging function
@@ -206,3 +227,13 @@ def log_thread(message: str, level: str = "INFO") -> None:
 def log_error(message: str, level: str = "ERROR") -> None:
     """Log error message."""
     get_logger().log_error(message, level)
+
+
+def log_error_with_traceback(message: str, level: str = "ERROR") -> None:
+    """Log error message with full stack trace."""
+    get_logger().log_error_with_traceback(message, level)
+
+
+def log_exception(message: str, exc_info=None, level: str = "ERROR") -> None:
+    """Log exception with stack trace. If exc_info is None, uses current exception."""
+    get_logger().log_exception(message, exc_info, level)

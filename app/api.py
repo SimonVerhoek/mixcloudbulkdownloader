@@ -3,7 +3,7 @@
 import httpx
 import yt_dlp
 
-from app.consts import ERROR_API_REQUEST_FAILED, MIXCLOUD_API_URL
+from app.consts.api import ERROR_API_REQUEST_FAILED, MIXCLOUD_API_URL
 from app.qt_logger import log_api, log_error
 
 

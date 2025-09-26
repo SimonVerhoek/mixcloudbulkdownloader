@@ -6,7 +6,7 @@ from unittest.mock import patch, Mock
 
 from app.services.license_manager import LicenseManager, license_manager
 from app.services.settings_manager import SettingsManager
-from app.consts import (
+from app.consts.license import (
     DEFAULT_LICENSE_RETRY_COUNT,
     DEFAULT_LICENSE_BACKOFF_RATE,
     DEFAULT_LICENSE_TIMEOUT,
@@ -64,6 +64,16 @@ class TestLicenseAPIIntegration:
         """Test successful license verification flow."""
         manager, settings, mock_qsettings = fresh_license_manager
         
+        # Mock credential retrieval to return test credentials
+        def mock_retrieve_credential(key, default):
+            if "email" in key:
+                return "test@example.com"
+            elif "license_key" in key:
+                return "valid-key-123"
+            return default
+        
+        settings._retrieve_credential.side_effect = mock_retrieve_credential
+        
         # Mock successful API response
         with patch('httpx.Client') as mock_client_class:
             mock_client = Mock()
@@ -81,7 +91,7 @@ class TestLicenseAPIIntegration:
             mock_client.request.return_value = mock_response
             
             # Test successful verification
-            result = manager.verify_license("test@example.com", "valid-key-123")
+            result = manager.verify_license()
             
             # Verify API call was made correctly
             mock_client.request.assert_called_once_with(
@@ -95,11 +105,21 @@ class TestLicenseAPIIntegration:
             assert manager.is_pro is True
             
             # Verify timestamp was updated
-            mock_qsettings.setValue.assert_called()
+            assert any(call[0][0] == "last_successful_verification" for call in mock_qsettings.setValue.call_args_list)
 
     def test_invalid_license_verification(self, fresh_license_manager):
         """Test invalid license verification."""
         manager, settings, mock_qsettings = fresh_license_manager
+        
+        # Mock credential retrieval to return test credentials
+        def mock_retrieve_credential(key, default):
+            if "email" in key:
+                return "test@example.com"
+            elif "license_key" in key:
+                return "invalid-key"
+            return default
+        
+        settings._retrieve_credential.side_effect = mock_retrieve_credential
         
         with patch('httpx.Client') as mock_client_class:
             mock_client = Mock()
@@ -116,7 +136,7 @@ class TestLicenseAPIIntegration:
             }
             mock_client.request.return_value = mock_response
             
-            result = manager.verify_license("test@example.com", "invalid-key")
+            result = manager.verify_license()
             
             assert result is False
             assert manager.is_pro is False
@@ -124,6 +144,16 @@ class TestLicenseAPIIntegration:
     def test_wrong_product_name(self, fresh_license_manager):
         """Test license for different product."""
         manager, settings, mock_qsettings = fresh_license_manager
+        
+        # Mock credential retrieval to return test credentials
+        def mock_retrieve_credential(key, default):
+            if "email" in key:
+                return "test@example.com"
+            elif "license_key" in key:
+                return "other-product-key"
+            return default
+        
+        settings._retrieve_credential.side_effect = mock_retrieve_credential
         
         with patch('httpx.Client') as mock_client_class:
             mock_client = Mock()
@@ -140,7 +170,7 @@ class TestLicenseAPIIntegration:
             }
             mock_client.request.return_value = mock_response
             
-            result = manager.verify_license("test@example.com", "other-product-key")
+            result = manager.verify_license()
             
             assert result is False
             assert manager.is_pro is False
@@ -150,23 +180,53 @@ class TestLicenseAPIIntegration:
         manager, settings, mock_qsettings = fresh_license_manager
         
         # Test missing email
-        result = manager.verify_license(None, "some-key")
+        def mock_retrieve_missing_email(key, default):
+            if "email" in key:
+                return ""
+            elif "license_key" in key:
+                return "some-key"
+            return default
+        
+        settings._retrieve_credential.side_effect = mock_retrieve_missing_email
+        result = manager.verify_license()
         assert result is False
         assert manager.is_pro is False
         
         # Test missing license key
-        result = manager.verify_license("test@example.com", None)
+        def mock_retrieve_missing_key(key, default):
+            if "email" in key:
+                return "test@example.com"
+            elif "license_key" in key:
+                return ""
+            return default
+        
+        settings._retrieve_credential.side_effect = mock_retrieve_missing_key
+        result = manager.verify_license()
         assert result is False
         assert manager.is_pro is False
         
         # Test both missing
-        result = manager.verify_license(None, None)
+        def mock_retrieve_both_missing(key, default):
+            return ""
+        
+        settings._retrieve_credential.side_effect = mock_retrieve_both_missing
+        result = manager.verify_license()
         assert result is False
         assert manager.is_pro is False
 
     def test_network_error_with_retry(self, fresh_license_manager):
         """Test network error handling with retry logic."""
         manager, settings, mock_qsettings = fresh_license_manager
+        
+        # Mock credential retrieval to return test credentials
+        def mock_retrieve_credential(key, default):
+            if "email" in key:
+                return "test@example.com"
+            elif "license_key" in key:
+                return "valid-key-123"
+            return default
+        
+        settings._retrieve_credential.side_effect = mock_retrieve_credential
         
         with patch('httpx.Client') as mock_client_class, \
              patch('time.sleep') as mock_sleep:  # Mock sleep to speed up test
@@ -179,7 +239,7 @@ class TestLicenseAPIIntegration:
             import httpx
             mock_client.request.side_effect = httpx.RequestError("Network connection failed")
             
-            result = manager.verify_license("test@example.com", "valid-key-123", max_retries=2)
+            result = manager.verify_license(max_retries=2)
             
             # Verify retries were attempted
             assert mock_client.request.call_count == 3  # Initial + 2 retries
@@ -195,6 +255,16 @@ class TestLicenseAPIIntegration:
         """Test timeout error handling."""
         manager, settings, mock_qsettings = fresh_license_manager
         
+        # Mock credential retrieval to return test credentials
+        def mock_retrieve_credential(key, default):
+            if "email" in key:
+                return "test@example.com"
+            elif "license_key" in key:
+                return "valid-key-123"
+            return default
+        
+        settings._retrieve_credential.side_effect = mock_retrieve_credential
+        
         with patch('httpx.Client') as mock_client_class, \
              patch('time.sleep'):
             
@@ -205,7 +275,7 @@ class TestLicenseAPIIntegration:
             import httpx
             mock_client.request.side_effect = httpx.TimeoutException("Request timed out")
             
-            result = manager.verify_license("test@example.com", "valid-key-123", max_retries=1)
+            result = manager.verify_license(max_retries=1)
             
             assert mock_client.request.call_count == 2  # Initial + 1 retry
             assert result is False
@@ -214,6 +284,16 @@ class TestLicenseAPIIntegration:
     def test_http_error_handling(self, fresh_license_manager):
         """Test HTTP error handling."""
         manager, settings, mock_qsettings = fresh_license_manager
+        
+        # Mock credential retrieval to return test credentials
+        def mock_retrieve_credential(key, default):
+            if "email" in key:
+                return "test@example.com"
+            elif "license_key" in key:
+                return "valid-key-123"
+            return default
+        
+        settings._retrieve_credential.side_effect = mock_retrieve_credential
         
         with patch('httpx.Client') as mock_client_class, \
              patch('time.sleep'):
@@ -228,7 +308,7 @@ class TestLicenseAPIIntegration:
             mock_response.status_code = 500
             mock_client.request.side_effect = httpx.HTTPStatusError("Server error", request=Mock(), response=mock_response)
             
-            result = manager.verify_license("test@example.com", "valid-key-123", max_retries=1)
+            result = manager.verify_license(max_retries=1)
             
             assert result is False
             assert manager.is_pro is False
@@ -236,6 +316,16 @@ class TestLicenseAPIIntegration:
     def test_malformed_json_response(self, fresh_license_manager):
         """Test handling of malformed JSON responses."""
         manager, settings, mock_qsettings = fresh_license_manager
+        
+        # Mock credential retrieval to return test credentials
+        def mock_retrieve_credential(key, default):
+            if "email" in key:
+                return "test@example.com"
+            elif "license_key" in key:
+                return "valid-key-123"
+            return default
+        
+        settings._retrieve_credential.side_effect = mock_retrieve_credential
         
         with patch('httpx.Client') as mock_client_class, \
              patch('time.sleep'):
@@ -248,7 +338,7 @@ class TestLicenseAPIIntegration:
             mock_response.json.side_effect = ValueError("Invalid JSON")
             mock_client.request.return_value = mock_response
             
-            result = manager.verify_license("test@example.com", "valid-key-123", max_retries=1)
+            result = manager.verify_license(max_retries=1)
             
             assert result is False
             assert manager.is_pro is False
@@ -256,6 +346,16 @@ class TestLicenseAPIIntegration:
     def test_offline_grace_period_fallback(self, fresh_license_manager):
         """Test offline grace period when verification fails."""
         manager, settings, mock_qsettings = fresh_license_manager
+        
+        # Mock credential retrieval to return test credentials
+        def mock_retrieve_credential(key, default):
+            if "email" in key:
+                return "test@example.com"
+            elif "license_key" in key:
+                return "valid-key-123"
+            return default
+        
+        settings._retrieve_credential.side_effect = mock_retrieve_credential
         
         # Set up existing successful verification timestamp (within grace period)
         recent_timestamp = time.time() - (OFFLINE_GRACE_PERIOD_DAYS * 24 * 60 * 60 / 2)  # Half grace period ago
@@ -279,7 +379,7 @@ class TestLicenseAPIIntegration:
             import httpx
             mock_client.request.side_effect = httpx.RequestError("Network error")
             
-            result = manager.verify_license("test@example.com", "valid-key-123", max_retries=1)
+            result = manager.verify_license(max_retries=1)
             
             # Should maintain pro status due to grace period
             assert result is True
@@ -288,6 +388,16 @@ class TestLicenseAPIIntegration:
     def test_expired_grace_period(self, fresh_license_manager):
         """Test behavior when grace period has expired."""
         manager, settings, mock_qsettings = fresh_license_manager
+        
+        # Mock credential retrieval to return test credentials
+        def mock_retrieve_credential(key, default):
+            if "email" in key:
+                return "test@example.com"
+            elif "license_key" in key:
+                return "valid-key-123"
+            return default
+        
+        settings._retrieve_credential.side_effect = mock_retrieve_credential
         
         # Set up old verification timestamp (outside grace period)
         old_timestamp = time.time() - (OFFLINE_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 2)  # Double grace period ago
@@ -310,7 +420,7 @@ class TestLicenseAPIIntegration:
             import httpx
             mock_client.request.side_effect = httpx.RequestError("Network error")
             
-            result = manager.verify_license("test@example.com", "valid-key-123", max_retries=1)
+            result = manager.verify_license(max_retries=1)
             
             # Should lose pro status due to expired grace period
             assert result is False
@@ -363,6 +473,16 @@ class TestLicenseAPIIntegration:
         """Test that integer timeout is converted to httpx.Timeout."""
         manager, settings, mock_qsettings = fresh_license_manager
         
+        # Mock credential retrieval to return test credentials
+        def mock_retrieve_credential(key, default):
+            if "email" in key:
+                return "test@example.com"
+            elif "license_key" in key:
+                return "valid-key"
+            return default
+        
+        settings._retrieve_credential.side_effect = mock_retrieve_credential
+        
         with patch('httpx.Client') as mock_client_class, \
              patch('httpx.Timeout') as mock_timeout_class:
             
@@ -381,7 +501,7 @@ class TestLicenseAPIIntegration:
             mock_client.request.return_value = mock_response
             
             custom_timeout = 30
-            manager.verify_license("test@example.com", "valid-key", timeout=custom_timeout)
+            manager.verify_license(timeout=custom_timeout)
             
             # Verify httpx.Timeout was created with the integer value
             mock_timeout_class.assert_called_once_with(timeout=custom_timeout)
@@ -392,6 +512,16 @@ class TestLicenseAPIIntegration:
     def test_custom_retry_parameters(self, fresh_license_manager):
         """Test custom retry parameters are respected."""
         manager, settings, mock_qsettings = fresh_license_manager
+        
+        # Mock credential retrieval to return test credentials
+        def mock_retrieve_credential(key, default):
+            if "email" in key:
+                return "test@example.com"
+            elif "license_key" in key:
+                return "valid-key"
+            return default
+        
+        settings._retrieve_credential.side_effect = mock_retrieve_credential
         
         with patch('httpx.Client') as mock_client_class, \
              patch('time.sleep') as mock_sleep:
@@ -407,8 +537,6 @@ class TestLicenseAPIIntegration:
             custom_backoff = 2.0
             
             result = manager.verify_license(
-                "test@example.com", 
-                "valid-key", 
                 max_retries=custom_retries,
                 backoff_rate=custom_backoff
             )

@@ -3,10 +3,10 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QLabel, QPushButton, QVBoxLayout, QWidget
 
-from app.consts import (
+from app.consts.license import LICENSE_VERIFICATION_SUCCESS
+from app.consts.ui import (
     LICENSE_SUCCESS_DIALOG_HEIGHT,
     LICENSE_SUCCESS_DIALOG_WIDTH,
-    LICENSE_VERIFICATION_SUCCESS,
 )
 
 

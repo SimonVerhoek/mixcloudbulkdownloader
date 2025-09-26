@@ -1,0 +1,88 @@
+/* Footer widget styling */
+
+#footerWidget {
+    background-color: #f5f5f5;
+    border-top: 1px solid #ddd;
+    min-height: 65px;
+    max-height: 65px;
+}
+
+#statusLabel {
+    color: #666;
+    font-size: 12px;
+    font-weight: normal;
+    padding: 20px 10px;
+    line-height: 1.0;
+}
+
+#feedbackButton {
+    background-color: transparent;
+    border: none;
+    color: #007acc;
+    font-size: 12px;
+    text-decoration: underline;
+    padding: 20px 15px;
+    margin: 0;
+    line-height: 1.0;
+}
+
+#feedbackButton:hover {
+    color: #005c99;
+    background-color: rgba(0, 122, 204, 0.1);
+}
+
+#feedbackButton:pressed {
+    background-color: rgba(0, 122, 204, 0.2);
+}
+
+/* Get MBD Pro Button in footer */
+#footerWidget #getMBDProButton {
+    background-color: #06CC0D;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 18px;
+    padding: 12px 20px;
+    min-width: 200px;
+    height: 30px;
+}
+
+#footerWidget #getMBDProButton:hover {
+    background-color: #088A0D;
+}
+
+#footerWidget #getMBDProButton:pressed {
+    background-color: #034B06;
+}
+
+/* Dark mode support */
+QWidget[darkMode="true"] #footerWidget {
+    background-color: #2b2b2b;
+    border-top: 1px solid #444;
+}
+
+QWidget[darkMode="true"] #statusLabel {
+    color: #ccc;
+}
+
+QWidget[darkMode="true"] #feedbackButton {
+    color: #4CAF50;
+}
+
+QWidget[darkMode="true"] #feedbackButton:hover {
+    color: #66BB6A;
+    background-color: rgba(76, 175, 80, 0.1);
+}
+
+QWidget[darkMode="true"] #footerWidget #getMBDProButton {
+    background-color: #04e80d;
+    color: white;
+}
+
+QWidget[darkMode="true"] #footerWidget #getMBDProButton:hover {
+    background-color: #03c20b;
+}
+
+QWidget[darkMode="true"] #footerWidget #getMBDProButton:pressed {
+    background-color: #029a09;
+}

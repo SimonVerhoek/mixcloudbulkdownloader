@@ -6,13 +6,18 @@ from PySide6.QtGui import QCloseEvent, QGuiApplication
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
+    QVBoxLayout,
+    QWidget,
 )
 
-from app.consts import (MAIN_WINDOW_MIN_HEIGHT, MAIN_WINDOW_MIN_WIDTH)
+from app.consts.ui import MAIN_WINDOW_MIN_HEIGHT, MAIN_WINDOW_MIN_WIDTH
 from app.custom_widgets.central_widget import CentralWidget
+from app.custom_widgets.footer_widget import FooterWidget
+from app.custom_widgets.dialogs.error_dialog import ErrorDialog
 from app.custom_widgets.dialogs.settings_dialog import SettingsDialog
 from app.custom_widgets.dialogs.get_pro_dialog import GetProDialog
 from app.qt_logger import log_ui, QtLogger
+from app.services.download_service import download_service
 from app.services.license_manager import license_manager
 from app.services.settings_manager import settings
 from app.styles import load_application_styles
@@ -33,9 +38,24 @@ class MainWindow(QMainWindow):
         # import services
         self.settings = settings
         self.license_manager = license_manager
+        self.download_service = download_service
 
+        # Create main container widget with vertical layout
+        main_widget = QWidget()
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Create central widget and footer
         widget = CentralWidget(license_manager=self.license_manager)
         self.central_widget = widget
+        self.footer_widget = FooterWidget(license_manager=self.license_manager)
+        
+        # Add to layout
+        main_layout.addWidget(widget)
+        main_layout.addWidget(self.footer_widget)
+        
+        main_widget.setLayout(main_layout)
 
         self.setWindowTitle("Mixcloud Bulk Downloader")
         self.setMinimumSize(MAIN_WINDOW_MIN_WIDTH, MAIN_WINDOW_MIN_HEIGHT)
@@ -44,10 +64,9 @@ class MainWindow(QMainWindow):
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu("File")
         
-        # Add Settings menu item (only if feature flag is enabled)
-        if self.settings.settings_pane_enabled:
-            file_menu.addAction("Settings...", self._show_settings_dialog)
-            file_menu.addSeparator()
+        # Add Settings menu item
+        file_menu.addAction("Settings...", self._show_settings_dialog)
+        file_menu.addSeparator()
         
         # Add Get MBD Pro menu item (only shown for non-Pro users)
         self.get_mbd_pro_action = file_menu.addAction("Get MBD Pro...", self._show_get_pro_dialog)
@@ -55,7 +74,10 @@ class MainWindow(QMainWindow):
         
         file_menu.addAction("Exit", QApplication.quit)
 
-        self.setCentralWidget(widget)
+        self.setCentralWidget(main_widget)
+        
+        # Connect to license status changes
+        self.license_manager.license_status_changed.connect(self._handle_license_status_changed)
         
         # Initialize Pro UI state
         self.refresh_pro_ui_elements()
@@ -77,7 +99,7 @@ class MainWindow(QMainWindow):
         configure application preferences. The dialog is centered on the
         main window and uses OS-native styling.
         """
-        settings_dialog = SettingsDialog(self)
+        settings_dialog = SettingsDialog(parent=self)
         settings_dialog.exec()
 
     def _show_get_pro_dialog(self) -> None:
@@ -89,11 +111,6 @@ class MainWindow(QMainWindow):
 
     def refresh_pro_ui_elements(self) -> None:
         """Refresh Pro UI elements based on current license status."""
-        # Update central widget Pro elements
-        if hasattr(self, 'central_widget'):
-            self.central_widget.refresh_pro_ui_elements()
-        
-        # Update menu items
         self.update_menu_items()
 
     def update_menu_items(self) -> None:
@@ -107,27 +124,36 @@ class MainWindow(QMainWindow):
     def startup_license_verification(self) -> None:
         """Perform startup license verification in background thread."""
         self.verification_thread = StartupVerificationThread(self.license_manager, self)
-        self.verification_thread.verification_completed.connect(self._handle_startup_verification_result)
         self.verification_thread.start()
 
-    def _handle_startup_verification_result(self, success: bool, notify_user: bool) -> None:
-        """Handle the result of startup license verification.
+    def _handle_license_status_changed(self, is_pro: bool) -> None:
+        """Handle changes in license status.
         
         Args:
-            success: Whether verification was successful
-            notify_user: Whether to notify user of verification failure
+            is_pro: Whether user now has Pro status
         """
-        from app.custom_widgets.dialogs.error_dialog import ErrorDialog
-        
         # Refresh UI elements based on new Pro status
         self.refresh_pro_ui_elements()
         
-        # Notify user if needed (first-time verification failure)
-        if notify_user:
+        # Check FFmpeg availability for Pro users after verification
+        if is_pro:
+            self._verify_ffmpeg_availability()
+
+    def _verify_ffmpeg_availability(self) -> None:
+        """Verify FFmpeg availability for Pro users and show appropriate messaging."""
+        ffmpeg_available = self.download_service.verify_ffmpeg_availability()
+        
+        if ffmpeg_available:
+            log_ui("FFmpeg executable found and available for audio conversion", "INFO")
+        else:
+            log_ui("FFmpeg executable not found - audio conversion may not be available", "WARNING")
+            
+            # Show user-friendly dialog about audio conversion limitations
             ErrorDialog(
-                self, 
-                message="License verification failed. Some features may be limited. "
-                       "Check your internet connection and license credentials."
+                self,
+                message="Audio conversion may not be available due to missing FFmpeg.\n\n"
+                       "Some audio formats may not be accessible. If you experience issues "
+                       "with downloads, please contact support for assistance."
             )
 
     def closeEvent(self, event: QCloseEvent) -> None:

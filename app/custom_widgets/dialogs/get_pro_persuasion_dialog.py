@@ -5,7 +5,8 @@ import webbrowser
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
-from app.consts import PRO_FEATURES_LIST, PRO_PRICE_TEXT, STRIPE_CHECKOUT_URL
+from app.consts.license import LICENSE_CHECKOUT_ERROR, PRO_FEATURES_LIST, PRO_PRICE_TEXT
+from app.custom_widgets.dialogs.error_dialog import ErrorDialog
 from app.qt_logger import log_error
 from app.services.license_manager import license_manager
 
@@ -51,7 +52,7 @@ class GetProPersuasionDialog(QDialog):
 
         # Pro features message
         pro_message = QLabel(
-            "Want to download even faster with premium features?\n\n"
+            "Want to download in higher quality and other formats?\n\n"
             "Upgrade to MBD Pro and unlock:"
         )
         pro_message.setWordWrap(True)
@@ -101,9 +102,12 @@ class GetProPersuasionDialog(QDialog):
     def _handle_get_pro(self) -> None:
         """Handle the Get Pro button click by opening the checkout URL."""
         try:
-            webbrowser.open(STRIPE_CHECKOUT_URL)
+            checkout_url = license_manager.get_checkout_url()
+            webbrowser.open(checkout_url)
         except Exception as e:
-            log_error(message=f"Failed to open browser for Pro checkout: {e}")
+            log_error(message=f"Failed to retrieve checkout URL: {e}")
+            error_dialog = ErrorDialog(self, LICENSE_CHECKOUT_ERROR, "Checkout Error")
+            error_dialog.exec()
         finally:
             self.accept()
 

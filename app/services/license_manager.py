@@ -4,8 +4,9 @@ import time
 from typing import Any
 
 import httpx
+from PySide6.QtCore import QObject, Signal
 
-from app.consts import (
+from app.consts.license import (
     DEFAULT_LICENSE_BACKOFF_RATE,
     DEFAULT_LICENSE_RETRY_COUNT,
     DEFAULT_LICENSE_TIMEOUT,
@@ -14,12 +15,14 @@ from app.consts import (
     LOG_LICENSE_PARSE_ERROR,
     LOG_LICENSE_TIMEOUT,
     OFFLINE_GRACE_PERIOD_DAYS,
+    STRIPE_CHECKOUT_URI,
+    USER_FEEDBACK_BEARER_TOKEN,
 )
 from app.qt_logger import log_api, log_error
 from app.services.settings_manager import settings
 
 
-class LicenseManager:
+class LicenseManager(QObject):
     """Manages license verification and pro status for the application.
 
     This singleton class handles all license-related operations including:
@@ -27,12 +30,54 @@ class LicenseManager:
     - Pro status management
     - Integration with settings for credential storage
     - Offline grace period handling
+    - Qt signals for license status changes
     """
+
+    # Signal emitted when license status changes (is_pro: bool)
+    license_status_changed = Signal(bool)
 
     def __init__(self) -> None:
         """Initialize the license manager with settings reference."""
+        super().__init__()
         self.settings = settings  # Use the singleton instance
-        self.is_pro = False  # Attribute set by verify_license(), not computed
+        self._is_pro = False  # Private attribute to track changes
+
+        # Initialize Pro status for offline users with valid credentials
+        self._initialize_pro_status()
+
+    @property
+    def is_pro(self) -> bool:
+        """Get the current Pro license status."""
+        return self._is_pro
+
+    @is_pro.setter
+    def is_pro(self, value: bool) -> None:
+        """Set the Pro license status and emit signal if changed."""
+        if self._is_pro != value:
+            self._is_pro = value
+            self.license_status_changed.emit(value)
+
+    def _initialize_pro_status(self) -> None:
+        """Initialize Pro status based on stored credentials and verification history.
+
+        This method is called during initialization to give immediate Pro access
+        to users who have valid stored credentials AND evidence of previous successful
+        verification. This ensures offline users get Pro features immediately at startup
+        while maintaining security for first-time users.
+        """
+        # Check if we have valid stored credentials
+        email = self.settings.email
+        license_key = self.settings.license_key
+        last_verification = self.settings.last_successful_verification
+
+        if email and license_key and last_verification > 0.0:
+            # Give immediate Pro access for stored credentials with verification history
+            # This indicates the license was successfully verified at least once before
+            self._is_pro = True
+            log_api(
+                message="Initialized with Pro status due to stored credentials and verification history",
+                level="INFO",
+            )
 
     def _send_request_to_licensing_server(
         self,
@@ -43,6 +88,7 @@ class LicenseManager:
         timeout: int = DEFAULT_LICENSE_TIMEOUT,
         max_retries: int = DEFAULT_LICENSE_RETRY_COUNT,
         backoff_rate: float = DEFAULT_LICENSE_BACKOFF_RATE,
+        headers: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         """Send HTTP request to license server with retry logic.
 
@@ -54,6 +100,7 @@ class LicenseManager:
             timeout: Request timeout in seconds.
             max_retries: Maximum number of retry attempts.
             backoff_rate: Exponential backoff multiplier for retries.
+            headers: HTTP headers to include in the request.
 
         Returns:
             Dict containing response JSON data, or None if all attempts failed.
@@ -73,6 +120,8 @@ class LicenseManager:
                     request_kwargs = {"params": url_params} if url_params else {}
                     if payload is not None:
                         request_kwargs["json"] = payload
+                    if headers is not None:
+                        request_kwargs["headers"] = headers
 
                     response = client.request(method=method.upper(), url=full_url, **request_kwargs)
 
@@ -136,8 +185,6 @@ class LicenseManager:
 
     def verify_license(
         self,
-        email: str | None = None,
-        license_key: str | None = None,
         max_retries: int = DEFAULT_LICENSE_RETRY_COUNT,
         backoff_rate: float = DEFAULT_LICENSE_BACKOFF_RATE,
         timeout: int = DEFAULT_LICENSE_TIMEOUT,
@@ -145,8 +192,6 @@ class LicenseManager:
         """Verify license credentials against the license server.
 
         Args:
-            email: License email. If None, retrieves from settings.
-            license_key: License key. If None, retrieves from settings.
             max_retries: Maximum number of retry attempts.
             backoff_rate: Exponential backoff multiplier for retries.
             timeout: Request timeout in seconds.
@@ -154,13 +199,14 @@ class LicenseManager:
         Returns:
             bool: True if license is valid, False otherwise.
         """
-        # If not provided, get from settings
-        if email is None:
-            email = self.settings.email
-        if license_key is None:
-            license_key = self.settings.license_key
+        email = self.settings.email
+        license_key = self.settings.license_key
 
         if not email or not license_key:
+            log_api(
+                message=f"No license credentials found. Pro status is set to <{self.is_pro}>",
+                level="INFO",
+            )
             self.is_pro = False
             return False
 
@@ -177,18 +223,19 @@ class LicenseManager:
             backoff_rate=backoff_rate,
         )
 
-        # If request failed completely, check offline status
+        # If request failed completely, check if we're within the offline grace period
         if response_data is None:
             if self.check_offline_status():
-                log_api(message="Maintaining pro status due to offline grace period", level="INFO")
-                # Keep current is_pro status (don't change it)
+                log_api(
+                    message=f"License server unreachable - Pro status remains <{self.is_pro}> (within grace period)",
+                    level="WARNING",
+                )
                 return self.is_pro
             else:
                 log_api(
-                    message="license outside grace period or never verified. Disabling pro...",
+                    message=f"License server unreachable and outside grace period - revoking Pro status",
                     level="WARNING",
                 )
-                # Outside grace period or never verified - disable pro features
                 self.is_pro = False
                 return False
 
@@ -197,7 +244,9 @@ class LicenseManager:
         product_name = response_data.get("product_name")
 
         if is_valid and product_name == "mixcloud_bulk_downloader":
-            log_api(message=f"acknowledged pro status for {product_name}", level="INFO")
+            log_api(
+                message=f"License server acknowledged pro status for {product_name}", level="INFO"
+            )
             # Successful verification
             self.is_pro = True
             self.update_verification_timestamp()
@@ -235,6 +284,73 @@ class LicenseManager:
     def update_verification_timestamp(self) -> None:
         """Update the last successful verification timestamp to current time."""
         self.settings.last_successful_verification = time.time()
+
+    def get_checkout_url(self) -> str:
+        """Get checkout URL from payment server.
+
+        Makes a GET request to the Stripe checkout URI to retrieve the actual
+        checkout URL and checkout ID from the payment server.
+
+        Returns:
+            Checkout URL string if successful.
+
+        Raises:
+            Exception: If request fails or response is invalid.
+        """
+        # Make GET request to the checkout URI using existing method
+        response_data = self._send_request_to_licensing_server(
+            method="GET",
+            uri=STRIPE_CHECKOUT_URI,
+            timeout=DEFAULT_LICENSE_TIMEOUT,
+        )
+
+        # Handle case where request completely failed
+        if response_data is None:
+            raise Exception("Failed to connect to payment server")
+
+        # Extract required fields from response
+        try:
+            checkout_url = response_data["checkout_url"]
+            checkout_id = response_data["checkout_id"]
+        except KeyError as e:
+            raise Exception(f"Invalid response from payment server: missing {e}")
+
+        # Log the checkout ID for tracking
+        log_api(message=f"Retrieved checkout URL with ID: {checkout_id}", level="INFO")
+
+        return checkout_url
+
+    def submit_feedback(self, feedback_text: str, email: str | None = None) -> None:
+        """Submit user feedback to license server.
+
+        Args:
+            feedback_text: The user's feedback message
+            email: Optional email address for response
+
+        Raises:
+            Exception: If request fails or server unreachable
+        """
+        # Prepare headers
+        headers = {
+            "Authorization": f"Bearer {USER_FEEDBACK_BEARER_TOKEN}",
+            "Content-Type": "application/json",
+        }
+
+        # Prepare payload
+        payload = {
+            "feedback_text": feedback_text,
+            "email": email,
+            "product_name": "mixcloud_bulk_downloader",
+        }
+
+        # Use existing infrastructure
+        response_data = self._send_request_to_licensing_server(
+            method="POST", uri="/public/user_feedback", payload=payload, headers=headers
+        )
+
+        # Handle failure
+        if response_data is None:
+            raise Exception("Failed to connect to feedback server")
 
     def get_license_status_info(self) -> dict[str, Any]:
         """Get comprehensive license status information for debugging/UI.

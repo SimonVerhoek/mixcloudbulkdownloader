@@ -6,8 +6,8 @@ import unicodedata
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem
 
-from app.consts import (
-    KNOWN_MEDIA_EXTENSIONS,
+from app.consts.audio import AUDIO_FORMATS
+from app.consts.ui import (
     TREE_SELECT_COLUMN_WIDTH,
     TREE_STATUS_COLUMN_WIDTH,
     TREE_TITLE_COLUMN_WIDTH,
@@ -70,15 +70,14 @@ class CloudcastQTreeWidget(QTreeWidget):
         self.download_thread.progress_signal.connect(self.update_item_download_progress)
         self.download_thread.completion_signal.connect(self.show_donation_dialog)
 
-    def _get_download_dir(self) -> str:
-        """Show directory selection dialog and return selected path.
+    def _get_download_dir(self) -> str | None:
+        """Get download directory using Pro-aware directory selection.
 
         Returns:
-            Selected directory path, or empty string if cancelled
+            Selected directory path, or None if cancelled
         """
-        return self.file_service.select_download_directory(
-            parent=self, title="Select download location"
-        )
+        # Use download service's Pro-aware directory selection
+        return self.download_service.get_download_directory()
 
     def _get_tree_items(self) -> list[QTreeWidgetItem]:
         """Get all top-level items in the tree.
@@ -223,9 +222,10 @@ class CloudcastQTreeWidget(QTreeWidget):
         # Step 4: Remove actual file extensions (not date parts like .17)
         # Only strip known audio/video file extensions
         result = cleaned.lower().strip()
-        for ext in KNOWN_MEDIA_EXTENSIONS:
-            if result.endswith(ext):
-                result = result[: -len(ext)]
+        for audio_format in AUDIO_FORMATS.values():
+            extension = audio_format.extension  # Already has dot like ".mp3"
+            if result.endswith(extension):
+                result = result[: -len(extension)]
                 break
 
         return result

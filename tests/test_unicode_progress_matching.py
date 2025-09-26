@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import Mock
 from PySide6.QtWidgets import QApplication
 
-from app.consts import KNOWN_MEDIA_EXTENSIONS
+from app.consts.audio import AUDIO_FORMATS
 from app.custom_widgets.cloudcast_q_tree_widget import CloudcastQTreeWidget
 from app.custom_widgets.cloudcast_q_tree_widget_item import CloudcastQTreeWidgetItem
 from app.data_classes import MixcloudUser, Cloudcast
@@ -482,9 +482,9 @@ class TestUnicodeProgressMatching:
         # Test that _normalize_filename automatically removes extensions
         base_filename = "test-track-name"
         
-        for ext in KNOWN_MEDIA_EXTENSIONS:
-            filename_with_ext = f"{base_filename}{ext}"
+        for audio_format in AUDIO_FORMATS.values():
+            filename_with_ext = f"{base_filename}{audio_format.extension}"
             normalized = widget._normalize_filename(filename_with_ext)
             
             # Should end up with just the base filename (extension removal is now automatic)
-            assert normalized == base_filename, f"Extension {ext} was not properly stripped"
+            assert normalized == base_filename, f"Extension {audio_format.extension} was not properly stripped"

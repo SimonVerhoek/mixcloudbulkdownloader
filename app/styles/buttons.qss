@@ -1,40 +1,66 @@
 /* Button Styles for Mixcloud Bulk Downloader */
 
-/* Primary Button (Donate, Download, Get Pro, etc.) */
-QPushButton#donateButton,
-QPushButton#primaryButton {
-    background-color: #4CAF50;
+/* Generic Base QPushButton Style */
+QPushButton {
+    background-color: #555;
     color: white;
     border: none;
-    padding: 10px 20px;
+    padding: 12px 20px;
     border-radius: 5px;
+    font-weight: normal;
+}
+
+QPushButton:hover {
+    background-color: #666;
+}
+
+QPushButton:pressed {
+    background-color: #444;
+}
+
+/* Primary Button (Donate, Download, Get Pro, etc.) */
+QPushButton#donateButton,
+QPushButton#primaryButton,
+QPushButton#sendButton {
+    background-color: #6804E8;
+    color: white;
     font-weight: bold;
 }
 
 QPushButton#donateButton:hover,
-QPushButton#primaryButton:hover {
-    background-color: #45a049;
+QPushButton#primaryButton:hover,
+QPushButton#sendButton:hover {
+    background-color: #5803C7;
 }
 
 QPushButton#donateButton:pressed,
-QPushButton#primaryButton:pressed {
-    background-color: #3d8b40;
+QPushButton#primaryButton:pressed,
+QPushButton#sendButton:pressed {
+    background-color: #4802A6;
 }
 
 /* Secondary Button (No thanks, Cancel, etc.) */
-QPushButton#secondaryButton {
-    background-color: #f0f0f0;
-    color: #333;
-    border: 1px solid #ccc;
-    padding: 10px 20px;
-    border-radius: 5px;
-}
-
-QPushButton#secondaryButton:hover {
-    background-color: #e0e0e0;
-}
-
 QPushButton#secondaryButton:pressed {
-    background-color: #d0d0d0;
     border-color: #999;
+}
+
+/* Browse Button - Default height for settings pane */
+QPushButton#browseButton {
+    padding: 6px 12px;
+    height: 24px;
+}
+
+/* Get MBD Pro Button - Special green color */
+QPushButton#getMBDProButton {
+    background-color: #04e80d;
+    color: white;
+    font-weight: bold;
+}
+
+QPushButton#getMBDProButton:hover {
+    background-color: #03c20b;
+}
+
+QPushButton#getMBDProButton:pressed {
+    background-color: #029a09;
 }

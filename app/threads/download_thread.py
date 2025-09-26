@@ -2,7 +2,7 @@
 
 from PySide6.QtCore import QThread, Signal
 
-from app.qt_logger import log_error, log_thread
+from app.qt_logger import log_error, log_error_with_traceback, log_thread
 from app.services.download_service import DownloadService, download_service
 
 
@@ -51,13 +51,14 @@ class DownloadThread(QThread):
             log_thread("Download completed successfully", "INFO")
             self.completion_signal.emit()
         except Exception as e:
-            log_error(f"Download thread error: {str(e)}", "CRITICAL")
+            log_error_with_traceback(f"Download thread error: {str(e)}", "CRITICAL")
             self.error_signal.emit(str(e))
 
     def stop(self) -> None:
         """Stop the download thread and emit interrupt signal."""
-        log_thread("Stopping download thread", "WARNING")
+        log_thread("Stopping download thread...", "INFO")
         self.download_service.cancel_downloads()
         self.terminate()
         self.interrupt_signal.emit()
         self.wait()
+        log_thread("Download thread stopped", "INFO")

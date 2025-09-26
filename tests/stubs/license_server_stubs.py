@@ -30,14 +30,44 @@ class FakeLicenseServerClient:
         # Default valid license for testing
         self.valid_licenses.add(("test@example.com", "valid-license-123"))
         
-    def post(self, url: str, *, json: dict[str, Any] = None, headers: dict[str, str] = None, timeout: httpx.Timeout = None) -> 'FakeLicenseServerResponse':
-        """Simulate HTTP POST request to license server.
+    def request(self, method: str, url: str, *, json: dict[str, Any] = None, headers: dict[str, str] = None, params: dict[str, Any] = None, timeout: httpx.Timeout = None) -> 'FakeLicenseServerResponse':
+        """Simulate HTTP request to license server.
         
         Args:
+            method: HTTP method (GET, POST, etc.)
             url: Request URL
             json: JSON payload
             headers: Request headers
+            params: URL parameters
             timeout: Request timeout
+            
+        Returns:
+            Fake license server response
+            
+        Raises:
+            httpx.RequestError: When should_raise_network_error is True
+            httpx.TimeoutException: When should_raise_timeout_error is True
+            httpx.HTTPStatusError: When should_raise_http_error is True
+        """
+        return self._handle_request(method, url, json=json, headers=headers, params=params)
+        
+    def post(self, url: str, *, json: dict[str, Any] = None, headers: dict[str, str] = None, timeout: httpx.Timeout = None) -> 'FakeLicenseServerResponse':
+        """Simulate HTTP POST request to license server."""
+        return self._handle_request("POST", url, json=json, headers=headers)
+        
+    def get(self, url: str, *, headers: dict[str, str] = None, params: dict[str, Any] = None, timeout: httpx.Timeout = None) -> 'FakeLicenseServerResponse':
+        """Simulate HTTP GET request to license server."""
+        return self._handle_request("GET", url, headers=headers, params=params)
+        
+    def _handle_request(self, method: str, url: str, *, json: dict[str, Any] = None, headers: dict[str, str] = None, params: dict[str, Any] = None) -> 'FakeLicenseServerResponse':
+        """Handle HTTP request to license server.
+        
+        Args:
+            method: HTTP method
+            url: Request URL
+            json: JSON payload
+            headers: Request headers
+            params: URL parameters
             
         Returns:
             Fake license server response
@@ -96,6 +126,44 @@ class FakeLicenseServerClient:
                     "error": "Invalid license credentials"
                 }
                 return FakeLicenseServerResponse(response_data)
+        
+        # Process feedback submission request
+        elif "public/user_feedback" in url and json:
+            # Validate required fields
+            feedback_text = json.get("feedback_text", "")
+            email = json.get("email")
+            product_name = json.get("product_name", "")
+            
+            if not feedback_text:
+                response_data = {"error": "feedback_text is required"}
+                return FakeLicenseServerResponse(response_data, status_code=400)
+            
+            if not product_name:
+                response_data = {"error": "product_name is required"}
+                return FakeLicenseServerResponse(response_data, status_code=400)
+            
+            # Check for proper authorization header
+            auth_header = self.last_headers.get("Authorization", "")
+            if not auth_header.startswith("Bearer "):
+                response_data = {"error": "Missing or invalid authorization header"}
+                return FakeLicenseServerResponse(response_data, status_code=401)
+            
+            # Success response
+            response_data = {
+                "success": True,
+                "message": "Feedback received successfully",
+                "feedback_id": "test-feedback-123"
+            }
+            return FakeLicenseServerResponse(response_data)
+        
+        # Process checkout URL request (GET)
+        elif "checkout" in url and method == "GET":
+            # Simulate checkout URL generation
+            response_data = {
+                "checkout_url": "https://checkout.stripe.com/test-checkout-session-123",
+                "checkout_id": "test-checkout-123"
+            }
+            return FakeLicenseServerResponse(response_data)
         
         # Default response for unknown endpoints
         return FakeLicenseServerResponse({"error": "Unknown endpoint"}, status_code=404)
@@ -218,6 +286,35 @@ class StubLicenseServer:
         """Simulate malformed JSON response."""
         # This will be caught as a JSON parsing error by the actual client
         self.client.set_custom_response(email, license_key, {"malformed": "response"})
+        
+    def set_feedback_auth_token(self, token: str) -> None:
+        """Set the expected bearer token for feedback requests.
+        
+        Args:
+            token: Bearer token to expect in Authorization header
+        """
+        # This is handled by the client checking the Authorization header
+        pass
+        
+    def simulate_feedback_validation_error(self, error_type: str = "missing_text") -> None:
+        """Simulate feedback validation errors.
+        
+        Args:
+            error_type: Type of validation error - "missing_text", "missing_product"
+        """
+        # These are handled automatically by the client validation logic
+        pass
+        
+    def set_checkout_response(self, checkout_url: str, checkout_id: str) -> None:
+        """Customize checkout URL response.
+        
+        Args:
+            checkout_url: Custom checkout URL to return
+            checkout_id: Custom checkout ID to return
+        """
+        # For now, the client returns fixed test values
+        # In the future, this could be made configurable
+        pass
         
     def get_request_history(self) -> dict[str, Any]:
         """Get history of requests made to the server."""

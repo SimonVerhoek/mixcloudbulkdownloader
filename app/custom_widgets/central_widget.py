@@ -9,13 +9,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.consts import (
+from app.consts.ui import (
     SEARCH_BUTTON_STRETCH,
     SEARCH_INPUT_STRETCH,
     SEARCH_LABEL_STRETCH,
 )
 from app.custom_widgets.cloudcast_q_tree_widget import CloudcastQTreeWidget
-from app.custom_widgets.dialogs.get_pro_dialog import GetProDialog
 from app.custom_widgets.search_user_q_combo_box import SearchUserQComboBox
 from app.services.api_service import MixcloudAPIService, api_service
 from app.services.download_service import DownloadService, download_service
@@ -62,6 +61,7 @@ class CentralWidget(QWidget):
         self.search_user_label = QLabel("Search account:")
         self.search_user_input = SearchUserQComboBox(api_service=self.api_service)
         self.get_cloudcasts_button = QPushButton("Get cloudcasts")
+        self.get_cloudcasts_button.setObjectName("primaryButton")
 
         search_user_layout.addWidget(self.search_user_label)
         search_user_layout.addWidget(self.search_user_input)
@@ -85,7 +85,9 @@ class CentralWidget(QWidget):
         self.select_all_button = QPushButton("Select All")
         self.unselect_all_button = QPushButton("Unselect All")
         self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.setObjectName("secondaryButton")
         self.download_button = QPushButton("Download")
+        self.download_button.setObjectName("primaryButton")
         cloudcast_action_buttons.addWidget(self.select_all_button)
         cloudcast_action_buttons.addWidget(self.unselect_all_button)
         cloudcast_action_buttons.addWidget(self.cancel_button)
@@ -94,9 +96,6 @@ class CentralWidget(QWidget):
         self.layout.addLayout(search_user_layout)
         self.layout.addLayout(user_cloudcasts_layout)
         self.layout.addLayout(cloudcast_action_buttons)
-
-        # Get MBD Pro button layout (centered, only shown for non-Pro users)
-        self._create_get_pro_button_layout()
 
         self.setLayout(self.layout)
 
@@ -108,38 +107,3 @@ class CentralWidget(QWidget):
         self.unselect_all_button.clicked.connect(self.cloudcasts.unselect_all)
         self.download_button.clicked.connect(self.cloudcasts.download_selected_cloudcasts)
         self.cancel_button.clicked.connect(self.cloudcasts.cancel_cloudcasts_download)
-
-        # Initial Pro UI state setup
-        self.refresh_pro_ui_elements()
-
-    def _create_get_pro_button_layout(self) -> None:
-        """Create the Get MBD Pro button layout with centered positioning."""
-        # Create horizontal layout with stretches for centering
-        get_pro_layout = QHBoxLayout()
-        get_pro_layout.addStretch()  # Left stretch
-
-        # Create Get MBD Pro button
-        self.get_mbd_pro_button = QPushButton("Get MBD Pro")
-        self.get_mbd_pro_button.setObjectName("primaryButton")
-        self.get_mbd_pro_button.clicked.connect(self._show_get_pro_dialog)
-
-        get_pro_layout.addWidget(self.get_mbd_pro_button)
-        get_pro_layout.addStretch()  # Right stretch
-
-        # Add layout to main layout
-        self.layout.addLayout(get_pro_layout)
-
-    def _show_get_pro_dialog(self) -> None:
-        """Show the Get Pro dialog."""
-        dialog = GetProDialog(self)
-        result = dialog.exec()
-        if result:  # Dialog accepted (successful verification)
-            self.refresh_pro_ui_elements()
-
-    def refresh_pro_ui_elements(self) -> None:
-        """Refresh Pro UI elements based on current license status."""
-        is_pro = self.license_manager.is_pro
-
-        # Show/hide Get MBD Pro button based on Pro status
-        if hasattr(self, "get_mbd_pro_button"):
-            self.get_mbd_pro_button.setVisible(not is_pro)

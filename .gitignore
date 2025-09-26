@@ -46,3 +46,6 @@ private_plans
 # local secrets & settings
 local_settings
 ~/
+
+# gitlab ci local
+.gitlab-ci-local

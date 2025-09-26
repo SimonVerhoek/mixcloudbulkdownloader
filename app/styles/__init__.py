@@ -63,7 +63,7 @@ class StylesheetLoader:
         Returns:
             Combined stylesheet content
         """
-        stylesheet_files = ["main.qss", "buttons.qss", "dialogs.qss", "labels.qss"]
+        stylesheet_files = ["main.qss", "buttons.qss", "dialogs.qss", "labels.qss", "footer.qss"]
         combined_styles = []
 
         for filename in stylesheet_files:

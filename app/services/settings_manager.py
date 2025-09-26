@@ -8,14 +8,13 @@ from pathlib import Path
 import keyring
 from PySide6.QtCore import QSettings
 
-from app.consts import (
+from app.consts.license import LOG_KEYRING_ERROR
+from app.consts.settings import (
     CUSTOM_SETTINGS_PATH,
     DEVELOPMENT,
-    FF_SETTINGS_PANE_ENABLED,
     KEYRING_EMAIL_KEY,
     KEYRING_LICENSE_KEY,
     KEYRING_SERVICE_NAME,
-    LOG_KEYRING_ERROR,
 )
 
 
@@ -48,25 +47,6 @@ class SettingsManager:
         self._configure_keyring_backend()
         self._settings = self._create_qsettings()
         self._initialize_from_env()
-
-    @property
-    def settings_pane_enabled(self) -> bool:
-        """Get whether the settings pane should be accessible to users.
-
-        Returns:
-            bool: True if settings pane should be shown, False otherwise.
-                 Defaults to False for new installations.
-        """
-        return bool(self._settings.value("settings_pane_enabled", False, type=bool))
-
-    @settings_pane_enabled.setter
-    def settings_pane_enabled(self, enabled: bool) -> None:
-        """Set whether the settings pane should be accessible to users.
-
-        Args:
-            enabled: True to enable settings pane access, False to disable.
-        """
-        self._settings.setValue("settings_pane_enabled", enabled)
 
     @property
     def email(self) -> str:
@@ -347,7 +327,29 @@ class SettingsManager:
         This should be called once during application initialization to set
         default values from environment variables if they are defined.
         """
-        self.settings_pane_enabled = FF_SETTINGS_PANE_ENABLED
+        # currently not in use
+        pass
+
+    def get(self, key: str, default=None):
+        """Get a setting value by key.
+
+        Args:
+            key: Setting key to retrieve
+            default: Default value if key doesn't exist
+
+        Returns:
+            Setting value or default if not found
+        """
+        return self._settings.value(key, default)
+
+    def set(self, key: str, value) -> None:
+        """Set a setting value by key.
+
+        Args:
+            key: Setting key to set
+            value: Value to store
+        """
+        self._settings.setValue(key, value)
 
     def sync(self) -> None:
         """Force synchronization of settings to persistent storage.

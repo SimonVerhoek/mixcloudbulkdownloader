@@ -5,7 +5,7 @@ import time
 from unittest.mock import Mock, patch, MagicMock
 
 from app.services.license_manager import LicenseManager, license_manager
-from app.consts import (
+from app.consts.license import (
     DEFAULT_LICENSE_TIMEOUT,
     DEFAULT_LICENSE_RETRY_COUNT,
     DEFAULT_LICENSE_BACKOFF_RATE,
@@ -56,15 +56,17 @@ class TestLicenseManagerStructure:
 class TestVerifyLicenseAPI:
     """Test verify_license API implementation for Phase 2."""
 
-    def test_verify_license_with_explicit_credentials(self, fresh_license_manager):
-        """Test verify_license with explicit email and license_key."""
+    def test_verify_license_with_stored_credentials(self, fresh_license_manager):
+        """Test verify_license with stored credentials in settings."""
         manager, mock_settings = fresh_license_manager
+        
+        # Set up stored credentials
+        mock_settings.email = "test@example.com"
+        mock_settings.license_key = "testkey123"
         
         # Mock the _send_request_to_licensing_server method to simulate network failure
         with patch.object(manager, '_send_request_to_licensing_server', return_value=None):
             result = manager.verify_license(
-                email="test@example.com",
-                license_key="testkey123",
                 max_retries=3,
                 backoff_rate=2.0,
                 timeout=60
@@ -140,21 +142,29 @@ class TestVerifyLicenseAPI:
         )
         assert result is False
 
-    def test_verify_license_partial_credential_override(self, fresh_license_manager):
-        """Test verify_license with partial credential override."""
+    def test_verify_license_custom_parameters(self, fresh_license_manager):
+        """Test verify_license with custom retry and timeout parameters."""
         manager, mock_settings = fresh_license_manager
         mock_settings.email = "settings@example.com"
         mock_settings.license_key = "settingskey"
         
-        # Mock the _send_request_to_licensing_server method and verify it's called with mixed credentials
+        # Mock the _send_request_to_licensing_server method and verify it's called with custom parameters
         with patch.object(manager, '_send_request_to_licensing_server', return_value=None) as mock_send:
-            result = manager.verify_license(email="override@example.com")
+            result = manager.verify_license(
+                max_retries=5,
+                backoff_rate=3.0,
+                timeout=120
+            )
         
-        # Verify _send_request_to_licensing_server was called with override email and settings key
-        mock_send.assert_called_once()
-        call_args = mock_send.call_args[1]  # Get keyword arguments
-        assert call_args["payload"]["email"] == "override@example.com"
-        assert call_args["payload"]["license_key"] == "settingskey"
+        # Verify _send_request_to_licensing_server was called with custom parameters
+        mock_send.assert_called_once_with(
+            method="POST",
+            uri="/public/license/verify",
+            payload={"email": "settings@example.com", "license_key": "settingskey"},
+            timeout=120,
+            max_retries=5,
+            backoff_rate=3.0
+        )
         assert result is False
 
 
