@@ -1,8 +1,6 @@
-# Load variables from the .env file
-include .env
-export
+# Note: Environment variables are now loaded by app.spec based on BUILD_ENV
 
-.PHONY: clean install build dmg
+.PHONY: clean install build-dev build-prod dmg
 
 # Define variables
 APP_NAME = Mixcloud\ Bulk\ Downloader.app
@@ -28,9 +26,13 @@ clean:
 install:
 	poetry add pyside6@latest
 
-# Target to build the app using PyInstaller
-build:
-	pyinstaller --clean -y --log-level ${PYINSTALLER_LOG_LEVEL} app.spec
+# Target to build the app for development using PyInstaller
+build-dev:
+	BUILD_ENV=dev pyinstaller --clean -y --log-level INFO app.spec
+
+# Target to build the app for production using PyInstaller
+build-prod:
+	BUILD_ENV=prod pyinstaller --clean -y --log-level INFO app.spec
 
 # Target to create the DMG file
 dmg:
@@ -50,12 +52,14 @@ verify-codesign:
 # Codesign the MacOS app
 # NOTE: as `make dmg` already attempts to codesign the app, this command is not necessary in practice
 codesign-app:
-	codesign --strict --deep --force --verify --verbose --sign $(APPLE_DEVELOPER_ID) --options runtime $(DIST_PATH)
+	@if [ ! -f .env.prod ]; then echo "Error: .env.prod file not found"; exit 1; fi
+	@set -a && source .env.prod && codesign --strict --deep --force --verify --verbose --sign "$$APPLE_DEVELOPER_ID" --options runtime $(DIST_PATH)
 
 notarize:
-	xcrun notarytool submit $(DMG_NAME) --keychain-profile ${KEYCHAIN_PROFILE} --wait
+	@if [ ! -f .env.prod ]; then echo "Error: .env.prod file not found"; exit 1; fi
+	@set -a && source .env.prod && xcrun notarytool submit $(DMG_NAME) --keychain-profile $$KEYCHAIN_PROFILE --wait
 
 staple:
 	xcrun stapler staple $(DMG_NAME)
 
-prepare-release: build dmg notarize staple
+prepare-release: build-prod dmg notarize staple

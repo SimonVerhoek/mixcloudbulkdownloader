@@ -2,12 +2,16 @@
 
 import re
 import unicodedata
+from pathlib import Path
 
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem
 
 from app.consts.audio import AUDIO_FORMATS
 from app.consts.ui import (
+    CANCELLED_ICON,
+    COMPLETE_ICON,
+    ERROR_ICON,
     TREE_SELECT_COLUMN_WIDTH,
     TREE_STATUS_COLUMN_WIDTH,
     TREE_TITLE_COLUMN_WIDTH,
@@ -17,9 +21,10 @@ from app.custom_widgets.dialogs.error_dialog import ErrorDialog
 from app.custom_widgets.dialogs.get_pro_persuasion_dialog import GetProPersuasionDialog
 from app.data_classes import Cloudcast, MixcloudUser
 from app.services.api_service import MixcloudAPIService, api_service
-from app.services.download_service import DownloadService, download_service
+from app.services.download_manager import DownloadManager
 from app.services.file_service import FileService, file_service
-from app.threads.download_thread import DownloadThread
+from app.services.license_manager import LicenseManager, license_manager
+from app.services.settings_manager import SettingsManager, settings
 from app.threads.get_cloudcasts_thread import GetCloudcastsThread
 
 
@@ -33,22 +38,25 @@ class CloudcastQTreeWidget(QTreeWidget):
     def __init__(
         self,
         api_service: MixcloudAPIService = api_service,
-        download_service: DownloadService = download_service,
         file_service: FileService = file_service,
+        license_manager: LicenseManager = license_manager,
+        settings_manager: SettingsManager = settings,
     ) -> None:
         """Initialize the cloudcast tree widget with columns and background threads.
 
         Args:
             api_service: Service for API operations.
-            download_service: Service for downloads.
             file_service: Service for file operations.
+            license_manager: License manager for Pro status checking.
+            settings_manager: Settings manager for preference persistence.
         """
         super().__init__()
 
         # Store services
         self.api_service = api_service
-        self.download_service = download_service
         self.file_service = file_service
+        self.license_manager = license_manager
+        self.settings_manager = settings_manager
 
         # Configure tree widget columns
         self.setColumnCount(3)
@@ -64,20 +72,28 @@ class CloudcastQTreeWidget(QTreeWidget):
         self.get_cloudcasts_thread.new_result.connect(self.add_result)
         self.get_cloudcasts_thread.interrupt_signal.connect(self.clear)
 
-        # Initialize and connect download thread
-        self.download_thread = DownloadThread(download_service=self.download_service)
-        self.download_thread.error_signal.connect(self.show_error)
-        self.download_thread.progress_signal.connect(self.update_item_download_progress)
-        self.download_thread.completion_signal.connect(self.show_donation_dialog)
+        self.download_manager = DownloadManager(
+            settings_manager=self.settings_manager, license_manager=self.license_manager
+        )
 
-    def _get_download_dir(self) -> str | None:
+        # Connect download manager signals to existing handlers
+        self.download_manager.task_progress.connect(self.handle_task_progress)
+        self.download_manager.task_result.connect(self.handle_task_result)
+        self.download_manager.task_error.connect(self.handle_task_error)
+        self.download_manager.task_cancelled.connect(self.handle_task_cancelled)
+        self.download_manager.task_finished.connect(self.handle_task_finished)
+
+    def _get_download_dir(self) -> Path | None:
         """Get download directory using Pro-aware directory selection.
 
         Returns:
             Selected directory path, or None if cancelled
         """
-        # Use download service's Pro-aware directory selection
-        return self.download_service.get_download_directory()
+        # Use file service's Pro-aware directory selection
+        directory_str = self.file_service.get_pro_download_directory(
+            self.license_manager, self.settings_manager, self
+        )
+        return Path(directory_str) if directory_str else None
 
     def _get_tree_items(self) -> list[QTreeWidgetItem]:
         """Get all top-level items in the tree.
@@ -125,7 +141,7 @@ class CloudcastQTreeWidget(QTreeWidget):
         ErrorDialog(self.parent(), message=msg)
 
     @Slot()
-    def show_donation_dialog(self) -> None:
+    def show_pro_persuasion_dialog(self) -> None:
         """Display Pro persuasion dialog after successful download completion."""
         if GetProPersuasionDialog.should_show():
             dialog = GetProPersuasionDialog(self.parent())
@@ -145,7 +161,11 @@ class CloudcastQTreeWidget(QTreeWidget):
 
     @Slot()
     def download_selected_cloudcasts(self) -> None:
-        """Start downloading all selected cloudcasts to user-chosen directory."""
+        """Download selected cloudcasts using DownloadManager system.
+
+        This method uses the new PyQt threading patterns with proper signal
+        emission and resource management.
+        """
         download_dir = self._get_download_dir()
         if not download_dir:  # User cancelled directory selection
             return
@@ -154,9 +174,11 @@ class CloudcastQTreeWidget(QTreeWidget):
         if not items:  # No items selected
             return
 
-        self.download_thread.download_dir = download_dir
-        self.download_thread.urls = [item.cloudcast.url for item in items]
-        self.download_thread.start()
+        # Extract cloudcasts from tree items
+        cloudcasts = [item.cloudcast for item in items]
+
+        # Start downloads using download manager
+        self.download_manager.start_downloads(cloudcasts=cloudcasts, download_dir=str(download_dir))
 
     @Slot(Cloudcast)
     def add_result(self, cloudcast: Cloudcast) -> None:
@@ -170,8 +192,8 @@ class CloudcastQTreeWidget(QTreeWidget):
 
     @Slot()
     def cancel_cloudcasts_download(self) -> None:
-        """Cancel the current download operation."""
-        self.download_thread.stop()
+        """Cancel all active downloads using DownloadManager system."""
+        self.download_manager.cancel_all()
 
     def _normalize_filename(self, name: str) -> str:
         """Normalize a filename for consistent matching using comprehensive Unicode handling.
@@ -272,3 +294,85 @@ class CloudcastQTreeWidget(QTreeWidget):
                 if name_normalized == expected_without_username:
                     item.update_download_progress(progress)
                     return
+
+    # TaskManager signal handlers for URL-based progress tracking
+
+    @Slot(str, str)
+    def handle_task_progress(self, task_id: str, progress_text: str) -> None:
+        """Handle progress updates from TaskManager using URL-based lookup.
+
+        Args:
+            task_id: Cloudcast URL (task identifier)
+            progress_text: Progress information to display
+        """
+        item = self._find_item_by_url(task_id)
+        if item:
+            item.update_download_progress(progress_text)
+
+    @Slot(str, str, bool)
+    def handle_task_result(self, task_id: str, result_path: str, will_convert: bool) -> None:
+        """Handle task completion with result.
+
+        Args:
+            task_id: Cloudcast URL (task identifier)
+            result_path: Path to completed file
+            will_convert: Whether conversion will happen after this download
+        """
+        item = self._find_item_by_url(task_id)
+        if item:
+            if will_convert:
+                item.update_download_progress("Download complete, preparing conversion...")
+            else:
+                item.update_download_progress(f"{COMPLETE_ICON} Complete")
+
+    @Slot(str, str)
+    def handle_task_error(self, task_id: str, error_message: str) -> None:
+        """Handle task error.
+
+        Args:
+            task_id: Cloudcast URL (task identifier)
+            error_message: Error details
+        """
+        item = self._find_item_by_url(task_id)
+        if item:
+            item.update_download_progress(f"{ERROR_ICON} Failed")
+
+        # Show error via existing error handling
+        self.show_error(f"Download failed: {error_message}")
+
+    @Slot(str)
+    def handle_task_cancelled(self, task_id: str) -> None:
+        """Handle task cancellation.
+
+        Args:
+            task_id: Cloudcast URL (task identifier)
+        """
+        item = self._find_item_by_url(task_id)
+        if item:
+            item.update_download_progress(f"{CANCELLED_ICON} Cancelled")
+
+    @Slot(str)
+    def handle_task_finished(self, task_id: str) -> None:
+        """Handle task finished (cleanup).
+
+        Args:
+            task_id: Cloudcast URL (task identifier)
+        """
+        # Task cleanup if needed in the future
+        pass
+
+    def _find_item_by_url(self, cloudcast_url: str) -> CloudcastQTreeWidgetItem | None:
+        """Find tree item by matching cloudcast URL.
+
+        Args:
+            cloudcast_url: URL to search for
+
+        Returns:
+            Matching CloudcastQTreeWidgetItem or None if not found
+        """
+        # Search through all items, not just selected ones
+        for i in range(self.topLevelItemCount()):
+            item = self.topLevelItem(i)
+            if isinstance(item, CloudcastQTreeWidgetItem) and item.cloudcast.url == cloudcast_url:
+                return item
+        return None

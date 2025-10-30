@@ -13,7 +13,6 @@ from app.custom_widgets.footer_widget import FooterWidget
 from app.custom_widgets.dialogs.feedback_dialog import FeedbackDialog
 from app.data_classes import MixcloudUser, Cloudcast
 from tests.stubs.api_stubs import StubMixcloudAPIService
-from tests.stubs.download_stubs import StubDownloadService
 from tests.stubs.file_stubs import StubFileService
 
 
@@ -86,17 +85,14 @@ class TestCloudcastQTreeWidget:
     def test_init_with_services(self, qt_app):
         """Test initialization with custom services."""
         api_service = StubMixcloudAPIService()
-        download_service = StubDownloadService()
         file_service = StubFileService()
         
         widget = CloudcastQTreeWidget(
             api_service=api_service,
-            download_service=download_service,
             file_service=file_service
         )
         
         assert widget.api_service is api_service
-        assert widget.download_service is download_service
         assert widget.file_service is file_service
 
     def test_init_without_services(self, qt_app):
@@ -104,7 +100,6 @@ class TestCloudcastQTreeWidget:
         widget = CloudcastQTreeWidget()
         
         assert widget.api_service is not None
-        assert widget.download_service is not None
         assert widget.file_service is not None
 
     def test_tree_widget_configuration(self, qt_app):
@@ -117,28 +112,26 @@ class TestCloudcastQTreeWidget:
     def test_thread_initialization(self, qt_app):
         """Test background threads are properly initialized."""
         api_service = StubMixcloudAPIService()
-        download_service = StubDownloadService()
         
         widget = CloudcastQTreeWidget(
-            api_service=api_service,
-            download_service=download_service
+            api_service=api_service
         )
         
         assert widget.get_cloudcasts_thread is not None
-        assert widget.download_thread is not None
+        assert widget.download_manager is not None
         assert widget.get_cloudcasts_thread.api_service is api_service
-        assert widget.download_thread.download_service is download_service
 
-    def test_get_download_dir_uses_download_service(self, qt_app):
-        """Test that directory selection uses download service."""
+    def test_get_download_dir_uses_file_service(self, qt_app):
+        """Test that directory selection uses file service."""
         from unittest.mock import patch
+        from pathlib import Path
         file_service = StubFileService()
         widget = CloudcastQTreeWidget(file_service=file_service)
         
-        with patch('app.services.download_service.download_service.get_download_directory', return_value="/fake/download/path"):
+        with patch.object(file_service, 'get_pro_download_directory', return_value="/fake/download/path"):
             result = widget._get_download_dir()
         
-        assert result == "/fake/download/path"
+        assert result == Path("/fake/download/path")
 
     def test_get_download_dir_cancelled(self, qt_app):
         """Test directory selection when cancelled."""
@@ -147,7 +140,7 @@ class TestCloudcastQTreeWidget:
         
         widget = CloudcastQTreeWidget(file_service=file_service)
         
-        with patch('app.services.download_service.download_service.get_download_directory', return_value=None):
+        with patch.object(file_service, 'get_pro_download_directory', return_value=None):
             result = widget._get_download_dir()
         
         assert result is None
@@ -388,31 +381,6 @@ class TestGetProPersuasionDialog:
         assert dialog.get_pro_button.text() == "Get Pro"
         assert dialog.no_thanks_button.text() == "No thank you"
 
-    def test_completion_signal_shows_dialog(self, qt_app):
-        """Test that CloudcastQTreeWidget shows Pro persuasion dialog on completion signal."""
-        widget = CloudcastQTreeWidget()
-        
-        # Track show_donation_dialog method calls
-        dialog_shown = []
-        original_method = widget.show_donation_dialog
-        
-        def mock_show_dialog():
-            dialog_shown.append(True)
-        
-        widget.show_donation_dialog = mock_show_dialog
-        
-        try:
-            # Emit completion signal
-            widget.download_thread.completion_signal.emit()
-            
-            # Process Qt events to handle signal
-            QApplication.processEvents()
-            
-            # Check if dialog method was called
-            assert len(dialog_shown) == 1
-        finally:
-            # Restore original method
-            widget.show_donation_dialog = original_method
 
 
 class TestFooterWidget:

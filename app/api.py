@@ -1,7 +1,6 @@
 """API functions for interacting with Mixcloud services."""
 
 import httpx
-import yt_dlp
 
 from app.consts.api import ERROR_API_REQUEST_FAILED, MIXCLOUD_API_URL
 from app.qt_logger import log_api, log_error
@@ -61,15 +60,3 @@ def get_mixcloud_API_data(url: str) -> tuple[dict, str]:
         log_error(error, "CRITICAL")
 
     return response, error
-
-
-def download_cloudcasts(urls: list[str], download_dir: str) -> None:
-    """Download cloudcasts using yt-dlp.
-
-    Args:
-        urls: List of cloudcast URLs to download
-        download_dir: Directory path where files should be saved
-    """
-    ydl_opts = {"outtmpl": f"{download_dir}/%(title)s.%(ext)s"}
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download(urls)

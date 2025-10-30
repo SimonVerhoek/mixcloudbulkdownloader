@@ -328,3 +328,172 @@ class StubLicenseServer:
     def reset(self) -> None:
         """Reset server state for new test."""
         self.client.reset()
+
+
+class StubLicenseManager:
+    """Stub license manager for testing without network dependencies.
+    
+    Provides a mock implementation of LicenseManager that can be configured
+    for different test scenarios without making actual HTTP requests.
+    """
+    
+    def __init__(self) -> None:
+        """Initialize stub license manager."""
+        # License status properties
+        self._is_pro = False
+        self.email = None
+        self.license_key = None
+        self.last_successful_verification = 0.0
+        
+        # Configurable behaviors
+        self.should_verify_fail = False
+        self.verify_failure_reason = "Invalid license"
+        self.should_get_checkout_fail = False
+        self.checkout_failure_reason = "Payment server error"
+        self.should_submit_feedback_fail = False
+        self.feedback_failure_reason = "Feedback server error"
+        
+        # Response data for successful operations
+        self.checkout_url = "https://checkout.stripe.com/test-session-123"
+        self.checkout_id = "test-checkout-123"
+        
+        # Call history for assertions
+        self.verify_calls = 0
+        self.checkout_calls = 0
+        self.feedback_calls = []
+        
+    @property
+    def is_pro(self) -> bool:
+        """Get current Pro status."""
+        return self._is_pro
+        
+    @is_pro.setter
+    def is_pro(self, value: bool) -> None:
+        """Set Pro status."""
+        self._is_pro = value
+        
+    def verify_license(self, max_retries: int = 3, backoff_rate: float = 2.0, timeout: int = 30) -> bool:
+        """Mock license verification.
+        
+        Args:
+            max_retries: Maximum retry attempts (ignored in stub)
+            backoff_rate: Backoff multiplier (ignored in stub)  
+            timeout: Request timeout (ignored in stub)
+            
+        Returns:
+            bool: True if verification succeeds, False if configured to fail
+        """
+        self.verify_calls += 1
+        
+        if self.should_verify_fail:
+            self._is_pro = False
+            return False
+            
+        self._is_pro = True
+        self.last_successful_verification = 1234567890.0  # Fixed timestamp for testing
+        return True
+        
+    def check_offline_status(self) -> bool:
+        """Mock offline status check.
+        
+        Returns:
+            bool: True if has previous verification, False otherwise
+        """
+        return self.last_successful_verification > 0.0
+        
+    def update_verification_timestamp(self) -> None:
+        """Mock timestamp update."""
+        self.last_successful_verification = 1234567890.0
+        
+    def get_checkout_url(self) -> str:
+        """Mock checkout URL retrieval.
+        
+        Returns:
+            str: Checkout URL if successful
+            
+        Raises:
+            Exception: If configured to fail
+        """
+        self.checkout_calls += 1
+        
+        if self.should_get_checkout_fail:
+            raise Exception(self.checkout_failure_reason)
+            
+        return self.checkout_url
+        
+    def submit_feedback(self, feedback_text: str, email: str | None = None) -> None:
+        """Mock feedback submission.
+        
+        Args:
+            feedback_text: User feedback message
+            email: Optional email for response
+            
+        Raises:
+            Exception: If configured to fail
+        """
+        self.feedback_calls.append({
+            "feedback_text": feedback_text,
+            "email": email
+        })
+        
+        if self.should_submit_feedback_fail:
+            raise Exception(self.feedback_failure_reason)
+            
+    def get_license_status_info(self) -> dict[str, Any]:
+        """Mock license status information.
+        
+        Returns:
+            dict: License status details for testing
+        """
+        return {
+            "is_pro": self._is_pro,
+            "email": self.email,
+            "has_license_key": bool(self.license_key),
+            "last_verification": self.last_successful_verification,
+            "within_offline_period": self.check_offline_status(),
+            "offline_grace_days": 7,  # Fixed value for testing
+        }
+        
+    # Test configuration methods
+    def configure_as_pro_user(self, email: str = "test@example.com", license_key: str = "valid-license-123") -> None:
+        """Configure stub as a Pro user with valid credentials."""
+        self._is_pro = True
+        self.email = email
+        self.license_key = license_key
+        self.last_successful_verification = 1234567890.0
+        self.should_verify_fail = False
+        
+    def configure_as_free_user(self) -> None:
+        """Configure stub as a free user without Pro status."""
+        self._is_pro = False
+        self.email = None
+        self.license_key = None
+        self.last_successful_verification = 0.0
+        
+    def configure_verify_failure(self, reason: str = "Invalid license") -> None:
+        """Configure license verification to fail."""
+        self.should_verify_fail = True
+        self.verify_failure_reason = reason
+        
+    def configure_checkout_failure(self, reason: str = "Payment server error") -> None:
+        """Configure checkout URL retrieval to fail."""
+        self.should_get_checkout_fail = True
+        self.checkout_failure_reason = reason
+        
+    def configure_feedback_failure(self, reason: str = "Feedback server error") -> None:
+        """Configure feedback submission to fail."""
+        self.should_submit_feedback_fail = True
+        self.feedback_failure_reason = reason
+        
+    def reset(self) -> None:
+        """Reset stub state for new test."""
+        self._is_pro = False
+        self.email = None
+        self.license_key = None
+        self.last_successful_verification = 0.0
+        self.should_verify_fail = False
+        self.should_get_checkout_fail = False
+        self.should_submit_feedback_fail = False
+        self.verify_calls = 0
+        self.checkout_calls = 0
+        self.feedback_calls.clear()

@@ -9,7 +9,6 @@ from app.custom_widgets.cloudcast_q_tree_widget import CloudcastQTreeWidget
 from app.custom_widgets.cloudcast_q_tree_widget_item import CloudcastQTreeWidgetItem
 from app.data_classes import MixcloudUser, Cloudcast
 from tests.stubs.api_stubs import StubMixcloudAPIService
-from tests.stubs.download_stubs import StubDownloadService
 from tests.stubs.file_stubs import StubFileService
 
 
@@ -77,12 +76,10 @@ class TestUnicodeProgressMatching:
         """Test that progress matching works despite Unicode character differences."""
         # Create widget with services
         api_service = StubMixcloudAPIService()
-        download_service = StubDownloadService()
         file_service = StubFileService()
         
         widget = CloudcastQTreeWidget(
             api_service=api_service,
-            download_service=download_service, 
             file_service=file_service
         )
         
@@ -217,12 +214,10 @@ class TestUnicodeProgressMatching:
         """Test progress matching with BIG SOLIDUS character (U+29F8)."""
         # Create widget with services
         api_service = StubMixcloudAPIService()
-        download_service = StubDownloadService()
         file_service = StubFileService()
         
         widget = CloudcastQTreeWidget(
             api_service=api_service,
-            download_service=download_service, 
             file_service=file_service
         )
         
@@ -322,12 +317,10 @@ class TestUnicodeProgressMatching:
     def test_full_width_characters_progress_matching(self, qt_app):
         """Test progress matching with full-width Unicode characters from user's specific case."""
         api_service = StubMixcloudAPIService()
-        download_service = StubDownloadService()
         file_service = StubFileService()
         
         widget = CloudcastQTreeWidget(
             api_service=api_service,
-            download_service=download_service, 
             file_service=file_service
         )
         
@@ -367,12 +360,10 @@ class TestUnicodeProgressMatching:
     def test_progress_matching_without_username_prefix(self, qt_app):
         """Test progress matching when yt-dlp provides filename without username prefix."""
         api_service = StubMixcloudAPIService()
-        download_service = StubDownloadService()
         file_service = StubFileService()
         
         widget = CloudcastQTreeWidget(
             api_service=api_service,
-            download_service=download_service, 
             file_service=file_service
         )
         
@@ -416,12 +407,10 @@ class TestUnicodeProgressMatching:
     def test_file_extension_handling_with_dots_in_names(self, qt_app):
         """Test that only actual file extensions are stripped, not date parts like .17."""
         api_service = StubMixcloudAPIService()
-        download_service = StubDownloadService()
         file_service = StubFileService()
         
         widget = CloudcastQTreeWidget(
             api_service=api_service,
-            download_service=download_service, 
             file_service=file_service
         )
         

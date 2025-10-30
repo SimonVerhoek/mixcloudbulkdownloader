@@ -18,9 +18,22 @@ QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
 QCoreApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
 
 
-# load .env file
+# Load environment file based on mandatory BUILD_ENV variable
 env = Env()
-env.read_env()
+build_env = os.getenv("BUILD_ENV", "prod")
+
+if build_env == "dev":
+    env_file = ".env"
+elif build_env == "prod":
+    env_file = ".env.prod"
+else:
+    raise ValueError(
+        f"Invalid BUILD_ENV value: '{build_env}'. "
+        "Valid values are 'dev' or 'prod'."
+    )
+
+print(f"Loading environment from: {env_file}")
+env.read_env(env_file)
 
 block_cipher = None
 

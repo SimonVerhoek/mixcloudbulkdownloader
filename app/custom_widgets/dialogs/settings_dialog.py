@@ -19,6 +19,14 @@ from PySide6.QtWidgets import (
 )
 
 from app.consts.audio import AUDIO_FORMATS
+from app.consts.settings import (
+    DEFAULT_MAX_PARALLEL_CONVERSIONS,
+    DEFAULT_MAX_PARALLEL_DOWNLOADS,
+    PARALLEL_CONVERSIONS_OPTIONS,
+    PARALLEL_DOWNLOADS_OPTIONS,
+    SETTING_MAX_PARALLEL_CONVERSIONS,
+    SETTING_MAX_PARALLEL_DOWNLOADS,
+)
 from app.consts.ui import (
     SETTINGS_DIALOG_HEIGHT,
     SETTINGS_DIALOG_MIN_HEIGHT,
@@ -29,6 +37,7 @@ from app.custom_widgets.dialogs.get_pro_dialog import GetProDialog
 from app.custom_widgets.pro_feature_widget import ProFeatureWidget
 from app.services.license_manager import LicenseManager, license_manager
 from app.services.settings_manager import SettingsManager, settings
+from app.services.system_service import cpu_count
 
 
 class SettingsDialog(ProFeatureWidget, QDialog):
@@ -111,6 +120,12 @@ class SettingsDialog(ProFeatureWidget, QDialog):
         # Default Audio Format
         self._create_audio_format_setting(pro_layout)
 
+        # Max Parallel Downloads
+        self._create_parallel_downloads_setting(pro_layout)
+
+        # Max Parallel Conversions
+        self._create_parallel_conversions_setting(pro_layout)
+
         self.pro_group.setLayout(pro_layout)
 
         # Configure group box for free users
@@ -179,6 +194,32 @@ class SettingsDialog(ProFeatureWidget, QDialog):
         # Register as Pro feature
         self.register_pro_widget(self.audio_format_combo)
 
+    def _create_parallel_downloads_setting(self, layout: QFormLayout) -> None:
+        """Create max parallel downloads setting."""
+        self.parallel_downloads_combo = QComboBox()
+        self.parallel_downloads_combo.addItems([str(i) for i in PARALLEL_DOWNLOADS_OPTIONS])
+        self.parallel_downloads_combo.setCurrentText(str(DEFAULT_MAX_PARALLEL_DOWNLOADS))
+
+        label_text = "Max Parallel Downloads:"
+        if not self.license_manager.is_pro:
+            label_text += " 🔒"
+
+        layout.addRow(label_text, self.parallel_downloads_combo)
+        self.register_pro_widget(self.parallel_downloads_combo)
+
+    def _create_parallel_conversions_setting(self, layout: QFormLayout) -> None:
+        """Create max parallel conversions setting with CPU warning."""
+        self.parallel_conversions_combo = QComboBox()
+        self.parallel_conversions_combo.addItems([str(i) for i in PARALLEL_CONVERSIONS_OPTIONS])
+        self.parallel_conversions_combo.setCurrentText(str(DEFAULT_MAX_PARALLEL_CONVERSIONS))
+
+        label_text = f"Max Parallel Conversions\n(CPU cores available: {cpu_count}):"
+        if not self.license_manager.is_pro:
+            label_text += " 🔒"
+
+        layout.addRow(label_text, self.parallel_conversions_combo)
+        self.register_pro_widget(self.parallel_conversions_combo)
+
     @Slot()
     def _browse_download_directory(self) -> None:
         """Open directory picker for default download location."""
@@ -212,6 +253,17 @@ class SettingsDialog(ProFeatureWidget, QDialog):
             if index >= 0:
                 self.audio_format_combo.setCurrentIndex(index)
 
+            # Load threading settings
+            max_downloads = self.settings_manager.get(
+                SETTING_MAX_PARALLEL_DOWNLOADS, DEFAULT_MAX_PARALLEL_DOWNLOADS
+            )
+            self.parallel_downloads_combo.setCurrentText(str(max_downloads))
+
+            max_conversions = self.settings_manager.get(
+                SETTING_MAX_PARALLEL_CONVERSIONS, DEFAULT_MAX_PARALLEL_CONVERSIONS
+            )
+            self.parallel_conversions_combo.setCurrentText(str(max_conversions))
+
     @Slot()
     def _save_and_accept(self) -> None:
         """Save settings and close dialog."""
@@ -226,6 +278,13 @@ class SettingsDialog(ProFeatureWidget, QDialog):
             # Save default audio format
             audio_format = self.audio_format_combo.currentText()
             self.settings_manager.set("default_audio_format", audio_format)
+
+            # Save threading settings
+            max_downloads = int(self.parallel_downloads_combo.currentText())
+            max_conversions = int(self.parallel_conversions_combo.currentText())
+
+            self.settings_manager.set(SETTING_MAX_PARALLEL_DOWNLOADS, max_downloads)
+            self.settings_manager.set(SETTING_MAX_PARALLEL_CONVERSIONS, max_conversions)
 
         # Sync settings to disk
         self.settings_manager.sync()

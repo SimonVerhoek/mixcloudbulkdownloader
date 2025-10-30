@@ -2,7 +2,10 @@
 
 from pathlib import Path
 
-from PySide6.QtWidgets import QFileDialog, QWidget
+from PySide6.QtWidgets import QFileDialog, QMessageBox, QWidget
+
+from app.services.license_manager import LicenseManager
+from app.services.settings_manager import SettingsManager
 
 
 class FileService:
@@ -193,6 +196,58 @@ class FileService:
         except (OSError, TypeError):
             pass
         return 0
+
+    def get_pro_download_directory(
+        self,
+        license_manager: LicenseManager,
+        settings_manager: SettingsManager,
+        parent: QWidget = None,
+    ) -> str | None:
+        """Pro-aware directory selection with default directory support.
+
+        Args:
+            license_manager: License manager for Pro user detection
+            settings_manager: Settings manager for default directory storage
+            parent: Parent widget for dialogs
+
+        Returns:
+            Selected directory path, or None if cancelled
+        """
+        if license_manager.is_pro:
+            # Check for saved default
+            default_dir = settings_manager.get("default_download_directory", None)
+            if default_dir and Path(default_dir).exists():
+                return default_dir
+
+            # No default - prompt and offer to save
+            chosen_dir = self.select_download_directory(parent, "Select Download Directory")
+            if chosen_dir:
+                self._prompt_save_as_default(chosen_dir, parent, settings_manager)
+                return chosen_dir
+            return None
+
+        # Free users get basic picker
+        directory = self.select_download_directory(parent, "Select Download Directory")
+        return directory if directory else None
+
+    def _prompt_save_as_default(
+        self, directory: str, parent: QWidget, settings_manager: SettingsManager
+    ) -> None:
+        """Ask user if they want to save directory as default.
+
+        Args:
+            directory: Directory path to potentially save as default
+            parent: Parent widget for dialog
+            settings_manager: Settings manager for saving preference
+        """
+        reply = QMessageBox.question(
+            parent,
+            "Save as Default",
+            f"Would you like to save this location as your default download folder?\n\n{directory}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            settings_manager.set("default_download_directory", directory)
 
 
 # Create module-level singleton instance

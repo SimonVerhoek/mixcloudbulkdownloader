@@ -41,6 +41,12 @@ Mixcloud Bulk Downloader is a desktop application built with PySide6 that allows
   - The import would cause circular dependencies if placed at module level
   This ensures better performance, clearer dependencies, and easier static analysis while allowing for necessary conditional imports.
 - **File Path Handling**: **ALWAYS** use `pathlib.Path` for file path operations instead of `os.path` when possible. This provides better cross-platform compatibility, more readable code, and modern Python best practices. Use `Path` objects for path construction, joining, existence checks, and file operations.
+- **Explicit Parameter Names**: **ALWAYS** use explicit parameter names in function and method calls (`function(param1=value1, param2=value2)`) instead of positional arguments (`function(value1, value2)`). This improves code readability, maintainability, and reduces errors when function signatures change. 
+
+**Exceptions:**
+  - Built-in functions and very common operations where positional arguments are conventional (e.g., `len(items)`, `str(value)`)
+  - Methods/functions that do not accept keyword arguments (e.g., `QTimer.singleShot()`, some Qt methods)
+  - When the API documentation explicitly states positional-only parameters
 
 ### Styling Guidelines
 
@@ -155,13 +161,44 @@ The project uses pytest with configuration defined in `pytest.ini`:
 
 ### Building for Distribution
 
-```bash
-# Create executable with PyInstaller
-pyinstaller --clean -y app.spec
+The project supports both development and production builds through environment-specific configurations:
 
-# macOS DMG creation (requires create-dmg)
-create-dmg dist/Mixcloud\ Bulk\ Downloader.app
+#### Development Build
+```bash
+# Build for development (uses .env with development settings)
+make build-dev
+
+# Or manually:
+BUILD_ENV=dev pyinstaller --clean -y --log-level INFO app.spec
 ```
+
+#### Production Build
+```bash
+# Build for production (uses .env.prod with production settings)
+make build-prod
+
+# Or manually:
+BUILD_ENV=prod pyinstaller --clean -y --log-level INFO app.spec
+```
+
+#### Complete Release Process
+```bash
+# Build production app, create DMG, notarize, and staple (always uses production settings)
+make prepare-release
+
+# Individual steps:
+make build-prod                    # Build production version
+make dmg                          # Create DMG file
+make notarize                     # Notarize with Apple
+make staple                       # Staple notarization
+```
+
+#### Environment Configuration
+
+- **Development (`.env`)**: `DEBUG=False`, `CONSOLE=False`, `DEVELOPMENT=True`
+- **Production (`.env.prod`)**: `DEBUG=False`, `CONSOLE=False`, `DEVELOPMENT=False`
+
+The `BUILD_ENV` environment variable is **mandatory** and must be set to either `dev` or `prod`. The build will fail with a clear error message if this variable is not specified.
 
 ### Linting and Formatting
 

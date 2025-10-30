@@ -1,6 +1,6 @@
 """Central widget containing the main application UI components."""
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -17,7 +17,6 @@ from app.consts.ui import (
 from app.custom_widgets.cloudcast_q_tree_widget import CloudcastQTreeWidget
 from app.custom_widgets.search_user_q_combo_box import SearchUserQComboBox
 from app.services.api_service import MixcloudAPIService, api_service
-from app.services.download_service import DownloadService, download_service
 from app.services.file_service import FileService, file_service
 from app.services.license_manager import LicenseManager, license_manager
 
@@ -32,7 +31,6 @@ class CentralWidget(QWidget):
     def __init__(
         self,
         api_service: MixcloudAPIService = api_service,
-        download_service: DownloadService = download_service,
         file_service: FileService = file_service,
         license_manager: LicenseManager = license_manager,
     ) -> None:
@@ -40,7 +38,6 @@ class CentralWidget(QWidget):
 
         Args:
             api_service: Service for API operations.
-            download_service: Service for downloads.
             file_service: Service for file operations.
             license_manager: License manager for Pro status checking.
         """
@@ -48,7 +45,6 @@ class CentralWidget(QWidget):
 
         # Store services
         self.api_service = api_service
-        self.download_service = download_service
         self.file_service = file_service
         self.license_manager = license_manager
 
@@ -75,10 +71,15 @@ class CentralWidget(QWidget):
         user_cloudcasts_layout = QVBoxLayout()
         self.cloudcasts = CloudcastQTreeWidget(
             api_service=self.api_service,
-            download_service=self.download_service,
             file_service=self.file_service,
         )
         user_cloudcasts_layout.addWidget(self.cloudcasts)
+
+        # Connect download manager workflow signals to button state management
+        self.cloudcasts.download_manager.workflow_started.connect(self._on_workflow_started)
+        self.cloudcasts.download_manager.all_workflows_finished.connect(
+            self._on_all_workflows_finished
+        )
 
         # Cloudcast action buttons layout
         cloudcast_action_buttons = QHBoxLayout()
@@ -99,6 +100,9 @@ class CentralWidget(QWidget):
 
         self.setLayout(self.layout)
 
+        # Initialize button states
+        self._update_cancel_button_state(downloads_active=False)
+
         # Signal connections
         self.get_cloudcasts_button.clicked.connect(
             lambda: self.cloudcasts.get_cloudcasts(user=self.search_user_input.selected_result)
@@ -107,3 +111,21 @@ class CentralWidget(QWidget):
         self.unselect_all_button.clicked.connect(self.cloudcasts.unselect_all)
         self.download_button.clicked.connect(self.cloudcasts.download_selected_cloudcasts)
         self.cancel_button.clicked.connect(self.cloudcasts.cancel_cloudcasts_download)
+
+    def _update_cancel_button_state(self, downloads_active: bool) -> None:
+        """Update cancel button enabled/disabled state based on download activity.
+
+        Args:
+            downloads_active: True if downloads are in progress, False if idle
+        """
+        self.cancel_button.setEnabled(downloads_active)
+
+    @Slot()
+    def _on_workflow_started(self) -> None:
+        """Handle workflow started signal - enable cancel button."""
+        self._update_cancel_button_state(downloads_active=True)
+
+    @Slot()
+    def _on_all_workflows_finished(self) -> None:
+        """Handle all workflows finished signal - disable cancel button."""
+        self._update_cancel_button_state(downloads_active=False)

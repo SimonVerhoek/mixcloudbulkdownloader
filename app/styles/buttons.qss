@@ -18,8 +18,13 @@ QPushButton:pressed {
     background-color: #444;
 }
 
-/* Primary Button (Donate, Download, Get Pro, etc.) */
-QPushButton#donateButton,
+QPushButton:disabled {
+    background-color: #333;
+    color: #777;
+    border: 1px solid #444;
+}
+
+/* Primary Button (Download, Get Pro, etc.) */
 QPushButton#primaryButton,
 QPushButton#sendButton {
     background-color: #6804E8;
@@ -27,21 +32,32 @@ QPushButton#sendButton {
     font-weight: bold;
 }
 
-QPushButton#donateButton:hover,
 QPushButton#primaryButton:hover,
 QPushButton#sendButton:hover {
     background-color: #5803C7;
 }
 
-QPushButton#donateButton:pressed,
 QPushButton#primaryButton:pressed,
 QPushButton#sendButton:pressed {
     background-color: #4802A6;
 }
 
+QPushButton#primaryButton:disabled,
+QPushButton#sendButton:disabled {
+    background-color: #333;
+    color: #777;
+    border: 1px solid #444;
+}
+
 /* Secondary Button (No thanks, Cancel, etc.) */
 QPushButton#secondaryButton:pressed {
     border-color: #999;
+}
+
+QPushButton#secondaryButton:disabled {
+    background-color: #2a2a2a;
+    color: #666;
+    border: 1px solid #3a3a3a;
 }
 
 /* Browse Button - Default height for settings pane */
@@ -63,4 +79,10 @@ QPushButton#getMBDProButton:hover {
 
 QPushButton#getMBDProButton:pressed {
     background-color: #029a09;
+}
+
+QPushButton#getMBDProButton:disabled {
+    background-color: #333;
+    color: #777;
+    border: 1px solid #444;
 }

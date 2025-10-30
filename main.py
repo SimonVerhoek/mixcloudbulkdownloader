@@ -1,6 +1,7 @@
 """Main application entry point for Mixcloud Bulk Downloader."""
 
 import sys
+from pathlib import Path
 
 from PySide6.QtGui import QCloseEvent, QGuiApplication
 from PySide6.QtWidgets import (
@@ -17,11 +18,12 @@ from app.custom_widgets.dialogs.error_dialog import ErrorDialog
 from app.custom_widgets.dialogs.settings_dialog import SettingsDialog
 from app.custom_widgets.dialogs.get_pro_dialog import GetProDialog
 from app.qt_logger import log_ui, QtLogger
-from app.services.download_service import download_service
+from app.utils.ffmpeg import verify_ffmpeg_availability
 from app.services.license_manager import license_manager
 from app.services.settings_manager import settings
 from app.styles import load_application_styles
 from app.threads.startup_verification_thread import StartupVerificationThread
+from app.utils.cleanup import PartialFileCleanup
 
 
 class MainWindow(QMainWindow):
@@ -38,7 +40,6 @@ class MainWindow(QMainWindow):
         # import services
         self.settings = settings
         self.license_manager = license_manager
-        self.download_service = download_service
 
         # Create main container widget with vertical layout
         main_widget = QWidget()
@@ -79,11 +80,17 @@ class MainWindow(QMainWindow):
         # Connect to license status changes
         self.license_manager.license_status_changed.connect(self._handle_license_status_changed)
         
+        # Initialize threading settings with defaults
+        self.settings.initialize_threading_settings(self.license_manager.is_pro)
+        
         # Initialize Pro UI state
         self.refresh_pro_ui_elements()
         
         # Perform startup license verification
         self.startup_license_verification()
+
+        # Clean up partial files from previous runs
+        self.cleanup_partial_files()
 
         # Configure application behavior
         app_instance = QGuiApplication.instance()
@@ -126,6 +133,30 @@ class MainWindow(QMainWindow):
         self.verification_thread = StartupVerificationThread(self.license_manager, self)
         self.verification_thread.start()
 
+    def cleanup_partial_files(self) -> None:
+        """Clean up partial download and conversion files from previous runs."""
+        try:
+            # Get default download directory or use home directory as fallback
+            default_download_dir = self.settings.get("default_download_directory", str(Path.home() / "Downloads"))
+            download_dir = Path(default_download_dir)
+            
+            if download_dir.exists():
+                # Clean up files older than 60 minutes (1 hour)
+                stats = PartialFileCleanup.cleanup_partial_files(directory=download_dir, max_age_minutes=60)
+                
+                total_cleaned = stats["downloading"] + stats["converting"]
+                if total_cleaned > 0:
+                    log_ui(f"Cleaned up {total_cleaned} partial files from previous runs "
+                          f"({stats['downloading']} downloading, {stats['converting']} converting)", "INFO")
+                
+                # Also clean up fragment files
+                fragment_count = PartialFileCleanup.cleanup_fragment_files(directory=download_dir)
+                if fragment_count > 0:
+                    log_ui(f"Cleaned up {fragment_count} fragment files", "INFO")
+        except Exception as e:
+            # Don't let cleanup errors affect startup
+            log_ui(f"Warning: Could not clean up partial files: {e}", "WARNING")
+
     def _handle_license_status_changed(self, is_pro: bool) -> None:
         """Handle changes in license status.
         
@@ -141,7 +172,7 @@ class MainWindow(QMainWindow):
 
     def _verify_ffmpeg_availability(self) -> None:
         """Verify FFmpeg availability for Pro users and show appropriate messaging."""
-        ffmpeg_available = self.download_service.verify_ffmpeg_availability()
+        ffmpeg_available = verify_ffmpeg_availability()
         
         if ffmpeg_available:
             log_ui("FFmpeg executable found and available for audio conversion", "INFO")

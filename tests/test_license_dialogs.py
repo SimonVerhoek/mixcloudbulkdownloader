@@ -389,8 +389,8 @@ class TestDialogIntegration:
             widget = CloudcastQTreeWidget()
             qtbot.addWidget(widget)
             
-            # Call the show_donation_dialog method
-            widget.show_donation_dialog()
+            # Call the show_pro_persuasion_dialog method
+            widget.show_pro_persuasion_dialog()
             
             # Verify dialog was created and shown
             mock_dialog_class.should_show.assert_called_once()
@@ -413,8 +413,8 @@ class TestDialogIntegration:
             widget = CloudcastQTreeWidget()
             qtbot.addWidget(widget)
             
-            # Call the show_donation_dialog method
-            widget.show_donation_dialog()
+            # Call the show_pro_persuasion_dialog method
+            widget.show_pro_persuasion_dialog()
             
             # Verify should_show was called but dialog was not created
             mock_dialog_class.should_show.assert_called_once()

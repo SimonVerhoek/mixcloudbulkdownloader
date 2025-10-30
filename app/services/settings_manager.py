@@ -11,10 +11,14 @@ from PySide6.QtCore import QSettings
 from app.consts.license import LOG_KEYRING_ERROR
 from app.consts.settings import (
     CUSTOM_SETTINGS_PATH,
+    DEFAULT_MAX_PARALLEL_CONVERSIONS,
+    DEFAULT_MAX_PARALLEL_DOWNLOADS,
     DEVELOPMENT,
     KEYRING_EMAIL_KEY,
     KEYRING_LICENSE_KEY,
     KEYRING_SERVICE_NAME,
+    SETTING_MAX_PARALLEL_CONVERSIONS,
+    SETTING_MAX_PARALLEL_DOWNLOADS,
 )
 
 
@@ -330,17 +334,57 @@ class SettingsManager:
         # currently not in use
         pass
 
+    def initialize_threading_settings(self, is_pro: bool) -> None:
+        """Initialize threading settings with defaults if not present.
+
+        Args:
+            is_pro: Whether user has Pro status to determine appropriate defaults
+        """
+        if is_pro:
+            if self.get(SETTING_MAX_PARALLEL_DOWNLOADS) is None:
+                self.set(SETTING_MAX_PARALLEL_DOWNLOADS, DEFAULT_MAX_PARALLEL_DOWNLOADS)
+            if self.get(SETTING_MAX_PARALLEL_CONVERSIONS) is None:
+                self.set(SETTING_MAX_PARALLEL_CONVERSIONS, DEFAULT_MAX_PARALLEL_CONVERSIONS)
+        else:
+            self.set(SETTING_MAX_PARALLEL_DOWNLOADS, 1)
+            self.set(SETTING_MAX_PARALLEL_CONVERSIONS, 0)  # conversions is a pro-only feature
+
+        self.sync()
+
     def get(self, key: str, default=None):
-        """Get a setting value by key.
+        """Get a setting value by key with automatic type conversion.
 
         Args:
             key: Setting key to retrieve
             default: Default value if key doesn't exist
 
         Returns:
-            Setting value or default if not found
+            Setting value with proper type conversion, or default if not found
         """
-        return self._settings.value(key, default)
+        value = self._settings.value(key, default)
+
+        # If we got the default value, return it as-is (it's already the correct type)
+        if value == default:
+            return default
+
+        # Handle type conversion based on default type if provided
+        if default is not None:
+            try:
+                # Convert to the same type as the default value
+                if isinstance(default, int):
+                    return int(value) if value is not None else default
+                elif isinstance(default, float):
+                    return float(value) if value is not None else default
+                elif isinstance(default, bool):
+                    # QSettings stores bools as strings "true"/"false"
+                    if isinstance(value, str):
+                        return value.lower() in ("true", "1", "yes", "on")
+                    return bool(value) if value is not None else default
+            except (ValueError, TypeError):
+                # If conversion fails, return the default
+                return default
+
+        return value
 
     def set(self, key: str, value) -> None:
         """Set a setting value by key.

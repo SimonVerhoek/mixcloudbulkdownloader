@@ -6,7 +6,15 @@ import time
 from unittest.mock import patch, MagicMock, Mock
 
 from app.services.settings_manager import SettingsManager, settings
-from app.consts.settings import KEYRING_SERVICE_NAME, KEYRING_EMAIL_KEY, KEYRING_LICENSE_KEY
+from app.consts.settings import (
+    KEYRING_SERVICE_NAME, 
+    KEYRING_EMAIL_KEY, 
+    KEYRING_LICENSE_KEY,
+    SETTING_MAX_PARALLEL_DOWNLOADS,
+    SETTING_MAX_PARALLEL_CONVERSIONS,
+    DEFAULT_MAX_PARALLEL_DOWNLOADS,
+    DEFAULT_MAX_PARALLEL_CONVERSIONS,
+)
 
 
 class TestSettingsManager:
@@ -189,6 +197,162 @@ class TestSettingsManagerCredentials:
         result = settings_instance.last_successful_verification
         
         assert result == 0.0
+
+
+@pytest.mark.unit
+class TestSettingsManagerThreadingInitialization:
+    """Test cases for threading settings initialization functionality."""
+
+    def test_initialize_threading_settings_pro_user_new_settings(self, fresh_settings):
+        """Test initialization for Pro user with no existing settings."""
+        settings_instance, mock_qsettings = fresh_settings
+        
+        # Mock get method to return None (no existing settings)
+        mock_qsettings.value.return_value = None
+        
+        # Call initialize_threading_settings for Pro user
+        settings_instance.initialize_threading_settings(is_pro=True)
+        
+        # Verify Pro defaults were set
+        expected_calls = [
+            (SETTING_MAX_PARALLEL_DOWNLOADS, DEFAULT_MAX_PARALLEL_DOWNLOADS),
+            (SETTING_MAX_PARALLEL_CONVERSIONS, DEFAULT_MAX_PARALLEL_CONVERSIONS),
+        ]
+        
+        # Check that setValue was called with Pro defaults
+        for key, value in expected_calls:
+            mock_qsettings.setValue.assert_any_call(key, value)
+        
+        # Verify sync was called
+        mock_qsettings.sync.assert_called_once()
+
+    def test_initialize_threading_settings_free_user_new_settings(self, fresh_settings):
+        """Test initialization for free user with no existing settings."""
+        settings_instance, mock_qsettings = fresh_settings
+        
+        # Mock get method to return None (no existing settings)
+        mock_qsettings.value.return_value = None
+        
+        # Call initialize_threading_settings for free user
+        settings_instance.initialize_threading_settings(is_pro=False)
+        
+        # Verify free user defaults (1) were set
+        expected_calls = [
+            (SETTING_MAX_PARALLEL_DOWNLOADS, 1),
+            (SETTING_MAX_PARALLEL_CONVERSIONS, 0),
+        ]
+        
+        # Check that setValue was called with free user defaults
+        for key, value in expected_calls:
+            mock_qsettings.setValue.assert_any_call(key, value)
+        
+        # Verify sync was called
+        mock_qsettings.sync.assert_called_once()
+
+    def test_initialize_threading_settings_existing_settings_not_overwritten(self, fresh_settings):
+        """Test that existing threading settings are not overwritten."""
+        settings_instance, mock_qsettings = fresh_settings
+        
+        # Mock get method to return existing values
+        existing_values = {
+            SETTING_MAX_PARALLEL_DOWNLOADS: 5,
+            SETTING_MAX_PARALLEL_CONVERSIONS: 3,
+        }
+        
+        def mock_get(key, default=None):
+            return existing_values.get(key, default)
+        
+        # Replace the get method with our mock
+        settings_instance.get = Mock(side_effect=mock_get)
+        
+        # Call initialize_threading_settings for Pro user
+        settings_instance.initialize_threading_settings(is_pro=True)
+        
+        # Verify setValue was NOT called for existing settings
+        mock_qsettings.setValue.assert_not_called()
+        
+        # Verify sync was still called
+        mock_qsettings.sync.assert_called_once()
+
+    def test_initialize_threading_settings_partial_existing_settings(self, fresh_settings):
+        """Test initialization when only some settings exist."""
+        settings_instance, mock_qsettings = fresh_settings
+        
+        # Mock get method: downloads setting exists, conversions doesn't
+        def mock_get(key, default=None):
+            if key == SETTING_MAX_PARALLEL_DOWNLOADS:
+                return 6  # Existing value
+            return None  # No existing value
+        
+        settings_instance.get = Mock(side_effect=mock_get)
+        
+        # Call initialize_threading_settings for Pro user
+        settings_instance.initialize_threading_settings(is_pro=True)
+        
+        # Verify only the missing setting was set
+        mock_qsettings.setValue.assert_called_once_with(
+            SETTING_MAX_PARALLEL_CONVERSIONS, 
+            DEFAULT_MAX_PARALLEL_CONVERSIONS
+        )
+        
+        # Verify sync was called
+        mock_qsettings.sync.assert_called_once()
+
+    def test_initialize_threading_settings_pro_defaults_values(self):
+        """Test that the Pro defaults are correctly configured."""
+        # Verify the constants match expected Pro values
+        assert DEFAULT_MAX_PARALLEL_DOWNLOADS == 3
+        assert DEFAULT_MAX_PARALLEL_CONVERSIONS == 2
+
+    def test_initialize_threading_settings_free_defaults_values(self, fresh_settings):
+        """Test that free user defaults are set to 1."""
+        settings_instance, mock_qsettings = fresh_settings
+        
+        # Mock get method to return None (no existing settings)
+        mock_qsettings.value.return_value = None
+        
+        # Call initialize_threading_settings for free user
+        settings_instance.initialize_threading_settings(is_pro=False)
+        
+        # Verify both settings were set to 1 for free users
+        mock_qsettings.setValue.assert_any_call(SETTING_MAX_PARALLEL_DOWNLOADS, 1)
+        mock_qsettings.setValue.assert_any_call(SETTING_MAX_PARALLEL_CONVERSIONS, 0)
+
+    def test_initialize_threading_settings_calls_sync(self, fresh_settings):
+        """Test that initialize_threading_settings always calls sync."""
+        settings_instance, mock_qsettings = fresh_settings
+        
+        # Test with Pro user
+        settings_instance.initialize_threading_settings(is_pro=True)
+        assert mock_qsettings.sync.call_count == 1
+        
+        # Reset and test with free user
+        mock_qsettings.sync.reset_mock()
+        settings_instance.initialize_threading_settings(is_pro=False)
+        assert mock_qsettings.sync.call_count == 1
+
+    def test_initialize_threading_settings_method_exists(self):
+        """Test that the initialize_threading_settings method exists and is callable."""
+        with patch('app.services.settings_manager.QSettings'):
+            settings_instance = SettingsManager()
+            
+            # Method should exist and be callable
+            assert hasattr(settings_instance, 'initialize_threading_settings')
+            assert callable(getattr(settings_instance, 'initialize_threading_settings'))
+
+    def test_threading_constants_imported_correctly(self):
+        """Test that all required threading constants are properly imported."""
+        # These should all be accessible and have expected types
+        assert isinstance(SETTING_MAX_PARALLEL_DOWNLOADS, str)
+        assert isinstance(SETTING_MAX_PARALLEL_CONVERSIONS, str)
+        assert isinstance(DEFAULT_MAX_PARALLEL_DOWNLOADS, int)
+        assert isinstance(DEFAULT_MAX_PARALLEL_CONVERSIONS, int)
+        
+        # Setting keys should be descriptive
+        assert "parallel" in SETTING_MAX_PARALLEL_DOWNLOADS.lower()
+        assert "parallel" in SETTING_MAX_PARALLEL_CONVERSIONS.lower()
+        assert "download" in SETTING_MAX_PARALLEL_DOWNLOADS.lower()
+        assert "conversion" in SETTING_MAX_PARALLEL_CONVERSIONS.lower()
 
 
 class TestCredentialStorage:

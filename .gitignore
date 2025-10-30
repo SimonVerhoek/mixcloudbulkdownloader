@@ -26,6 +26,7 @@ dist
 
 # environment variables
 .env
+.env.prod
 
 # virtual environments
 venv*

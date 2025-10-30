@@ -14,8 +14,43 @@ if _test_env_file.exists():
     _env.read_env(str(_test_env_file))
 
 from tests.stubs.api_stubs import StubMixcloudAPIService
-from tests.stubs.download_stubs import StubDownloadService
 from tests.stubs.file_stubs import StubFileService
+
+
+def get_valid_threading_test_values():
+    """Get valid threading values for the current test environment.
+    
+    Returns:
+        tuple: (valid_parallel_downloads, valid_parallel_conversions)
+    """
+    from app.consts.settings import (
+        PARALLEL_DOWNLOADS_OPTIONS, 
+        PARALLEL_CONVERSIONS_OPTIONS,
+        DEFAULT_MAX_PARALLEL_DOWNLOADS,
+        DEFAULT_MAX_PARALLEL_CONVERSIONS
+    )
+    
+    # Use defaults if they're valid, otherwise use first available option
+    valid_downloads = DEFAULT_MAX_PARALLEL_DOWNLOADS if DEFAULT_MAX_PARALLEL_DOWNLOADS in PARALLEL_DOWNLOADS_OPTIONS else PARALLEL_DOWNLOADS_OPTIONS[0]
+    valid_conversions = DEFAULT_MAX_PARALLEL_CONVERSIONS if DEFAULT_MAX_PARALLEL_CONVERSIONS in PARALLEL_CONVERSIONS_OPTIONS else PARALLEL_CONVERSIONS_OPTIONS[0]
+    
+    return valid_downloads, valid_conversions
+
+
+def get_mock_settings_for_threading():
+    """Get mock settings dict that works in current environment.
+    
+    Returns:
+        dict: Mock settings with valid threading values
+    """
+    valid_downloads, valid_conversions = get_valid_threading_test_values()
+    
+    return {
+        "default_download_directory": None,
+        "default_audio_format": "MP3", 
+        "max_parallel_downloads": valid_downloads,
+        "max_parallel_conversions": valid_conversions,
+    }
 
 
 @pytest.fixture(scope="session")
@@ -53,15 +88,6 @@ def stub_api_service():
     service.fake_client.request_count = 0
     service.fake_client.should_raise_network_error = False
     service.fake_client.should_raise_http_error = False
-
-
-@pytest.fixture
-def stub_download_service():
-    """Provide stub download service for testing."""
-    service = StubDownloadService()
-    yield service
-    # Reset state after each test
-    service.reset()
 
 
 @pytest.fixture
@@ -135,7 +161,7 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.qt)
         
         # Add unit marker to service tests
-        if any(name in str(item.fspath) for name in ["test_api_service", "test_download_service", "test_file_service"]):
+        if any(name in str(item.fspath) for name in ["test_api_service", "test_file_service"]):
             item.add_marker(pytest.mark.unit)
         
         # Add integration marker to thread tests

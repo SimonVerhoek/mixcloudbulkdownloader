@@ -24,7 +24,6 @@ def mock_services():
     """Mock all services for testing."""
     with patch('main.settings') as mock_settings, \
          patch('main.license_manager') as mock_license_manager, \
-         patch('main.download_service') as mock_download_service, \
          patch('main.StartupVerificationThread') as mock_thread:
         
         # Configure mocks
@@ -39,7 +38,6 @@ def mock_services():
         yield {
             'settings': mock_settings,
             'license_manager': mock_license_manager, 
-            'download_service': mock_download_service,
             'thread': mock_thread_instance
         }
 

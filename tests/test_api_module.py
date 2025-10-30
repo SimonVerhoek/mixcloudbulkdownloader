@@ -7,7 +7,6 @@ import httpx
 
 from app import api
 from app.consts.api import MIXCLOUD_API_URL, ERROR_API_REQUEST_FAILED
-from tests.stubs.ytdlp_stubs import StubYoutubeDL, DownloadError
 
 
 class TestAPIURLGeneration:
@@ -169,113 +168,12 @@ class TestMixcloudAPIData:
             api.get_mixcloud_API_data("http://api.test.com")
 
 
-class TestDownloadCloudcasts:
-    """Test the download_cloudcasts function."""
-
-    @patch('app.api.yt_dlp.YoutubeDL')
-    def test_download_cloudcasts_success(self, mock_yt_dlp_class):
-        """Test successful cloudcast download."""
-        mock_yt_dlp = MagicMock()
-        mock_yt_dlp_class.return_value.__enter__.return_value = mock_yt_dlp
-        
-        urls = ["http://mixcloud.com/user/mix1", "http://mixcloud.com/user/mix2"]
-        download_dir = "/downloads"
-        
-        api.download_cloudcasts(urls, download_dir)
-        
-        # Verify yt-dlp was configured with correct output template
-        expected_opts = {"outtmpl": f"{download_dir}/%(title)s.%(ext)s"}
-        mock_yt_dlp_class.assert_called_once_with(expected_opts)
-        
-        # Verify download was called with URLs
-        mock_yt_dlp.download.assert_called_once_with(urls)
-
-    @patch('app.api.yt_dlp.YoutubeDL')
-    def test_download_cloudcasts_with_custom_directory(self, mock_yt_dlp_class):
-        """Test cloudcast download with custom directory."""
-        mock_yt_dlp = MagicMock()
-        mock_yt_dlp_class.return_value.__enter__.return_value = mock_yt_dlp
-        
-        urls = ["http://mixcloud.com/user/mix"]
-        download_dir = "/custom/path/music"
-        
-        api.download_cloudcasts(urls, download_dir)
-        
-        expected_opts = {"outtmpl": f"{download_dir}/%(title)s.%(ext)s"}
-        mock_yt_dlp_class.assert_called_once_with(expected_opts)
-
-    def test_download_cloudcasts_with_stub_success(self):
-        """Test download using stub for more realistic simulation."""
-        urls = ["https://www.mixcloud.com/testuser/test-mix/"]
-        download_dir = "/downloads"
-        
-        # Create stub that simulates successful download
-        stub_yt_dlp = StubYoutubeDL({"outtmpl": f"{download_dir}/%(title)s.%(ext)s"})
-        
-        with patch('app.api.yt_dlp.YoutubeDL', return_value=stub_yt_dlp):
-            api.download_cloudcasts(urls, download_dir)
-            
-        # Verify stub recorded the download
-        assert stub_yt_dlp.downloaded_urls == urls
-
-    def test_download_cloudcasts_with_stub_network_error(self):
-        """Test download with network error using stub."""
-        urls = ["https://www.mixcloud.com/testuser/test-mix/"]
-        download_dir = "/downloads"
-        
-        stub_yt_dlp = StubYoutubeDL({"outtmpl": f"{download_dir}/%(title)s.%(ext)s"})
-        stub_yt_dlp.set_error("network", "Connection timeout")
-        
-        with patch('app.api.yt_dlp.YoutubeDL', return_value=stub_yt_dlp):
-            with pytest.raises(DownloadError, match="Network error"):
-                api.download_cloudcasts(urls, download_dir)
-
-    def test_download_cloudcasts_with_stub_extraction_error(self):
-        """Test download with extraction error using stub.""" 
-        urls = ["https://www.mixcloud.com/testuser/test-mix/"]
-        download_dir = "/downloads"
-        
-        stub_yt_dlp = StubYoutubeDL({"outtmpl": f"{download_dir}/%(title)s.%(ext)s"})
-        stub_yt_dlp.set_error("extraction", "Could not extract download URL")
-        
-        with patch('app.api.yt_dlp.YoutubeDL', return_value=stub_yt_dlp):
-            with pytest.raises(Exception):  # ExtractorError from stub
-                api.download_cloudcasts(urls, download_dir)
-
-    def test_download_cloudcasts_empty_url_list(self):
-        """Test download with empty URL list."""
-        stub_yt_dlp = StubYoutubeDL({"outtmpl": "/downloads/%(title)s.%(ext)s"})
-        
-        with patch('app.api.yt_dlp.YoutubeDL', return_value=stub_yt_dlp):
-            api.download_cloudcasts([], "/downloads")
-            
-        # Should complete without error but download nothing
-        assert stub_yt_dlp.downloaded_urls == []
-
-    @patch('app.api.yt_dlp.YoutubeDL')
-    def test_download_cloudcasts_context_manager_cleanup(self, mock_yt_dlp_class):
-        """Test that context manager properly cleans up even on error."""
-        mock_yt_dlp = MagicMock()
-        mock_yt_dlp.download.side_effect = Exception("Download failed")
-        mock_context = MagicMock()
-        mock_context.__enter__.return_value = mock_yt_dlp
-        mock_yt_dlp_class.return_value = mock_context
-        
-        with pytest.raises(Exception, match="Download failed"):
-            api.download_cloudcasts(["http://example.com"], "/downloads")
-        
-        # Verify context manager was properly entered and exited
-        mock_context.__enter__.assert_called_once()
-        mock_context.__exit__.assert_called_once()
-
-
 class TestAPIIntegration:
     """Test integration scenarios combining API functions."""
 
     @patch('app.api.httpx.get')
-    @patch('app.api.yt_dlp.YoutubeDL')
-    def test_full_workflow_simulation(self, mock_yt_dlp_class, mock_get):
-        """Test a complete workflow from search to download."""
+    def test_full_workflow_simulation(self, mock_get):
+        """Test a complete API workflow from search to user cloudcasts."""
         # Mock successful API response
         api_response = {
             "data": [{
@@ -288,11 +186,7 @@ class TestAPIIntegration:
         mock_response.json.return_value = api_response
         mock_get.return_value = mock_response
         
-        # Mock successful download
-        mock_yt_dlp = MagicMock()
-        mock_yt_dlp_class.return_value.__enter__.return_value = mock_yt_dlp
-        
-        # Simulate workflow
+        # Simulate API workflow
         search_url = api.search_user_API_url("test")
         data, error = api.get_mixcloud_API_data(search_url)
         
@@ -304,12 +198,6 @@ class TestAPIIntegration:
         cloudcasts_data, cloudcasts_error = api.get_mixcloud_API_data(user_url)
         
         assert cloudcasts_error == ""
-        
-        # Download cloudcasts
-        urls = ["http://mixcloud.com/testuser/mix1"]
-        api.download_cloudcasts(urls, "/downloads")
-        
-        mock_yt_dlp.download.assert_called_once_with(urls)
 
     def test_error_handling_consistency(self):
         """Test that error handling is consistent across functions."""
@@ -324,12 +212,3 @@ class TestAPIIntegration:
             data, error = api.get_mixcloud_API_data("http://test.com")
             assert data is None
             assert error == ERROR_API_REQUEST_FAILED
-            
-        # Download function should raise exceptions (for application to handle)
-        with patch('app.api.yt_dlp.YoutubeDL') as mock_yt_dlp_class:
-            mock_yt_dlp = MagicMock()
-            mock_yt_dlp.download.side_effect = Exception("Download error")
-            mock_yt_dlp_class.return_value.__enter__.return_value = mock_yt_dlp
-            
-            with pytest.raises(Exception, match="Download error"):
-                api.download_cloudcasts(["http://test.com"], "/downloads")
