@@ -18,20 +18,20 @@ class TestUserQListWidgetItem:
             name="Test User Name",
             pictures={"large": "https://example.com/large.jpg"},
             url="https://www.mixcloud.com/testuser/",
-            username="testuser"
+            username="testuser",
         )
-        
+
         item = UserQListWidgetItem(user=user)
-        
+
         # Verify inheritance
         assert isinstance(item, QListWidgetItem)
         assert isinstance(item, UserQListWidgetItem)
-        
+
         # Verify user data is stored
         assert item.user is user
         assert item.user.name == "Test User Name"
         assert item.user.username == "testuser"
-        
+
         # Verify display text format
         expected_text = "Test User Name (testuser)"
         assert item.text() == expected_text
@@ -43,11 +43,11 @@ class TestUserQListWidgetItem:
             name="Minimal User",
             pictures={},
             url="https://www.mixcloud.com/minimaluser/",
-            username="minimaluser"
+            username="minimaluser",
         )
-        
+
         item = UserQListWidgetItem(user=user)
-        
+
         assert item.user is user
         assert item.text() == "Minimal User (minimaluser)"
 
@@ -58,11 +58,11 @@ class TestUserQListWidgetItem:
             name="DJ Tëst & Spëcíal Çhars 🎵",
             pictures={"large": "https://example.com/pic.jpg"},
             url="https://www.mixcloud.com/special-user/",
-            username="special-user"
+            username="special-user",
         )
-        
+
         item = UserQListWidgetItem(user=user)
-        
+
         expected_text = "DJ Tëst & Spëcíal Çhars 🎵 (special-user)"
         assert item.text() == expected_text
         assert item.user.name == "DJ Tëst & Spëcíal Çhars 🎵"
@@ -75,11 +75,11 @@ class TestUserQListWidgetItem:
             name=long_name,
             pictures={},
             url="https://www.mixcloud.com/longuser/",
-            username="longuser"
+            username="longuser",
         )
-        
+
         item = UserQListWidgetItem(user=user)
-        
+
         expected_text = f"{long_name} (longuser)"
         assert item.text() == expected_text
         assert len(item.text()) > 200
@@ -91,11 +91,11 @@ class TestUserQListWidgetItem:
             name="",  # Empty name
             pictures={},
             url="https://www.mixcloud.com/emptyuser/",
-            username="emptyuser"
+            username="emptyuser",
         )
-        
+
         item = UserQListWidgetItem(user=user)
-        
+
         expected_text = " (emptyuser)"  # Empty name results in space before username
         assert item.text() == expected_text
 
@@ -106,11 +106,11 @@ class TestUserQListWidgetItem:
             name="sameuser",
             pictures={},
             url="https://www.mixcloud.com/sameuser/",
-            username="sameuser"
+            username="sameuser",
         )
-        
+
         item = UserQListWidgetItem(user=user)
-        
+
         expected_text = "sameuser (sameuser)"
         assert item.text() == expected_text
 
@@ -121,14 +121,14 @@ class TestUserQListWidgetItem:
             name="Reference Test",
             pictures={"small": "https://example.com/small.jpg"},
             url="https://www.mixcloud.com/reftest/",
-            username="reftest"
+            username="reftest",
         )
-        
+
         item = UserQListWidgetItem(user=original_user)
-        
+
         # Verify it's the same object reference, not a copy
         assert item.user is original_user
-        
+
         # Verify all attributes are accessible
         assert item.user.key == "/reftest/"
         assert item.user.pictures == {"small": "https://example.com/small.jpg"}
@@ -141,20 +141,20 @@ class TestUserQListWidgetItem:
             name="User One",
             pictures={},
             url="https://www.mixcloud.com/user1/",
-            username="user1"
+            username="user1",
         )
-        
+
         user2 = MixcloudUser(
             key="/user2/",
             name="User Two",
             pictures={},
             url="https://www.mixcloud.com/user2/",
-            username="user2"
+            username="user2",
         )
-        
+
         item1 = UserQListWidgetItem(user=user1)
         item2 = UserQListWidgetItem(user=user2)
-        
+
         # Verify independence
         assert item1.user is not item2.user
         assert item1.text() != item2.text()
@@ -168,22 +168,22 @@ class TestUserQListWidgetItem:
             name="Inheritance Test",
             pictures={},
             url="https://www.mixcloud.com/inheritancetest/",
-            username="inheritancetest"
+            username="inheritancetest",
         )
-        
+
         item = UserQListWidgetItem(user=user)
-        
+
         # Test inherited methods
         original_text = item.text()
-        
+
         # Test setText (inherited method)
         item.setText("Modified Text")
         assert item.text() == "Modified Text"
-        
+
         # User data should still be preserved
         assert item.user is user
         assert item.user.name == "Inheritance Test"
-        
+
         # Test setToolTip (inherited method)
         item.setToolTip("Test tooltip")
         assert item.toolTip() == "Test tooltip"
@@ -197,16 +197,16 @@ class TestUserQListWidgetItem:
             ("Name123", "user123", "Name123 (user123)"),
             ("NAME", "name", "NAME (name)"),
         ]
-        
+
         for name, username, expected_display in test_users:
             user = MixcloudUser(
                 key=f"/{username}/",
                 name=name,
                 pictures={},
                 url=f"https://www.mixcloud.com/{username}/",
-                username=username
+                username=username,
             )
-            
+
             item = UserQListWidgetItem(user=user)
             assert item.text() == expected_display
 
@@ -217,19 +217,19 @@ class TestUserQListWidgetItem:
             name="Immutable Test",
             pictures={"medium": "https://example.com/medium.jpg"},
             url="https://www.mixcloud.com/immutabletest/",
-            username="immutabletest"
+            username="immutabletest",
         )
-        
+
         # Store original values
         original_name = original_user.name
         original_username = original_user.username
         original_key = original_user.key
         original_url = original_user.url
         original_pictures = original_user.pictures.copy()
-        
+
         # Create item
         item = UserQListWidgetItem(user=original_user)
-        
+
         # Verify original user data is unchanged
         assert original_user.name == original_name
         assert original_user.username == original_username
@@ -251,9 +251,9 @@ class TestUserQListWidgetItemEdgeCases:
             name="None Test",
             pictures={},
             url="https://www.mixcloud.com/nonetest/",
-            username="nonetest"
+            username="nonetest",
         )
-        
+
         # This should not raise any exceptions
         item = UserQListWidgetItem(user=user)
         assert isinstance(item.text(), str)
@@ -268,9 +268,9 @@ class TestUserQListWidgetItemEdgeCases:
             name="   ",  # Only whitespace
             pictures={},
             url="https://www.mixcloud.com/whitespacetest/",
-            username="whitespacetest"
+            username="whitespacetest",
         )
-        
+
         item = UserQListWidgetItem(user=user)
         expected_text = "    (whitespacetest)"  # Three spaces plus space before parentheses
         assert item.text() == expected_text
@@ -283,9 +283,9 @@ class TestUserQListWidgetItemEdgeCases:
             name="Multi\nLine\nName",
             pictures={},
             url="https://www.mixcloud.com/newlinetest/",
-            username="newlinetest"
+            username="newlinetest",
         )
-        
+
         item = UserQListWidgetItem(user=user)
         expected_text = "Multi\nLine\nName (newlinetest)"
         assert item.text() == expected_text
@@ -303,7 +303,7 @@ class TestUserQListWidgetItemEdgeCases:
             "Name[WithBrackets]",  # Brackets in name
             "Name{WithBraces}",  # Braces in name
         ]
-        
+
         for i, name in enumerate(edge_case_names):
             username = f"edgecase{i}"
             user = MixcloudUser(
@@ -311,11 +311,11 @@ class TestUserQListWidgetItemEdgeCases:
                 name=name,
                 pictures={},
                 url=f"https://www.mixcloud.com/{username}/",
-                username=username
+                username=username,
             )
-            
+
             item = UserQListWidgetItem(user=user)
-            
+
             # Should not raise exceptions and should follow the format
             text = item.text()
             assert isinstance(text, str)
@@ -330,25 +330,25 @@ class TestUserQListWidgetItemIntegration:
     def test_item_can_be_used_in_qlistwidget(self, qapp):
         """Test that the item can be properly used in a QListWidget."""
         from PySide6.QtWidgets import QListWidget
-        
+
         user = MixcloudUser(
             key="/integrationtest/",
             name="Integration Test User",
             pictures={},
             url="https://www.mixcloud.com/integrationtest/",
-            username="integrationtest"
+            username="integrationtest",
         )
-        
+
         # Create list widget and add our custom item
         list_widget = QListWidget()
         item = UserQListWidgetItem(user=user)
-        
+
         list_widget.addItem(item)
-        
+
         # Verify item was added correctly
         assert list_widget.count() == 1
         retrieved_item = list_widget.item(0)
-        
+
         # Verify it's our custom item with preserved data
         assert isinstance(retrieved_item, UserQListWidgetItem)
         assert retrieved_item.user is user
@@ -358,30 +358,30 @@ class TestUserQListWidgetItemIntegration:
     def test_multiple_items_in_list_widget(self, qapp):
         """Test multiple UserQListWidgetItems in a QListWidget."""
         from PySide6.QtWidgets import QListWidget
-        
+
         users = [
             MixcloudUser(
                 key=f"/user{i}/",
                 name=f"User {i}",
                 pictures={},
                 url=f"https://www.mixcloud.com/user{i}/",
-                username=f"user{i}"
+                username=f"user{i}",
             )
             for i in range(3)
         ]
-        
+
         list_widget = QListWidget()
         items = []
-        
+
         # Add multiple items
         for user in users:
             item = UserQListWidgetItem(user=user)
             items.append(item)
             list_widget.addItem(item)
-        
+
         # Verify all items were added
         assert list_widget.count() == 3
-        
+
         # Verify each item maintains its data
         for i in range(3):
             retrieved_item = list_widget.item(i)

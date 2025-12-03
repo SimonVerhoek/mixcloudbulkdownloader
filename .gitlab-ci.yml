@@ -9,7 +9,7 @@ image:
   entrypoint: ["/bin/sh", "-c"]
 
 services:
-  - docker:dind
+  - docker:28.5.0-dind
 
 cache:
   key: ${CI_JOB_NAME}

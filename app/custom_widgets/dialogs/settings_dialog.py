@@ -5,6 +5,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QCursor, QFontMetrics
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -20,10 +21,14 @@ from PySide6.QtWidgets import (
 
 from app.consts.audio import AUDIO_FORMATS
 from app.consts.settings import (
+    DEFAULT_CHECK_UPDATES_ON_STARTUP,
+    DEFAULT_ENABLE_AUDIO_CONVERSION,
     DEFAULT_MAX_PARALLEL_CONVERSIONS,
     DEFAULT_MAX_PARALLEL_DOWNLOADS,
     PARALLEL_CONVERSIONS_OPTIONS,
     PARALLEL_DOWNLOADS_OPTIONS,
+    SETTING_CHECK_UPDATES_ON_STARTUP,
+    SETTING_ENABLE_AUDIO_CONVERSION,
     SETTING_MAX_PARALLEL_CONVERSIONS,
     SETTING_MAX_PARALLEL_DOWNLOADS,
 )
@@ -38,6 +43,7 @@ from app.custom_widgets.pro_feature_widget import ProFeatureWidget
 from app.services.license_manager import LicenseManager, license_manager
 from app.services.settings_manager import SettingsManager, settings
 from app.services.system_service import cpu_count
+from app.threads.update_check_thread import UpdateCheckThread
 
 
 class SettingsDialog(ProFeatureWidget, QDialog):
@@ -67,6 +73,7 @@ class SettingsDialog(ProFeatureWidget, QDialog):
 
         self.settings_manager = settings_manager
         self._full_download_path = None  # Store the full path separately from display
+        self.update_check_thread: UpdateCheckThread | None = None
 
         self._setup_dialog()
         self._setup_ui()
@@ -88,6 +95,7 @@ class SettingsDialog(ProFeatureWidget, QDialog):
         main_layout = QVBoxLayout()
 
         # Create settings sections
+        self._create_update_settings_section(main_layout)
         self._create_pro_features_section(main_layout)
 
         # Dialog buttons
@@ -108,6 +116,28 @@ class SettingsDialog(ProFeatureWidget, QDialog):
         main_layout.addWidget(button_box)
         self.setLayout(main_layout)
 
+    def _create_update_settings_section(self, main_layout: QVBoxLayout) -> None:
+        """Create update settings section (not Pro-gated)."""
+        # Create horizontal layout for checkbox + button
+        update_layout = QHBoxLayout()
+
+        # Update checkbox
+        self.update_checkbox = QCheckBox("Check for updates on startup")
+        self.update_checkbox.setChecked(DEFAULT_CHECK_UPDATES_ON_STARTUP)
+        update_layout.addWidget(self.update_checkbox)
+
+        # Add stretch to push button to the right
+        update_layout.addStretch()
+
+        # Check now button
+        self.check_now_button = QPushButton("Check now")
+        self.check_now_button.clicked.connect(self._check_for_updates_now)
+        update_layout.addWidget(self.check_now_button)
+
+        # Add the layout to main layout with some spacing
+        main_layout.addLayout(update_layout)
+        main_layout.addSpacing(10)
+
     def _create_pro_features_section(self, main_layout: QVBoxLayout) -> None:
         """Create Pro features section with appropriate gating."""
         self.pro_group = QGroupBox("Pro Features")
@@ -117,8 +147,8 @@ class SettingsDialog(ProFeatureWidget, QDialog):
         # Default Download Directory
         self._create_download_directory_setting(pro_layout)
 
-        # Default Audio Format
-        self._create_audio_format_setting(pro_layout)
+        # Convert Audio (checkbox + dropdown)
+        self._create_audio_conversion_setting(pro_layout)
 
         # Max Parallel Downloads
         self._create_parallel_downloads_setting(pro_layout)
@@ -176,22 +206,46 @@ class SettingsDialog(ProFeatureWidget, QDialog):
         self.register_pro_widget(self.download_dir_button)
         self.register_pro_widget(self.download_dir_label)
 
-    def _create_audio_format_setting(self, layout: QFormLayout) -> None:
-        """Create default audio format setting."""
+    def _create_audio_conversion_setting(self, layout: QFormLayout) -> None:
+        """Create audio conversion checkbox and format dropdown setting."""
+        # Create horizontal layout for checkbox + dropdown
+        conversion_layout = QHBoxLayout()
+        conversion_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Create checkbox for enabling/disabling conversion
+        self.enable_conversion_checkbox = QCheckBox("Enable")
+        self.enable_conversion_checkbox.setChecked(DEFAULT_ENABLE_AUDIO_CONVERSION)
+
+        # Create dropdown for audio format selection
         self.audio_format_combo = QComboBox()
         # Create list of formats from AUDIO_FORMATS using dot notation
         audio_formats = sorted([fmt.label for fmt in AUDIO_FORMATS.values()])
         self.audio_format_combo.addItems(audio_formats)
         self.audio_format_combo.setCurrentText(AUDIO_FORMATS.mp3.label)  # Default
 
+        # Connect checkbox to dropdown enabled state
+        self.enable_conversion_checkbox.toggled.connect(self.audio_format_combo.setEnabled)
+
+        # Set initial dropdown state based on checkbox
+        self.audio_format_combo.setEnabled(self.enable_conversion_checkbox.isChecked())
+
+        # Add widgets to layout
+        conversion_layout.addWidget(self.enable_conversion_checkbox)
+        conversion_layout.addWidget(self.audio_format_combo)
+
+        # Create container widget
+        conversion_widget = QWidget()
+        conversion_widget.setLayout(conversion_layout)
+
         # Create label with lock icon if free user
-        label_text = "Default Audio Format:"
+        label_text = "Convert Audio:"
         if not self.license_manager.is_pro:
             label_text += " 🔒"
 
-        layout.addRow(label_text, self.audio_format_combo)
+        layout.addRow(label_text, conversion_widget)
 
-        # Register as Pro feature
+        # Register as Pro features
+        self.register_pro_widget(self.enable_conversion_checkbox)
         self.register_pro_widget(self.audio_format_combo)
 
     def _create_parallel_downloads_setting(self, layout: QFormLayout) -> None:
@@ -237,6 +291,12 @@ class SettingsDialog(ProFeatureWidget, QDialog):
 
     def _load_current_settings(self) -> None:
         """Load current settings from settings manager."""
+        # Load update settings (available to all users)
+        check_updates = self.settings_manager.get(
+            SETTING_CHECK_UPDATES_ON_STARTUP, DEFAULT_CHECK_UPDATES_ON_STARTUP
+        )
+        self.update_checkbox.setChecked(check_updates)
+
         # Load Pro settings if Pro user
         if self.license_manager.is_pro:
             # Load default download directory
@@ -246,6 +306,13 @@ class SettingsDialog(ProFeatureWidget, QDialog):
             else:
                 self.download_dir_label.setText("Not set")
                 self._full_download_path = None
+
+            # Load audio conversion setting
+            conversion_enabled = self.settings_manager.get(
+                SETTING_ENABLE_AUDIO_CONVERSION, DEFAULT_ENABLE_AUDIO_CONVERSION
+            )
+            self.enable_conversion_checkbox.setChecked(conversion_enabled)
+            self.audio_format_combo.setEnabled(conversion_enabled)
 
             # Load default audio format
             audio_format = self.settings_manager.get("default_audio_format", "MP3")
@@ -267,6 +334,10 @@ class SettingsDialog(ProFeatureWidget, QDialog):
     @Slot()
     def _save_and_accept(self) -> None:
         """Save settings and close dialog."""
+        # Save update settings (available to all users)
+        check_updates = self.update_checkbox.isChecked()
+        self.settings_manager.set(SETTING_CHECK_UPDATES_ON_STARTUP, check_updates)
+
         # Save Pro settings if Pro user
         if self.license_manager.is_pro:
             # Save default download directory (use full path, not elided display text)
@@ -274,6 +345,10 @@ class SettingsDialog(ProFeatureWidget, QDialog):
                 self.settings_manager.set("default_download_directory", self._full_download_path)
             else:
                 self.settings_manager.set("default_download_directory", None)
+
+            # Save audio conversion setting
+            conversion_enabled = self.enable_conversion_checkbox.isChecked()
+            self.settings_manager.set(SETTING_ENABLE_AUDIO_CONVERSION, conversion_enabled)
 
             # Save default audio format
             audio_format = self.audio_format_combo.currentText()
@@ -317,3 +392,25 @@ class SettingsDialog(ProFeatureWidget, QDialog):
         """Show upgrade dialog when user clicks lock icon."""
         dialog = GetProDialog(self)
         dialog.exec()
+
+    def _check_for_updates_now(self) -> None:
+        """Trigger immediate update check via MainWindow."""
+        # Disable button during check
+        self.check_now_button.setEnabled(False)
+        self.check_now_button.setText("Checking...")
+
+        # Get main window reference and trigger update check
+        main_window = self.parent()
+        if hasattr(main_window, "start_update_check"):
+            main_window.start_update_check()
+
+        # Re-enable button (this is immediate, actual check happens in background)
+        self.check_now_button.setEnabled(True)
+        self.check_now_button.setText("Check now")
+
+    def closeEvent(self, event) -> None:
+        """Handle dialog close event with thread cleanup."""
+        if self.update_check_thread and self.update_check_thread.isRunning():
+            self.update_check_thread.stop()
+
+        super().closeEvent(event)

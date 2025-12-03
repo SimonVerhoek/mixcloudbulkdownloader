@@ -1,7 +1,7 @@
 """UI-related constants for dimensions, layouts, and dialog sizing."""
 
 # Main window dimensions
-MAIN_WINDOW_MIN_WIDTH: int = 750
+MAIN_WINDOW_MIN_WIDTH: int = 775
 MAIN_WINDOW_MIN_HEIGHT: int = 450
 
 # Tree widget column sizes

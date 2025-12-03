@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.consts.logging import QT_LOG_MAX_FILE_SIZE, QT_LOG_BACKUP_COUNT, QT_LOG_CATEGORIES
+from app.consts.logging import QT_LOG_BACKUP_COUNT, QT_LOG_CATEGORIES, QT_LOG_MAX_FILE_SIZE
 
 
 class TestLoggingConstants:
@@ -56,7 +56,7 @@ class TestLoggingConstants:
         """Test that QT_LOG_CATEGORIES contains expected values."""
         expected_categories = {
             "UI": "app.ui",
-            "API": "app.api", 
+            "API": "app.api",
             "DOWNLOAD": "app.download",
             "THREAD": "app.threads",
             "ERROR": "app.error",
@@ -99,10 +99,10 @@ class TestLoggingConstants:
         """Test that QT_LOG_CATEGORIES covers main application areas."""
         # Verify that major application areas are covered
         keys = set(QT_LOG_CATEGORIES.keys())
-        
+
         # UI logging should be available
         assert "UI" in keys
-        # API logging should be available  
+        # API logging should be available
         assert "API" in keys
         # Download logging should be available
         assert "DOWNLOAD" in keys
@@ -123,7 +123,7 @@ class TestLoggingConstants:
         original_size = QT_LOG_MAX_FILE_SIZE
         original_count = QT_LOG_BACKUP_COUNT
         original_categories = QT_LOG_CATEGORIES.copy()
-        
+
         # Verify they match expected values
         assert QT_LOG_MAX_FILE_SIZE == original_size
         assert QT_LOG_BACKUP_COUNT == original_count
@@ -138,11 +138,11 @@ class TestLoggingConstantsIntegration:
         # File size should be suitable for rotating file handler
         assert isinstance(QT_LOG_MAX_FILE_SIZE, int)
         assert QT_LOG_MAX_FILE_SIZE > 0
-        
+
         # Backup count should be suitable for rotating file handler
         assert isinstance(QT_LOG_BACKUP_COUNT, int)
         assert QT_LOG_BACKUP_COUNT > 0
-        
+
         # Categories should be suitable for logger names
         for category_name, logger_name in QT_LOG_CATEGORIES.items():
             # Logger names should be valid Python module paths
@@ -157,19 +157,19 @@ class TestLoggingConstantsIntegration:
         # 5 MB = 5 * 1024 * 1024 bytes
         expected_bytes = 5 * 1024 * 1024
         assert QT_LOG_MAX_FILE_SIZE == expected_bytes
-        
+
         # Verify the math is correct
         assert expected_bytes == 5242880  # 5 MB in bytes
 
     def test_categories_namespace_consistency(self):
         """Test that all categories use consistent namespace."""
         app_prefix = "app."
-        
+
         for value in QT_LOG_CATEGORIES.values():
             assert value.startswith(app_prefix)
-            
+
             # Extract the suffix after "app."
-            suffix = value[len(app_prefix):]
+            suffix = value[len(app_prefix) :]
             assert len(suffix) > 0
             assert suffix.islower()
 
@@ -177,7 +177,7 @@ class TestLoggingConstantsIntegration:
         """Test that constants are memory efficient."""
         # Dict should not be excessively large
         assert len(QT_LOG_CATEGORIES) <= 20  # Reasonable upper bound
-        
+
         # String values should not be excessively long
         for key, value in QT_LOG_CATEGORIES.items():
             assert len(key) <= 20
@@ -207,7 +207,7 @@ class TestLoggingConstantsEdgeCases:
             assert isinstance(key, str)
             assert isinstance(value, str)
             items_count += 1
-        
+
         assert items_count == len(QT_LOG_CATEGORIES)
 
     def test_constants_can_be_used_in_string_formatting(self):
@@ -215,10 +215,10 @@ class TestLoggingConstantsEdgeCases:
         # Should not raise any exceptions
         size_str = f"Max file size: {QT_LOG_MAX_FILE_SIZE} bytes"
         count_str = f"Backup count: {QT_LOG_BACKUP_COUNT}"
-        
+
         assert str(QT_LOG_MAX_FILE_SIZE) in size_str
         assert str(QT_LOG_BACKUP_COUNT) in count_str
-        
+
         # Test categories in string formatting
         for key, value in QT_LOG_CATEGORIES.items():
             formatted = f"Category {key}: {value}"
@@ -234,7 +234,7 @@ class TestLoggingConstantsUsage:
         # Simulate what a rotating file handler would expect
         max_bytes = QT_LOG_MAX_FILE_SIZE
         backup_count = QT_LOG_BACKUP_COUNT
-        
+
         # These should be positive integers suitable for file handler
         assert isinstance(max_bytes, int)
         assert isinstance(backup_count, int)
@@ -244,7 +244,7 @@ class TestLoggingConstantsUsage:
     def test_logger_name_creation(self):
         """Test that category values can be used as logger names."""
         import logging
-        
+
         # Should be able to create loggers with these names
         for category_name, logger_name in QT_LOG_CATEGORIES.items():
             try:
@@ -267,16 +267,13 @@ class TestLoggingConstantsUsage:
                     "filename": "test.log",
                 }
             },
-            "loggers": {}
+            "loggers": {},
         }
-        
+
         # Add loggers for each category
         for category_key, logger_name in QT_LOG_CATEGORIES.items():
-            config["loggers"][logger_name] = {
-                "level": "INFO",
-                "handlers": ["rotating_file"]
-            }
-        
+            config["loggers"][logger_name] = {"level": "INFO", "handlers": ["rotating_file"]}
+
         # Verify configuration structure
         assert "handlers" in config
         assert "loggers" in config

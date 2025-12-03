@@ -10,12 +10,15 @@ from typing import Dict
 from PySide6.QtCore import Q_ARG, QMetaObject, QObject, Qt, QThreadPool, Signal, Slot
 
 from app.consts.settings import (
+    DEFAULT_ENABLE_AUDIO_CONVERSION,
     DEFAULT_MAX_PARALLEL_CONVERSIONS,
     DEFAULT_MAX_PARALLEL_DOWNLOADS,
+    SETTING_ENABLE_AUDIO_CONVERSION,
     SETTING_MAX_PARALLEL_CONVERSIONS,
     SETTING_MAX_PARALLEL_DOWNLOADS,
 )
 from app.data_classes import Cloudcast
+from app.services.conversion_worker import ConversionWorker
 from app.services.license_manager import LicenseManager
 from app.services.settings_manager import SettingsManager
 
@@ -186,6 +189,7 @@ class DownloadManager(QObject):
                     download_dir=download_dir,
                     callback_bridge=self.callback_bridge,
                     settings_manager=self.settings_manager,
+                    license_manager=self.license_manager,
                 )
 
                 self.active_downloads[cloudcast.url] = worker
@@ -201,7 +205,7 @@ class DownloadManager(QObject):
         for worker in self.active_conversions.values():
             worker.cancel()
 
-    def _start_conversion_if_needed(self, cloudcast_url: str, downloaded_file: str) -> None:
+    def _start_conversion(self, cloudcast_url: str, downloaded_file: str) -> None:
         """Start conversion worker for Pro users.
 
         Args:
@@ -211,9 +215,6 @@ class DownloadManager(QObject):
         # Get target format from settings (ensure lowercase for AUDIO_FORMATS lookup)
         target_format = self.settings_manager.get("default_audio_format", "mp3").lower()
         downloaded_path = Path(downloaded_file)
-
-        # Import here to avoid circular imports
-        from app.services.conversion_worker import ConversionWorker
 
         worker = ConversionWorker(
             cloudcast_url=cloudcast_url,
@@ -249,15 +250,21 @@ class DownloadManager(QObject):
             # Determine if conversion will happen
             will_convert = False
             if self.license_manager.is_pro:
-                # Get target format to determine if conversion is needed (ensure lowercase)
-                target_format = self.settings_manager.get("default_audio_format", "mp3").lower()
-                downloaded_path = Path(file_path)
-                current_format = downloaded_path.suffix.lstrip(".")
+                # Check if conversion is enabled
+                conversion_enabled = self.settings_manager.get(
+                    SETTING_ENABLE_AUDIO_CONVERSION, DEFAULT_ENABLE_AUDIO_CONVERSION
+                )
 
-                if current_format != target_format:
-                    will_convert = True
-                    self._start_conversion_if_needed(cloudcast_url, file_path)
-                    # Note: Don't return early - still emit completion signal
+                if conversion_enabled:
+                    # Get target format to determine if conversion is needed (ensure lowercase)
+                    target_format = self.settings_manager.get("default_audio_format", "mp3").lower()
+                    downloaded_path = Path(file_path)
+                    current_format = downloaded_path.suffix.lstrip(".")
+
+                    if current_format != target_format:
+                        will_convert = True
+                        self._start_conversion(cloudcast_url, file_path)
+                        # Note: Don't return early - still emit completion signal
 
             # Always emit completion signal with conversion decision
             self.task_result.emit(cloudcast_url, file_path, will_convert)

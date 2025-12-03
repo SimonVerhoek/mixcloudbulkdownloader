@@ -38,6 +38,7 @@ env.read_env(env_file)
 block_cipher = None
 
 current_dir = os.getcwd()
+root_dir = Path(current_dir)
 
 
 a = Analysis(
@@ -64,13 +65,16 @@ spec = spec_from_file_location("get_poetry_version", module_path)
 poetry_version_module = module_from_spec(spec)
 spec.loader.exec_module(poetry_version_module)
 
-APP_VERSION = poetry_version_module.get_poetry_version(root_dir=Path(current_dir))
+APP_VERSION = poetry_version_module.get_poetry_version(root_dir=root_dir)
 APP_TITLE = 'Mixcloud Bulk Downloader'
 DEBUG = env.bool("DEBUG", False)
 CONSOLE = env.bool("CONSOLE", False)
 ICON_WINDOWS = 'assets/logo.ico'
 ICON_MACOS = 'assets/logo.icns'
 WINDOWS_EXE_ONLY = False
+
+# Create version file for use in production
+(root_dir / "app" / "_version.py").write_text(f'__version__ = "{APP_VERSION}"\n')
 
 print()
 print(f"{sys.platform = }")
@@ -127,6 +131,61 @@ if sys.platform == 'darwin':
     )
 
 if sys.platform in ['win32', 'win64', 'linux']:
+    import re
+    from PyInstaller.utils.win32.versioninfo import (
+        VSVersionInfo, FixedFileInfo, StringFileInfo, StringTable, 
+        StringStruct, VarFileInfo, VarStruct
+    )
+    
+    def parse_version_for_windows(version_string: str) -> tuple[int, int, int, int]:
+        """Parse version string to extract numeric components for Windows version resource.
+        
+        Args:
+            version_string: Version like "2.2.0a0", "1.0.0", "3.1.2rc1"
+            
+        Returns:
+            Tuple of 4 integers (major, minor, patch, build) for Windows FixedFileInfo
+        """
+        try:
+            # Remove pre-release identifiers (alpha, beta, rc, dev, etc.)
+            clean_version = re.sub(r'[a-zA-Z].*$', '', version_string)
+            parts = clean_version.split('.')
+            
+            # Ensure we have at least 3 parts, pad with zeros if needed
+            while len(parts) < 3:
+                parts.append('0')
+            
+            major = int(parts[0]) if parts[0] else 0
+            minor = int(parts[1]) if parts[1] else 0  
+            patch = int(parts[2]) if parts[2] else 0
+            build = 0  # Always 0 for build number
+            
+            return (major, minor, patch, build)
+        except (ValueError, IndexError) as e:
+            print(f"Parsing version string for Windows failed: {e}")
+            raise
+    
+    # Create Windows version resource
+    major, minor, patch, build = parse_version_for_windows(APP_VERSION)
+    version_resource = VSVersionInfo(
+        ffi=FixedFileInfo(
+            filevers=(major, minor, patch, build),
+            prodvers=(major, minor, patch, build),
+        ),
+        kids=[
+            StringFileInfo([StringTable(
+                '040904B0',
+                [
+                    StringStruct('FileVersion', APP_VERSION),
+                    StringStruct('ProductVersion', APP_VERSION),
+                    StringStruct('ProductName', 'Mixcloud Bulk Downloader'),
+                    StringStruct('FileDescription', 'Mixcloud Bulk Downloader Application'),
+                ]
+            )]),
+            VarFileInfo([VarStruct('Translation', [1033, 1200])]),
+        ]
+    )
+    
     if WINDOWS_EXE_ONLY:
         # only create .exe file
         exe = EXE(
@@ -141,7 +200,8 @@ if sys.platform in ['win32', 'win64', 'linux']:
             upx=True,
             runtime_tmpdir=None,
             console=CONSOLE,
-            icon=ICON_WINDOWS
+            icon=ICON_WINDOWS,
+            version=version_resource
         )
 
     else:
@@ -157,7 +217,8 @@ if sys.platform in ['win32', 'win64', 'linux']:
             strip=False,
             upx=True,
             console=CONSOLE,
-            icon=ICON_WINDOWS
+            icon=ICON_WINDOWS,
+            version=version_resource
         )
         coll = COLLECT(
             exe,

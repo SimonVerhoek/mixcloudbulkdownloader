@@ -50,3 +50,6 @@ local_settings
 
 # gitlab ci local
 .gitlab-ci-local
+
+# version file
+app/_version.py

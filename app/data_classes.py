@@ -35,3 +35,39 @@ class Cloudcast:
     name: str
     url: str
     user: MixcloudUser
+
+
+@dataclass
+class GitHubAsset:
+    """Represents a GitHub release asset.
+
+    Attributes:
+        name: Asset filename (e.g., "app-2.2.0.dmg")
+        browser_download_url: Direct download URL
+        size: File size in bytes
+        content_type: MIME type of the asset
+    """
+
+    name: str
+    browser_download_url: str
+    size: int
+    content_type: str
+
+
+@dataclass
+class GitHubRelease:
+    """Represents a GitHub release with download assets.
+
+    Attributes:
+        tag_name: Version tag (e.g., "2.2.0")
+        name: Release title
+        body: Release notes/changelog
+        assets: List of downloadable assets
+        published_at: Release publication date
+    """
+
+    tag_name: str
+    name: str
+    body: str
+    assets: list[GitHubAsset]
+    published_at: str

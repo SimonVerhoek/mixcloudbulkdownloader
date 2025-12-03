@@ -1,29 +1,30 @@
 """Unit tests for Unicode normalization logic without Qt dependencies."""
 
-import pytest
 import unicodedata
+
+import pytest
 
 
 def normalize_name_for_matching(name: str) -> str:
     """Standalone function to test Unicode normalization logic."""
     # Convert full-width characters to half-width
-    normalized = unicodedata.normalize('NFKC', name)
-    
+    normalized = unicodedata.normalize("NFKC", name)
+
     # Additional replacements for common yt-dlp substitutions
     replacements = {
-        '：': ':',  # Full-width colon
-        '＊': '*',  # Full-width asterisk
-        '？': '?',  # Full-width question mark
-        '｜': '|',  # Full-width pipe
-        '／': '/',  # Full-width slash
-        '＜': '<',  # Full-width less-than
-        '＞': '>',  # Full-width greater-than
-        '＂': '"',  # Full-width quote
+        "：": ":",  # Full-width colon
+        "＊": "*",  # Full-width asterisk
+        "？": "?",  # Full-width question mark
+        "｜": "|",  # Full-width pipe
+        "／": "/",  # Full-width slash
+        "＜": "<",  # Full-width less-than
+        "＞": ">",  # Full-width greater-than
+        "＂": '"',  # Full-width quote
     }
-    
+
     for full_width, half_width in replacements.items():
         normalized = normalized.replace(full_width, half_width)
-    
+
     return normalized.lower().strip()
 
 
@@ -39,6 +40,7 @@ def test_basic_normalization():
     result = normalize_name_for_matching("TestUser - Test Mix")
     assert result == "testuser - test mix"
 
+
 @pytest.mark.unit
 def test_full_width_colon_normalization():
     """Test full-width colon normalization."""
@@ -46,6 +48,7 @@ def test_full_width_colon_normalization():
     input_name = "User - Mix：Part 1"
     result = normalize_name_for_matching(input_name)
     assert result == "user - mix:part 1"
+
 
 @pytest.mark.unit
 def test_full_width_asterisk_normalization():
@@ -55,6 +58,7 @@ def test_full_width_asterisk_normalization():
     result = normalize_name_for_matching(input_name)
     assert result == "user - hot sh*t mix"
 
+
 @pytest.mark.unit
 def test_multiple_full_width_characters():
     """Test normalization of multiple full-width characters."""
@@ -62,20 +66,27 @@ def test_multiple_full_width_characters():
     result = normalize_name_for_matching(input_name)
     assert result == "prettylights - ep302:: modern measure * hot sh*t"
 
+
 @pytest.mark.unit
 def test_real_world_case():
     """Test the exact case that was failing in production."""
     # API expected name
     api_name = "prettylights - ep302 ft. modern measure :: pretty lights - 10.25.17 - the hot sh*t"
     api_normalized = normalize_name_for_matching(api_name)
-    
+
     # yt-dlp provided name with full-width characters
-    ytdlp_name = "prettylights - ep302 ft. modern measure ：： pretty lights - 10.25.17 - the hot sh＊t"
+    ytdlp_name = (
+        "prettylights - ep302 ft. modern measure ：： pretty lights - 10.25.17 - the hot sh＊t"
+    )
     ytdlp_normalized = normalize_name_for_matching(ytdlp_name)
-    
+
     # Should match after normalization
     assert api_normalized == ytdlp_normalized
-    assert api_normalized == "prettylights - ep302 ft. modern measure :: pretty lights - 10.25.17 - the hot sh*t"
+    assert (
+        api_normalized
+        == "prettylights - ep302 ft. modern measure :: pretty lights - 10.25.17 - the hot sh*t"
+    )
+
 
 @pytest.mark.unit
 def test_nfkc_normalization():
@@ -83,31 +94,33 @@ def test_nfkc_normalization():
     # Test with composed vs decomposed characters
     composed = "Café"  # é as single character U+00E9
     decomposed = "Café"  # e + combining acute accent U+0065 + U+0301
-    
+
     result1 = normalize_name_for_matching(composed)
     result2 = normalize_name_for_matching(decomposed)
-    
+
     # Should be identical after NFKC normalization
     assert result1 == result2
     assert result1 == "café"
+
 
 @pytest.mark.unit
 def test_all_full_width_replacements():
     """Test all full-width character replacements."""
     test_cases = [
-        ("Test：", "test:"),           # Full-width colon
-        ("Test＊", "test*"),          # Full-width asterisk
-        ("Test？", "test?"),          # Full-width question mark
-        ("Test｜", "test|"),          # Full-width pipe
-        ("Test／", "test/"),          # Full-width slash
-        ("Test＜", "test<"),          # Full-width less-than
-        ("Test＞", "test>"),          # Full-width greater-than
-        ("Test＂", 'test"'),          # Full-width quote
+        ("Test：", "test:"),  # Full-width colon
+        ("Test＊", "test*"),  # Full-width asterisk
+        ("Test？", "test?"),  # Full-width question mark
+        ("Test｜", "test|"),  # Full-width pipe
+        ("Test／", "test/"),  # Full-width slash
+        ("Test＜", "test<"),  # Full-width less-than
+        ("Test＞", "test>"),  # Full-width greater-than
+        ("Test＂", 'test"'),  # Full-width quote
     ]
-    
+
     for input_str, expected in test_cases:
         result = normalize_name_for_matching(input_str)
         assert result == expected
+
 
 @pytest.mark.unit
 def test_expected_name_generation():
@@ -115,17 +128,19 @@ def test_expected_name_generation():
     result = get_normalized_expected_name("TestUser", "Mix Name：Part 1")
     assert result == "testuser - mix name:part 1"
 
+
 @pytest.mark.unit
 def test_case_insensitive_matching():
     """Test that matching is case insensitive."""
     name1 = "PRETTYLIGHTS - EP302 FT. MODERN MEASURE"
     name2 = "prettylights - ep302 ft. modern measure"
-    
+
     result1 = normalize_name_for_matching(name1)
     result2 = normalize_name_for_matching(name2)
-    
+
     assert result1 == result2
     assert result1 == "prettylights - ep302 ft. modern measure"
+
 
 @pytest.mark.unit
 def test_whitespace_normalization():
@@ -134,11 +149,13 @@ def test_whitespace_normalization():
     result = normalize_name_for_matching(input_name)
     assert result == "user   -   mix  name"  # strip() only removes leading/trailing
 
+
 @pytest.mark.unit
 def test_empty_and_none_handling():
     """Test handling of edge cases."""
     assert normalize_name_for_matching("") == ""
     assert normalize_name_for_matching("   ") == ""
+
 
 @pytest.mark.unit
 def test_unicode_only_characters():
@@ -147,6 +164,7 @@ def test_unicode_only_characters():
     input_name = "User - דיבור חדיש 706"
     result = normalize_name_for_matching(input_name)
     assert result == "user - דיבור חדיש 706"
+
 
 @pytest.mark.unit
 def test_mixed_ascii_unicode():

@@ -1,8 +1,9 @@
 files: |
   (?x)(
     ^app/|
+    ^tests/|
     
-    ^pyproject.toml/|
+    ^pyproject.toml|
     ^poetry.lock
   )
 

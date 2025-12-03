@@ -15,12 +15,16 @@ set -eu
 WINDOWS_FFMPEG_URL="https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
 MACOS_FFMPEG_URL="https://evermeet.cx/ffmpeg/ffmpeg-6.1.1.7z"
 MACOS_FFPROBE_URL="https://evermeet.cx/ffmpeg/ffprobe-6.1.1.7z"
+MACOS_ARM_FFMPEG_URL="https://www.osxexperts.net/ffmpeg80arm.zip"
+MACOS_ARM_FFPROBE_URL="https://www.osxexperts.net/ffprobe80arm.zip"
 
 # Get script directory and project root
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 WINDOWS_DIR="$PROJECT_ROOT/app/resources/ffmpeg/windows"
 MACOS_DIR="$PROJECT_ROOT/app/resources/ffmpeg/macos"
+MACOS_INTEL_DIR="$PROJECT_ROOT/app/resources/ffmpeg/macos/intel"
+MACOS_ARM_DIR="$PROJECT_ROOT/app/resources/ffmpeg/macos/arm64"
 
 # Colors for output (if terminal supports them)
 if [ -t 1 ] && command -v tput >/dev/null 2>&1; then
@@ -268,9 +272,40 @@ extract_macos_7z() {
     # Find and copy binary
     local extracted_binary="$temp_dir/$binary_name"
     if [ -f "$extracted_binary" ]; then
-        cp "$extracted_binary" "$MACOS_DIR/$binary_name"
-        chmod +x "$MACOS_DIR/$binary_name"
-        log "Installed $binary_name to $MACOS_DIR/$binary_name"
+        cp "$extracted_binary" "$MACOS_INTEL_DIR/$binary_name"
+        chmod +x "$MACOS_INTEL_DIR/$binary_name"
+        log "Installed $binary_name to $MACOS_INTEL_DIR/$binary_name"
+        rm -rf "$temp_dir"
+        return 0
+    else
+        log_error "Binary $binary_name not found in extracted archive"
+        rm -rf "$temp_dir"
+        return 1
+    fi
+}
+
+# Extract macOS binary from zip archive
+extract_macos_zip() {
+    local zip_file="$1"
+    local binary_name="$2"
+    local temp_dir
+    temp_dir=$(mktemp -d)
+    
+    log "Extracting $binary_name from $(basename "$zip_file")"
+    
+    # Extract zip file
+    if ! unzip -q "$zip_file" -d "$temp_dir"; then
+        log_error "Failed to extract zip file"
+        rm -rf "$temp_dir"
+        return 1
+    fi
+    
+    # Find and copy binary
+    local extracted_binary="$temp_dir/$binary_name"
+    if [ -f "$extracted_binary" ]; then
+        cp "$extracted_binary" "$MACOS_ARM_DIR/$binary_name"
+        chmod +x "$MACOS_ARM_DIR/$binary_name"
+        log "Installed $binary_name to $MACOS_ARM_DIR/$binary_name"
         rm -rf "$temp_dir"
         return 0
     else
@@ -319,9 +354,9 @@ download_windows_binaries() {
     return 1
 }
 
-# Download macOS binaries
+# Download macOS Intel binaries
 download_macos_binaries() {
-    log "Downloading macOS binaries..."
+    log "Downloading macOS Intel binaries..."
     
     local temp_ffmpeg temp_ffprobe
     temp_ffmpeg=$(create_temp_file ".7z")
@@ -341,6 +376,39 @@ download_macos_binaries() {
     # Download ffprobe
     if download_with_progress "$MACOS_FFPROBE_URL" "$temp_ffprobe"; then
         if ! extract_macos_7z "$temp_ffprobe" "ffprobe"; then
+            success=false
+        fi
+    else
+        success=false
+    fi
+    
+    rm -f "$temp_ffmpeg" "$temp_ffprobe"
+    
+    [ "$success" = true ]
+}
+
+# Download macOS ARM64 binaries
+download_macos_arm_binaries() {
+    log "Downloading macOS ARM64 binaries..."
+    
+    local temp_ffmpeg temp_ffprobe
+    temp_ffmpeg=$(create_temp_file ".zip")
+    temp_ffprobe=$(create_temp_file ".zip")
+    
+    local success=true
+    
+    # Download ffmpeg
+    if download_with_progress "$MACOS_ARM_FFMPEG_URL" "$temp_ffmpeg"; then
+        if ! extract_macos_zip "$temp_ffmpeg" "ffmpeg"; then
+            success=false
+        fi
+    else
+        success=false
+    fi
+    
+    # Download ffprobe
+    if download_with_progress "$MACOS_ARM_FFPROBE_URL" "$temp_ffprobe"; then
+        if ! extract_macos_zip "$temp_ffprobe" "ffprobe"; then
             success=false
         fi
     else
@@ -383,14 +451,36 @@ main() {
             fi
             ;;
         macos)
-            if [ ! -d "$MACOS_DIR" ]; then
-                log_error "macOS directory does not exist: $MACOS_DIR"
+            if [ ! -d "$MACOS_INTEL_DIR" ]; then
+                log_error "macOS Intel directory does not exist: $MACOS_INTEL_DIR"
                 exit 1
             fi
+            if [ ! -d "$MACOS_ARM_DIR" ]; then
+                log_error "macOS ARM64 directory does not exist: $MACOS_ARM_DIR"
+                exit 1
+            fi
+            
+            local intel_success=false
+            local arm_success=false
+            
             if download_macos_binaries; then
-                log_success "macOS binaries downloaded successfully!"
+                log_success "macOS Intel binaries downloaded successfully!"
+                intel_success=true
             else
-                log_error "Failed to download macOS binaries"
+                log_error "Failed to download macOS Intel binaries"
+            fi
+            
+            if download_macos_arm_binaries; then
+                log_success "macOS ARM64 binaries downloaded successfully!"
+                arm_success=true
+            else
+                log_error "Failed to download macOS ARM64 binaries"
+            fi
+            
+            if [ "$intel_success" = true ] && [ "$arm_success" = true ]; then
+                log_success "All macOS binaries downloaded successfully!"
+            else
+                log_error "Failed to download all required macOS binaries"
                 exit 1
             fi
             ;;

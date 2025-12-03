@@ -3,12 +3,12 @@
 import pytest
 
 from app.consts.settings import (
-    DEFAULT_MAX_PARALLEL_DOWNLOADS,
     DEFAULT_MAX_PARALLEL_CONVERSIONS,
-    SETTING_MAX_PARALLEL_DOWNLOADS,
-    SETTING_MAX_PARALLEL_CONVERSIONS,
-    PARALLEL_DOWNLOADS_OPTIONS,
+    DEFAULT_MAX_PARALLEL_DOWNLOADS,
     PARALLEL_CONVERSIONS_OPTIONS,
+    PARALLEL_DOWNLOADS_OPTIONS,
+    SETTING_MAX_PARALLEL_CONVERSIONS,
+    SETTING_MAX_PARALLEL_DOWNLOADS,
 )
 
 
@@ -31,7 +31,7 @@ class TestThreadingConstants:
         """Test that parallel downloads setting key is properly formatted."""
         assert isinstance(SETTING_MAX_PARALLEL_DOWNLOADS, str)
         assert len(SETTING_MAX_PARALLEL_DOWNLOADS) > 0
-        
+
         # Should be descriptive
         key = SETTING_MAX_PARALLEL_DOWNLOADS.lower()
         assert "parallel" in key
@@ -42,7 +42,7 @@ class TestThreadingConstants:
         """Test that parallel conversions setting key is properly formatted."""
         assert isinstance(SETTING_MAX_PARALLEL_CONVERSIONS, str)
         assert len(SETTING_MAX_PARALLEL_CONVERSIONS) > 0
-        
+
         # Should be descriptive
         key = SETTING_MAX_PARALLEL_CONVERSIONS.lower()
         assert "parallel" in key
@@ -62,9 +62,10 @@ class TestThreadingConstants:
         """Test that default values are in reasonable ranges."""
         # Downloads: should be between 1-8 (as per UI)
         assert 1 <= DEFAULT_MAX_PARALLEL_DOWNLOADS <= 8
-        
+
         # Conversions: should be reasonable for CPU usage (at least 1, less than or equal to cpu_count)
         from app.services.system_service import cpu_count
+
         assert 1 <= DEFAULT_MAX_PARALLEL_CONVERSIONS <= cpu_count
 
     def test_downloads_default_higher_than_conversions(self):
@@ -80,12 +81,12 @@ class TestThreadingConstants:
     def test_constants_accessible_from_module(self):
         """Test that constants are accessible when imported."""
         from app.consts.settings import (
+            DEFAULT_MAX_PARALLEL_CONVERSIONS,
             DEFAULT_MAX_PARALLEL_DOWNLOADS,
-            DEFAULT_MAX_PARALLEL_CONVERSIONS, 
-            SETTING_MAX_PARALLEL_DOWNLOADS,
             SETTING_MAX_PARALLEL_CONVERSIONS,
+            SETTING_MAX_PARALLEL_DOWNLOADS,
         )
-        
+
         # All should be accessible
         assert DEFAULT_MAX_PARALLEL_DOWNLOADS is not None
         assert DEFAULT_MAX_PARALLEL_CONVERSIONS is not None
@@ -96,13 +97,13 @@ class TestThreadingConstants:
         """Test that setting keys follow snake_case format."""
         downloads_key = SETTING_MAX_PARALLEL_DOWNLOADS
         conversions_key = SETTING_MAX_PARALLEL_CONVERSIONS
-        
+
         # Should be snake_case (lowercase with underscores)
         assert downloads_key.islower()
         assert conversions_key.islower()
         assert "_" in downloads_key
         assert "_" in conversions_key
-        
+
         # Should not contain spaces or other characters
         assert " " not in downloads_key
         assert " " not in conversions_key
@@ -121,14 +122,15 @@ class TestThreadingConstants:
         """Test that constants match what the UI expects."""
         # Downloads: UI shows 1-8, default should be valid
         assert 1 <= DEFAULT_MAX_PARALLEL_DOWNLOADS <= 8
-        
+
         # Conversions: UI shows dynamic options based on CPU, default should be valid
         from app.services.system_service import cpu_count
+
         assert 1 <= DEFAULT_MAX_PARALLEL_CONVERSIONS <= cpu_count
-        
+
         # Default downloads should be "3" as set in UI
         assert DEFAULT_MAX_PARALLEL_DOWNLOADS == 3
-        
+
         # Default conversions should be reasonable for the target environment
         # Note: May be 2 on high-core systems, but could be 1 on low-core CI systems
         assert DEFAULT_MAX_PARALLEL_CONVERSIONS >= 1
@@ -138,7 +140,7 @@ class TestThreadingConstants:
         assert isinstance(PARALLEL_DOWNLOADS_OPTIONS, list)
         assert len(PARALLEL_DOWNLOADS_OPTIONS) > 0
         assert all(isinstance(x, int) for x in PARALLEL_DOWNLOADS_OPTIONS)
-        
+
         # Should be 1-8 range
         assert PARALLEL_DOWNLOADS_OPTIONS == [1, 2, 3, 4, 5, 6, 7, 8]
 
@@ -147,9 +149,10 @@ class TestThreadingConstants:
         assert isinstance(PARALLEL_CONVERSIONS_OPTIONS, list)
         assert len(PARALLEL_CONVERSIONS_OPTIONS) > 0
         assert all(isinstance(x, int) for x in PARALLEL_CONVERSIONS_OPTIONS)
-        
+
         # Should be dynamic based on CPU count, but start at 1 and be less than cpu_count
         from app.services.system_service import cpu_count
+
         expected_options = [i for i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] if i < cpu_count]
         assert PARALLEL_CONVERSIONS_OPTIONS == expected_options
 
@@ -159,6 +162,7 @@ class TestThreadingConstants:
         # For conversions, default might not be in options on low-core systems (like CI with 2 cores)
         # In such cases, the UI should handle this gracefully by using the closest available option
         from app.services.system_service import cpu_count
+
         if cpu_count > DEFAULT_MAX_PARALLEL_CONVERSIONS:
             assert DEFAULT_MAX_PARALLEL_CONVERSIONS in PARALLEL_CONVERSIONS_OPTIONS
         else:
@@ -176,9 +180,10 @@ class TestThreadingConstants:
         # Downloads should start at 1 and not exceed 8
         assert min(PARALLEL_DOWNLOADS_OPTIONS) >= 1
         assert max(PARALLEL_DOWNLOADS_OPTIONS) <= 8
-        
+
         # Conversions should start at 1 and not exceed cpu_count-1 (CPU intensive)
         from app.services.system_service import cpu_count
+
         assert min(PARALLEL_CONVERSIONS_OPTIONS) >= 1
         assert max(PARALLEL_CONVERSIONS_OPTIONS) < cpu_count
         # Should not be empty
@@ -190,52 +195,52 @@ class TestThreadingConstants:
         assert len(PARALLEL_CONVERSIONS_OPTIONS) == len(set(PARALLEL_CONVERSIONS_OPTIONS))
 
 
-@pytest.mark.unit 
+@pytest.mark.unit
 class TestThreadingConstantsIntegration:
     """Integration tests for threading constants with other modules."""
 
     def test_constants_work_with_settings_manager(self):
         """Test that constants work correctly with SettingsManager."""
+        from unittest.mock import Mock, patch
+
         from app.services.settings_manager import SettingsManager
-        from unittest.mock import patch, Mock
-        
-        with patch('app.services.settings_manager.QSettings') as mock_qsettings:
+
+        with patch("app.services.settings_manager.QSettings") as mock_qsettings:
             mock_instance = Mock()
             mock_qsettings.return_value = mock_instance
             mock_instance.value.return_value = None
-            
+
             settings = SettingsManager()
-            
+
             # Should be able to call initialize_threading_settings with constants
             settings.initialize_threading_settings(is_pro=True)
-            
+
             # Verify constants were used in setValue calls
             mock_instance.setValue.assert_any_call(
-                SETTING_MAX_PARALLEL_DOWNLOADS, 
-                DEFAULT_MAX_PARALLEL_DOWNLOADS
+                SETTING_MAX_PARALLEL_DOWNLOADS, DEFAULT_MAX_PARALLEL_DOWNLOADS
             )
             mock_instance.setValue.assert_any_call(
-                SETTING_MAX_PARALLEL_CONVERSIONS,
-                DEFAULT_MAX_PARALLEL_CONVERSIONS
+                SETTING_MAX_PARALLEL_CONVERSIONS, DEFAULT_MAX_PARALLEL_CONVERSIONS
             )
 
     def test_constants_work_with_settings_dialog(self):
         """Test that constants work correctly with SettingsDialog."""
+        from unittest.mock import Mock
+
         from app.custom_widgets.dialogs.settings_dialog import SettingsDialog
         from app.services.license_manager import LicenseManager
         from app.services.settings_manager import SettingsManager
-        from unittest.mock import Mock
-        
+
         # Mock the managers
         license_mgr = Mock(spec=LicenseManager)
         license_mgr.is_pro = True
-        
+
         settings_mgr = Mock(spec=SettingsManager)
         settings_mgr.get.side_effect = lambda key, default=None: {
             SETTING_MAX_PARALLEL_DOWNLOADS: DEFAULT_MAX_PARALLEL_DOWNLOADS,
             SETTING_MAX_PARALLEL_CONVERSIONS: DEFAULT_MAX_PARALLEL_CONVERSIONS,
         }.get(key, default)
-        
+
         # This should work without errors - constants should be compatible
         try:
             # Just test that import and basic usage works
@@ -247,19 +252,18 @@ class TestThreadingConstantsIntegration:
     def test_constants_consistency_across_modules(self):
         """Test that constants are consistent across different modules."""
         # Import from different places to ensure consistency
-        from app.consts.settings import DEFAULT_MAX_PARALLEL_DOWNLOADS as const1
-        from app.consts.settings import DEFAULT_MAX_PARALLEL_CONVERSIONS as const2
-        from app.consts.settings import SETTING_MAX_PARALLEL_DOWNLOADS as key1
-        from app.consts.settings import SETTING_MAX_PARALLEL_CONVERSIONS as key2
-        
         # Re-import to verify consistency
         from app.consts.settings import (
-            DEFAULT_MAX_PARALLEL_DOWNLOADS as const1_reimport,
+            DEFAULT_MAX_PARALLEL_CONVERSIONS as const2,
             DEFAULT_MAX_PARALLEL_CONVERSIONS as const2_reimport,
-            SETTING_MAX_PARALLEL_DOWNLOADS as key1_reimport,
+            DEFAULT_MAX_PARALLEL_DOWNLOADS as const1,
+            DEFAULT_MAX_PARALLEL_DOWNLOADS as const1_reimport,
+            SETTING_MAX_PARALLEL_CONVERSIONS as key2,
             SETTING_MAX_PARALLEL_CONVERSIONS as key2_reimport,
+            SETTING_MAX_PARALLEL_DOWNLOADS as key1,
+            SETTING_MAX_PARALLEL_DOWNLOADS as key1_reimport,
         )
-        
+
         # Should be identical
         assert const1 == const1_reimport
         assert const2 == const2_reimport

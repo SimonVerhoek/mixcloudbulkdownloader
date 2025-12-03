@@ -31,7 +31,7 @@ USER_FEEDBACK_BEARER_TOKEN: str = env.str(
 PRO_FEATURES_LIST: list[str] = [
     "High quality downloads (192kbps)",
     "Convert to your favorite audio format (FLAC, MP3, AAC, WAV and more)",
-    "Set your default download directory",
+    "Download and convert even faster in parallel" "Set your default download directory",
     "Priority customer support",
 ]
 PRO_PRICE_TEXT: str = "Get MBD Pro for just $9.99!"
