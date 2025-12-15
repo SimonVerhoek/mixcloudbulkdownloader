@@ -18,6 +18,9 @@ DEVELOPMENT: bool = env.bool("DEVELOPMENT", default=False)
 # Custom settings path override
 CUSTOM_SETTINGS_PATH: str = env.str("CUSTOM_SETTINGS_PATH", default="")
 
+# Auto-update settings
+AUTO_UPDATE_SHOW_PRERELEASE: bool = env.bool("AUTO_UPDATE_SHOW_PRERELEASE", default=False)
+
 
 # Threading settings - Pro only
 DEFAULT_MAX_PARALLEL_DOWNLOADS: int = 3
@@ -52,6 +55,7 @@ DEFAULT_CHECK_UPDATES_ON_STARTUP: bool = True
 GITHUB_API_BASE_URL: str = "https://api.github.com"
 GITHUB_REPO_PATH: str = "/repos/SimonVerhoek/mixcloudbulkdownloader"
 GITHUB_RELEASES_ENDPOINT: str = f"{GITHUB_REPO_PATH}/releases/latest"
+GITHUB_RELEASES_ALL_ENDPOINT: str = f"{GITHUB_REPO_PATH}/releases"
 
 # Platform mappings (corrected for actual release assets)
 PLATFORM_FILE_EXTENSIONS: dict[str, str] = {

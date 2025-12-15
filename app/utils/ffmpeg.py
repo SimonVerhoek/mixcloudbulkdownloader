@@ -2,11 +2,12 @@
 
 import platform
 from pathlib import Path
+from typing import Literal
 
 from app.qt_logger import log_download, log_error_with_traceback
 
 
-def _get_macos_architecture() -> str:
+def _get_macos_architecture() -> Literal["arm64", "intel"]:
     """Get macOS architecture for binary selection.
 
     Returns:

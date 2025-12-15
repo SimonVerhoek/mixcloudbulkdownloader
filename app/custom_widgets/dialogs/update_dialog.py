@@ -185,6 +185,27 @@ class UpdateDialog(QDialog):
     def _start_download(self) -> None:
         """Start the download process with progress dialog."""
         try:
+            # Check if platform-specific download is available
+            # We need to get the actual release assets to validate
+            release, error = self.update_service.check_for_updates()
+            if error or not release:
+                ErrorDialog.show_error(
+                    self,
+                    "Download Error",
+                    "Failed to verify download availability. Please try again later.",
+                )
+                return
+
+            # Validate platform-specific asset availability
+            platform_download_url = self.update_service.get_platform_asset(release.assets)
+            if not platform_download_url:
+                ErrorDialog.show_error(
+                    self,
+                    "Download Error",
+                    "No suitable download found for your platform.",
+                )
+                return
+
             # Determine file extension based on platform
             file_extension = ".dmg" if sys.platform == "darwin" else ".zip"
             default_filename = f"MixcloudBulkDownloader-{self.latest_version}{file_extension}"
@@ -212,8 +233,9 @@ class UpdateDialog(QDialog):
             self.progress_dialog.show_cancel_only()
 
             # Create download thread with full target path (no parent to prevent Qt cleanup issues)
+            # Use the validated platform-specific URL instead of the original download_url
             self.download_thread = UpdateDownloadThread(
-                self.download_url, save_path, self.update_service
+                platform_download_url, save_path, self.update_service
             )
 
             # Connect thread signals
