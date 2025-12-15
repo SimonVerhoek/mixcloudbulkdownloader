@@ -149,6 +149,25 @@ detect_os() {
     esac
 }
 
+# Detect macOS architecture (Intel vs ARM64)
+detect_macos_architecture() {
+    local arch_name
+    arch_name=$(uname -m)
+    
+    case "$arch_name" in
+        x86_64)
+            echo "intel"
+            ;;
+        arm64|aarch64)
+            echo "arm64"
+            ;;
+        *)
+            log_error "Unknown macOS architecture: $arch_name"
+            echo "unknown"
+            ;;
+    esac
+}
+
 # Check and install dependencies
 check_dependencies() {
     local missing_deps=""
@@ -451,38 +470,37 @@ main() {
             fi
             ;;
         macos)
-            if [ ! -d "$MACOS_INTEL_DIR" ]; then
-                log_error "macOS Intel directory does not exist: $MACOS_INTEL_DIR"
-                exit 1
-            fi
-            if [ ! -d "$MACOS_ARM_DIR" ]; then
-                log_error "macOS ARM64 directory does not exist: $MACOS_ARM_DIR"
-                exit 1
-            fi
+            # Detect macOS architecture
+            local macos_arch
+            macos_arch=$(detect_macos_architecture)
+            log "Detected macOS architecture: $macos_arch"
             
-            local intel_success=false
-            local arm_success=false
-            
-            if download_macos_binaries; then
-                log_success "macOS Intel binaries downloaded successfully!"
-                intel_success=true
-            else
-                log_error "Failed to download macOS Intel binaries"
-            fi
-            
-            if download_macos_arm_binaries; then
-                log_success "macOS ARM64 binaries downloaded successfully!"
-                arm_success=true
-            else
-                log_error "Failed to download macOS ARM64 binaries"
-            fi
-            
-            if [ "$intel_success" = true ] && [ "$arm_success" = true ]; then
-                log_success "All macOS binaries downloaded successfully!"
-            else
-                log_error "Failed to download all required macOS binaries"
-                exit 1
-            fi
+            case "$macos_arch" in
+                intel)
+                    if download_macos_binaries; then
+                        log_success "macOS Intel binaries downloaded successfully!"
+                    else
+                        log_error "Failed to download macOS Intel binaries"
+                        exit 1
+                    fi
+                    ;;
+                arm64)
+                    if download_macos_arm_binaries; then
+                        log_success "macOS ARM64 binaries downloaded successfully!"
+                    else
+                        log_error "Failed to download macOS ARM64 binaries"
+                        exit 1
+                    fi
+                    ;;
+                unknown)
+                    log_error "Cannot determine macOS architecture, unable to download appropriate binaries"
+                    exit 1
+                    ;;
+                *)
+                    log_error "Unsupported macOS architecture: $macos_arch"
+                    exit 1
+                    ;;
+            esac
             ;;
         linux)
             log_warning "Linux detected. This script is designed for Windows and macOS binaries only."

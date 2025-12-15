@@ -1,7 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 import sys
-import tomllib
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
@@ -9,7 +8,6 @@ from environs import Env
 from PyInstaller.building.api import COLLECT, EXE, PYZ
 from PyInstaller.building.build_main import Analysis
 from PyInstaller.building.osx import BUNDLE
-from PyInstaller.utils.hooks import collect_submodules
 from PySide6.QtCore import QCoreApplication, Qt
 
 
@@ -41,24 +39,6 @@ current_dir = os.getcwd()
 root_dir = Path(current_dir)
 
 
-a = Analysis(
-    ['main.py'],
-    pathex=[current_dir],
-    binaries=[],
-    datas=[
-        ("app/styles/*.qss", "styles"),
-        ("app/resources/ffmpeg/", "app/resources/ffmpeg"),
-    ],
-    hiddenimports=[],
-    hookspath=[],
-    runtime_hooks=[],
-    excludes=[],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
-    noarchive=False,
-)
-
 # Dynamically import get_poetry_version.py so we can grab the project's version
 module_path = Path("./scripts/get_poetry_version.py")
 spec = spec_from_file_location("get_poetry_version", module_path)
@@ -73,9 +53,6 @@ ICON_WINDOWS = 'assets/logo.ico'
 ICON_MACOS = 'assets/logo.icns'
 WINDOWS_EXE_ONLY = False
 
-# Create version file for use in production
-(root_dir / "app" / "_version.py").write_text(f'__version__ = "{APP_VERSION}"\n')
-
 print()
 print(f"{sys.platform = }")
 print(f"{APP_VERSION = }")
@@ -83,7 +60,33 @@ print(f"{DEBUG = }")
 print(f"{CONSOLE = }")
 print()
 
+
+# Create version file for use in production
+(root_dir / "app" / "_version.py").write_text(f'__version__ = "{APP_VERSION}"\n')
+
+
+a = Analysis(
+    ['main.py'],
+    pathex=[current_dir],
+    binaries=[],
+    datas=[
+        ("app/styles/*.qss", "styles"),
+        ("app/resources/ffmpeg/", "app/resources/ffmpeg"),
+        ("app/_version.py", "app"),
+    ],
+    hiddenimports=[],
+    hookspath=[],
+    runtime_hooks=[],
+    excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+
+
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
 
 if sys.platform == 'darwin':
     import ctypes

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mixcloud-bulk-downloader"
-version = "2.2.0"
+version = "2.2.1"
 description = "Download for FREE all cloudcasts of your favorite Mixcloud artist at one go!"
 authors = ["Simon Verhoek <simon@simonic.nl>"]
 readme = "README.md"
@@ -19,11 +19,13 @@ pyobjc = { version = "^10.3", markers = "sys_platform == 'darwin'" }
 pywin32 = { version = "^306", markers = "sys_platform == 'win32'" }
 secretstorage = { version = "^3.3", markers = "sys_platform == 'linux'" }
 packaging = "^25.0"
+httpcore = "1.0.9"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.6.0"
 pyinstaller = "^6.12.0"
 keyrings-alt = "^5.0.2"
+setuptools = "78.1.1"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.4.0"
@@ -34,11 +36,6 @@ pytest-cov = "^4.1.0"
 
 [tool.poetry.group.ci.dependencies]
 pytest-xvfb = "^3.1.1"
-
-# For some reason, this is broken. Will produce the following error:
-# The Poetry configuration is invalid:
-#   - Additional properties are not allowed ('requires-plugins' was unexpected
-# Until this is fixed, leave this code commented out
 
 [tool.poetry.requires-plugins]
 poetry-plugin-export = ">=1.9"

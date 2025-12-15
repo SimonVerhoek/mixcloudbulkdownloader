@@ -1,0 +1,86 @@
+name: macOS Intel Build
+
+on:
+  push:
+    branches: [ "**" ]  # Trigger on push to any branch
+
+jobs:
+  build-macos-intel:
+    runs-on: macos-15-intel  # Intel x86_64 runner
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+      
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.11.5'
+        
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: latest
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+        installer-parallel: true
+        
+    - name: Load cached venv
+      id: cached-poetry-dependencies
+      uses: actions/cache@v3
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
+        
+    - name: Install dependencies
+      if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+      run: poetry install --no-interaction --no-root
+      
+    - name: Install project
+      run: poetry install --no-interaction
+      
+    - name: Download ffmpeg binaries
+      run: |
+        chmod +x ./scripts/download_ffmpeg.sh
+        ./scripts/download_ffmpeg.sh
+
+    - name: Create production environment file
+      run: |
+        cat > .env.prod << EOF
+        DEBUG=False
+        CONSOLE=False
+        DEVELOPMENT=False
+        APPLE_DEVELOPER_ID=""
+        EOF
+
+    - name: Build Intel application
+      run: poetry run pyinstaller --clean -y --log-level INFO app.spec
+      env:
+        BUILD_ENV: prod
+
+    - name: Verify Intel app bundle created
+      run: |
+        if [ ! -d "dist/Mixcloud Bulk Downloader.app" ]; then
+          echo "Error: App bundle not found at dist/Mixcloud Bulk Downloader.app"
+          exit 1
+        fi
+        
+        echo "Intel app bundle created successfully"
+        echo "=== App bundle info ==="
+        ls -la "dist/Mixcloud Bulk Downloader.app"
+        echo "=== App bundle architecture ==="
+        file "dist/Mixcloud Bulk Downloader.app/Contents/MacOS/Mixcloud Bulk Downloader" || echo "Could not determine architecture"
+
+    - name: Create Intel ZIP archive
+      run: |
+        cd dist
+        zip -r "Mixcloud_Bulk_Downloader_Intel.zip" "Mixcloud Bulk Downloader.app"
+        echo "ZIP created: $(ls -la Mixcloud_Bulk_Downloader_Intel.zip)"
+
+    - name: Upload Intel ZIP artifact
+      uses: actions/upload-artifact@v6
+      with:
+        name: mixcloud-bulk-downloader-intel-zip
+        path: dist/Mixcloud_Bulk_Downloader_Intel.zip
+        retention-days: 30
+        if-no-files-found: error

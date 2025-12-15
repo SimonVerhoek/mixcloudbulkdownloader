@@ -20,6 +20,7 @@ mc_list_*
 # build & dist files
 build
 dist
+dist-macos-intel
 
 # packaged apps
 *.dmg
