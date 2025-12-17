@@ -49,6 +49,15 @@ APP_VERSION = poetry_version_module.get_poetry_version(root_dir=root_dir)
 APP_TITLE = 'Mixcloud Bulk Downloader'
 DEBUG = env.bool("DEBUG", False)
 CONSOLE = env.bool("CONSOLE", False)
+
+# Detect Intel CI build environment
+IS_INTEL_CI = os.getenv("GITHUB_ACTIONS") == "true" and build_env == "prod"
+
+# For Intel builds in CI, always enable debug mode to capture detailed bootloader output
+if IS_INTEL_CI:
+    print("GitHub Actions Intel build detected - enabling debug mode for detailed output")
+    DEBUG = True
+    CONSOLE = True
 ICON_WINDOWS = 'assets/logo.ico'
 ICON_MACOS = 'assets/logo.icns'
 WINDOWS_EXE_ONLY = False
@@ -65,16 +74,55 @@ print()
 (root_dir / "app" / "_version.py").write_text(f'__version__ = "{APP_VERSION}"\n')
 
 
+# Prepare binaries and hidden imports for Intel CI builds
+intel_binaries = []
+intel_hiddenimports = []
+
+if IS_INTEL_CI:
+    print("Configuring Intel CI build with enhanced Python bundling...")
+    
+    # Add explicit Python runtime dependencies for Intel builds
+    intel_hiddenimports.extend([
+        'pkg_resources.py2_warn',
+        'pkg_resources.markers',
+        'packaging',
+        'packaging.version',
+        'packaging.specifiers',
+        'packaging.requirements',
+    ])
+    
+    # Try to detect and include Python shared library
+    import sys
+    import os
+    python_lib_path = None
+    
+    # Find Python shared library in common locations for GitHub Actions
+    possible_paths = [
+        f"{sys.prefix}/lib/libpython{sys.version_info.major}.{sys.version_info.minor}.dylib",
+        f"{sys.prefix}/lib/python{sys.version_info.major}.{sys.version_info.minor}/config-{sys.version_info.major}.{sys.version_info.minor}-darwin/libpython{sys.version_info.major}.{sys.version_info.minor}.dylib",
+        f"/usr/local/lib/libpython{sys.version_info.major}.{sys.version_info.minor}.dylib",
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            python_lib_path = path
+            print(f"Found Python library at: {python_lib_path}")
+            intel_binaries.append((python_lib_path, '.'))
+            break
+    
+    if not python_lib_path:
+        print(f"Warning: Could not find Python shared library. Checked paths: {possible_paths}")
+
 a = Analysis(
     ['main.py'],
     pathex=[current_dir],
-    binaries=[],
+    binaries=intel_binaries,
     datas=[
         ("app/styles/*.qss", "styles"),
         ("app/resources/ffmpeg/", "app/resources/ffmpeg"),
         ("app/_version.py", "app"),
     ],
-    hiddenimports=[],
+    hiddenimports=intel_hiddenimports,
     hookspath=[],
     runtime_hooks=[],
     excludes=[],
@@ -94,31 +142,59 @@ if sys.platform == 'darwin':
     ctypes.cdll.LoadLibrary("/System/Library/Frameworks/Cocoa.framework/Cocoa").NSApplicationLoad()
 
     # .env values should always be quoted, but we do not want double quoting here so strip the duplicates
-    # APPLE_DEVELOPER_ID = env.str("APPLE_DEVELOPER_ID").strip("'").strip('"')
-    APPLE_DEVELOPER_ID = None
+    APPLE_DEVELOPER_ID = env.str("APPLE_DEVELOPER_ID").strip("'").strip('"')
 
-    exe = EXE(
-        pyz,
-        a.scripts,
-        a.binaries,
-        a.zipfiles,
-        a.datas,
-        [],
-        name=APP_TITLE,
-        debug=DEBUG,
-        bootloader_ignore_signals=False,
-        strip=False,
-        upx=True,
-        upx_exclude=[],
-        runtime_tmpdir=None,
-        console=CONSOLE,
-        disable_windowed_traceback=False,
-        argv_emulation=False,
-        target_arch=None,
-        codesign_identity=APPLE_DEVELOPER_ID,
-        entitlements_file=None,
-    )
+    if IS_INTEL_CI:
+        print("Creating Intel CI build with enhanced Python bundling")
+        # For Intel CI builds, use onefile but with explicit Python runtime inclusion
+        # to avoid embedded signature issues while ensuring Python is bundled
+        exe = EXE(
+            pyz,
+            a.scripts,
+            a.binaries,
+            a.zipfiles,
+            a.datas,
+            [],
+            name=APP_TITLE,
+            debug=DEBUG,
+            bootloader_ignore_signals=False,
+            strip=False,
+            upx=False,  # Disable UPX for Intel builds to avoid compression issues
+            upx_exclude=[],
+            runtime_tmpdir=None,
+            console=CONSOLE,
+            disable_windowed_traceback=False,
+            argv_emulation=False,
+            target_arch=None,
+            codesign_identity=APPLE_DEVELOPER_ID,
+            entitlements_file=None,
+        )
+    else:
+        print("Creating standard build with onefile mode")
+        # Use onefile mode for local builds (ARM64)
+        exe = EXE(
+            pyz,
+            a.scripts,
+            a.binaries,
+            a.zipfiles,
+            a.datas,
+            [],
+            name=APP_TITLE,
+            debug=DEBUG,
+            bootloader_ignore_signals=False,
+            strip=False,
+            upx=True,
+            upx_exclude=[],
+            runtime_tmpdir=None,
+            console=CONSOLE,
+            disable_windowed_traceback=False,
+            argv_emulation=False,
+            target_arch=None,
+            codesign_identity=APPLE_DEVELOPER_ID,
+            entitlements_file=None,
+        )
 
+    # Both Intel and ARM64 builds now use the same BUNDLE structure (onefile mode)
     app = BUNDLE(
         exe,
         name=f"{APP_TITLE}.app",

@@ -47,15 +47,28 @@ jobs:
     - name: Create production environment file
       run: |
         cat > .env.prod << EOF
-        DEBUG=False
+        DEBUG=True
         CONSOLE=False
         DEVELOPMENT=False
+        APPLE_DEVELOPER_ID=""
         EOF
 
     - name: Build Intel application
-      run: poetry run pyinstaller --clean -y --log-level INFO app.spec
+      run: poetry run pyinstaller --clean -y --log-level DEBUG app.spec
       env:
         BUILD_ENV: prod
+        
+    - name: Debug PyInstaller build output
+      run: |
+        echo "=== Python environment in CI ==="
+        python -c "import sys; print(f'Python prefix: {sys.prefix}'); print(f'Python version: {sys.version}'); print(f'Python executable: {sys.executable}')"
+        echo "=== Checking for Python shared library in CI environment ==="
+        find /opt/hostedtoolcache/Python -name "*.dylib" 2>/dev/null | grep -i python | head -5 || echo "No Python dylibs found in hostedtoolcache"
+        find /usr/local -name "*python*.dylib" 2>/dev/null | head -5 || echo "No Python dylibs found in /usr/local"
+        echo "=== PyInstaller build directory structure ==="
+        find build -name "*.toc" -exec echo "TOC file: {}" \; -exec head -20 {} \; 2>/dev/null || echo "No TOC files found"
+        echo "=== Analysis warnings ==="
+        find build -name "warn*.txt" -exec echo "Warning file: {}" \; -exec cat {} \; 2>/dev/null || echo "No warning files found"
 
     - name: Verify Intel app bundle created
       run: |
@@ -67,8 +80,51 @@ jobs:
         echo "Intel app bundle created successfully"
         echo "=== App bundle info ==="
         ls -la "dist/Mixcloud Bulk Downloader.app"
-        echo "=== App bundle architecture ==="
-        file "dist/Mixcloud Bulk Downloader.app/Contents/MacOS/Mixcloud Bulk Downloader" || echo "Could not determine architecture"
+        
+        echo "=== Main executable architecture ==="
+        file "dist/Mixcloud Bulk Downloader.app/Contents/MacOS/Mixcloud Bulk Downloader" || echo "Could not determine main executable architecture"
+        
+        echo "=== Checking for Python framework ==="
+        if [ -d "dist/Mixcloud Bulk Downloader.app/Contents/Frameworks/Python.framework" ]; then
+          echo "Python.framework found, checking architecture..."
+          file "dist/Mixcloud Bulk Downloader.app/Contents/Frameworks/Python.framework/Versions/*/Python" || echo "Could not check Python framework architecture"
+        else
+          echo "No Python.framework found in app bundle"
+        fi
+        
+        echo "=== Checking Intel CI onedir build structure ==="
+        echo "Complete app bundle structure:"
+        find "dist/Mixcloud Bulk Downloader.app" -type f | head -50
+        
+        echo "=== Contents of MacOS directory ==="
+        ls -la "dist/Mixcloud Bulk Downloader.app/Contents/MacOS/" || echo "Could not list MacOS directory"
+        
+        echo "=== File count in MacOS directory ==="
+        find "dist/Mixcloud Bulk Downloader.app/Contents/MacOS" -type f | wc -l
+        
+        echo "=== Checking for separate Python runtime files ==="
+        find "dist/Mixcloud Bulk Downloader.app/Contents/MacOS" -name "*python*" -o -name "*Python*" | head -10
+        
+        echo "=== Checking for dynamic libraries ==="
+        find "dist/Mixcloud Bulk Downloader.app/Contents/MacOS" -name "*.dylib" | head -10
+        
+        echo "=== Checking for shared libraries ==="
+        find "dist/Mixcloud Bulk Downloader.app/Contents/MacOS" -name "*.so" | head -10
+        
+        echo "=== Verifying onedir structure vs onefile ==="
+        if [ -f "dist/Mixcloud Bulk Downloader.app/Contents/MacOS/Mixcloud Bulk Downloader" ]; then
+          echo "Main executable found"
+          echo "Executable size: $(ls -lh "dist/Mixcloud Bulk Downloader.app/Contents/MacOS/Mixcloud Bulk Downloader" | awk '{print $5}')"
+          echo "Main executable dependencies:"
+          otool -L "dist/Mixcloud Bulk Downloader.app/Contents/MacOS/Mixcloud Bulk Downloader" | head -10
+        fi
+        
+        echo "=== Total app bundle size ==="
+        du -sh "dist/Mixcloud Bulk Downloader.app"
+        
+        echo "=== Checking for any ARM64 contamination ==="
+        echo "Scanning all executables and libraries for architecture..."
+        find "dist/Mixcloud Bulk Downloader.app" -type f \( -perm +111 -o -name "*.dylib" -o -name "*.so" \) -exec file {} \; | grep -E "(arm64|x86_64)" | head -20 || echo "No executables/libraries found or architecture check failed"
 
     - name: Create Intel ZIP archive
       run: |
