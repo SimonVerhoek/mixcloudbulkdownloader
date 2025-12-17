@@ -94,7 +94,8 @@ if sys.platform == 'darwin':
     ctypes.cdll.LoadLibrary("/System/Library/Frameworks/Cocoa.framework/Cocoa").NSApplicationLoad()
 
     # .env values should always be quoted, but we do not want double quoting here so strip the duplicates
-    APPLE_DEVELOPER_ID = env.str("APPLE_DEVELOPER_ID").strip("'").strip('"')
+    # APPLE_DEVELOPER_ID = env.str("APPLE_DEVELOPER_ID").strip("'").strip('"')
+    APPLE_DEVELOPER_ID = None
 
     exe = EXE(
         pyz,

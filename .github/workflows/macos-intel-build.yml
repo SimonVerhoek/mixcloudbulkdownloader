@@ -50,7 +50,6 @@ jobs:
         DEBUG=False
         CONSOLE=False
         DEVELOPMENT=False
-        APPLE_DEVELOPER_ID=""
         EOF
 
     - name: Build Intel application
