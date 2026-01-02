@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mixcloud-bulk-downloader"
-version = "2.2.2"
+version = "2.2.3"
 description = "Download for FREE all cloudcasts of your favorite Mixcloud artist at one go!"
 authors = ["Simon Verhoek <simon@simonic.nl>"]
 readme = "README.md"
@@ -11,8 +11,8 @@ python = "3.11.5"
 yt-dlp = "^2025.7.21"
 httpx = "^0.28.1"
 pyside6 = "^6.8.3"
-environs = "^14.3.0"
-keyring = "^24.3.0"
+environs = "^14.5.0"
+keyring = "^25.7.0"
 
 # OS-specific keyring backends per OS
 pyobjc = { version = "^10.3", markers = "sys_platform == 'darwin'" }
@@ -20,6 +20,7 @@ pywin32 = { version = "^306", markers = "sys_platform == 'win32'" }
 secretstorage = { version = "^3.3", markers = "sys_platform == 'linux'" }
 packaging = "^25.0"
 httpcore = "1.0.9"
+marshmallow = "4.1.2"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.6.0"
