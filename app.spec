@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
+import platform
 import sys
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
@@ -65,10 +66,31 @@ print()
 (root_dir / "app" / "_version.py").write_text(f'__version__ = "{APP_VERSION}"\n')
 
 
+# Detect architecture and set appropriate SSL library paths
+if sys.platform == "darwin":
+    # Configure architecture-specific SSL binaries
+    if platform.machine() == 'arm64':
+        # ARM64 build: explicitly use Homebrew ARM64 SSL libraries
+        ssl_binaries = [
+            ('/opt/homebrew/opt/openssl@3/lib/libssl.3.dylib', '.'),
+            ('/opt/homebrew/opt/openssl@3/lib/libcrypto.3.dylib', '.'),
+        ]
+        print("🔧 ARM64 build: Using ARM64 SSL libraries from /opt/homebrew")
+    else:
+        # Intel build: explicitly use Homebrew Intel SSL libraries
+        ssl_binaries = [
+            ('/usr/local/opt/openssl@3/lib/libssl.3.dylib', '.'),
+            ('/usr/local/opt/openssl@3/lib/libcrypto.3.dylib', '.'),
+        ]
+        print("🔧 Intel build: Using Intel SSL libraries from /usr/local")
+else:
+    ssl_binaries = None
+
+
 a = Analysis(
     ['main.py'],
     pathex=[current_dir],
-    binaries=[],
+    binaries=ssl_binaries,
     datas=[
         ("app/styles/*.qss", "styles"),
         ("app/resources/ffmpeg/", "app/resources/ffmpeg"),

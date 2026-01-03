@@ -41,7 +41,18 @@ ifeq ($(ARCH),intel)
 	arch -x86_64 zsh -c "source venv-intel/bin/activate && BUILD_ENV=dev pyinstaller --clean -y --log-level INFO app.spec --distpath dist-macos-intel"
 else
 	@echo "Building ARM64 development version using native shell and venv..."
-	source venv/bin/activate && BUILD_ENV=dev pyinstaller --clean -y --log-level INFO app.spec
+	@echo "🔧 Using ARM64 environment with isolated library paths..."
+	env -i \
+		PATH="/Users/simonverhoek/PycharmProjects/mixcloud_bulk_downloader/mixcloud_bulk_downloader/venv/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin" \
+		DYLD_LIBRARY_PATH="/opt/homebrew/lib" \
+		PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig" \
+		HOMEBREW_PREFIX="/opt/homebrew" \
+		HOMEBREW_CELLAR="/opt/homebrew/Cellar" \
+		HOMEBREW_REPOSITORY="/opt/homebrew" \
+		HOME="$(HOME)" \
+		USER="$(USER)" \
+		PYTHONPATH="$(shell source venv/bin/activate && python -c 'import sys; print(":".join(sys.path[1:]))')" \
+		bash -c "source venv/bin/activate && BUILD_ENV=dev pyinstaller --clean -y --log-level INFO app.spec"
 endif
 
 # Target to build the app for production using PyInstaller
@@ -52,7 +63,18 @@ ifeq ($(ARCH),intel)
 	arch -x86_64 zsh -c "source venv-intel/bin/activate && BUILD_ENV=prod pyinstaller --clean -y --log-level INFO app.spec --distpath dist-macos-intel"
 else
 	@echo "Building ARM64 version using native shell and venv..."
-	source venv/bin/activate && BUILD_ENV=prod pyinstaller --clean -y --log-level INFO app.spec
+	@echo "🔧 Using ARM64 environment with isolated library paths..."
+	env -i \
+		PATH="/Users/simonverhoek/PycharmProjects/mixcloud_bulk_downloader/mixcloud_bulk_downloader/venv/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin" \
+		DYLD_LIBRARY_PATH="/opt/homebrew/lib" \
+		PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig" \
+		HOMEBREW_PREFIX="/opt/homebrew" \
+		HOMEBREW_CELLAR="/opt/homebrew/Cellar" \
+		HOMEBREW_REPOSITORY="/opt/homebrew" \
+		HOME="$(HOME)" \
+		USER="$(USER)" \
+		PYTHONPATH="$(shell source venv/bin/activate && python -c 'import sys; print(":".join(sys.path[1:]))')" \
+		bash -c "source venv/bin/activate && BUILD_ENV=prod pyinstaller --clean -y --log-level INFO app.spec"
 endif
 
 # Target to create the DMG file
