@@ -428,7 +428,9 @@ class TestConversionWorkerIntegration:
             mock_popen.assert_called_once()
             args, kwargs = mock_popen.call_args
             cmd = args[0]
-            assert "/usr/bin/ffmpeg" in cmd
+            # Check that the FFmpeg path appears in the command (platform-agnostic)
+            ffmpeg_path_str = str(mock_ffmpeg_path.return_value)
+            assert ffmpeg_path_str in cmd
             assert conversion_worker.input_file in cmd
             assert str(conversion_worker.converting_file_path) in cmd
 

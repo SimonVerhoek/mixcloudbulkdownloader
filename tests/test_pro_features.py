@@ -115,6 +115,7 @@ class MockWidget:
         return self.parent_widget
 
 
+@pytest.mark.qt
 class TestProFeatureWidget:
     """Test suite for ProFeatureWidget mixin class."""
 
@@ -188,6 +189,7 @@ class TestProFeatureWidget:
         assert mock_widget.object_name == ""
 
 
+@pytest.mark.qt
 class TestProFeatureIntegration:
     """Integration tests for pro feature system."""
 

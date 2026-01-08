@@ -34,7 +34,10 @@ class TestStylesheetLoader:
             patch("app.styles.hasattr", return_value=False),
         ):
             loader = StylesheetLoader()
-            assert str(loader.styles_dir).endswith("app/styles")
+            # Check path components instead of string ending for cross-platform compatibility
+            path_parts = loader.styles_dir.parts
+            assert "app" in path_parts
+            assert "styles" in path_parts
 
     def test_get_styles_directory_bundled_environment(self):
         """Test styles directory detection in PyInstaller bundled environment."""
@@ -166,6 +169,7 @@ class TestStylesheetLoader:
             assert "Warning: Could not load stylesheet main.qss" in captured.out
             assert "Warning: Could not load stylesheet dialogs.qss" in captured.out
 
+    @pytest.mark.qt
     def test_apply_styles_with_app_instance(self, qapp):
         """Test applying styles to a QApplication instance."""
         test_content = "QApplication { font-size: 16px; }"
@@ -234,6 +238,7 @@ class TestStylesheetLoader:
             mock_apply.assert_called_once()
 
 
+@pytest.mark.qt
 class TestStylesheetLoaderGlobalFunctions:
     """Test cases for global stylesheet loader functions."""
 
@@ -250,6 +255,7 @@ class TestStylesheetLoaderGlobalFunctions:
         assert loader1 is loader2
         assert isinstance(loader1, StylesheetLoader)
 
+    @pytest.mark.qt
     def test_load_application_styles_with_app(self, qapp):
         """Test load_application_styles convenience function."""
         with patch("app.styles.get_stylesheet_loader") as mock_get_loader:

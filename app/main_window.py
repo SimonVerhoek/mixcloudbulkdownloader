@@ -139,7 +139,7 @@ class MainWindow(QMainWindow):
 
     def startup_update_check(self) -> None:
         """Check for updates on startup if enabled in settings."""
-        if self.settings.get(SETTING_CHECK_UPDATES_ON_STARTUP, DEFAULT_CHECK_UPDATES_ON_STARTUP):
+        if self.settings.check_updates_on_startup:
             self.start_update_check()
 
     def start_update_check(self) -> None:
@@ -190,8 +190,8 @@ class MainWindow(QMainWindow):
         """Clean up partial download and conversion files from previous runs."""
         try:
             # Get default download directory or use home directory as fallback
-            default_download_dir = self.settings.get(
-                "default_download_directory", str(Path.home() / "Downloads")
+            default_download_dir = self.settings.default_download_directory or str(
+                Path.home() / "Downloads"
             )
             download_dir = Path(default_download_dir)
 

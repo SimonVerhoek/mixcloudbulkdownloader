@@ -44,9 +44,7 @@ class UpdateService(HTTPClientBase):
         Returns:
             True if startup checking is enabled in settings
         """
-        return self.settings_manager.get(
-            SETTING_CHECK_UPDATES_ON_STARTUP, DEFAULT_CHECK_UPDATES_ON_STARTUP
-        )
+        return self.settings_manager.check_updates_on_startup
 
     def get_latest_release(self) -> GitHubRelease | None:
         """Get latest release from GitHub API with proper asset parsing.

@@ -61,7 +61,7 @@ def get_mock_settings_for_threading():
 
     return {
         "default_download_directory": None,
-        "default_audio_format": "MP3",
+        "preferred_audio_format": "MP3",
         SETTING_ENABLE_AUDIO_CONVERSION: DEFAULT_ENABLE_AUDIO_CONVERSION,
         "max_parallel_downloads": valid_downloads,
         "max_parallel_conversions": valid_conversions,
@@ -73,16 +73,24 @@ def qapp():
     """Create QApplication instance for the entire test session."""
     from PySide6.QtWidgets import QApplication
 
-    if QApplication.instance() is None:
-        app = QApplication(sys.argv)
-    else:
-        app = QApplication.instance()
+    existing_app = QApplication.instance()
+    if existing_app is not None:
+        yield existing_app
+        return
 
-    yield app
+    # Create new application only if none exists
+    app = QApplication(sys.argv)
 
-    # Clean up
-    if app:
-        app.quit()
+    try:
+        yield app
+    finally:
+        # Clean up only if we created the app
+        try:
+            if app and not app.closingDown():
+                app.quit()
+        except RuntimeError:
+            # App may already be deleted, ignore
+            pass
 
 
 @pytest.fixture

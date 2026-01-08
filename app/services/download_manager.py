@@ -147,12 +147,8 @@ class DownloadManager(QObject):
 
     def _update_thread_pool_sizes(self):
         """Update thread pool sizes from current settings."""
-        max_downloads = self.settings_manager.get(
-            SETTING_MAX_PARALLEL_DOWNLOADS, DEFAULT_MAX_PARALLEL_DOWNLOADS
-        )
-        max_conversions = self.settings_manager.get(
-            SETTING_MAX_PARALLEL_CONVERSIONS, DEFAULT_MAX_PARALLEL_CONVERSIONS
-        )
+        max_downloads = self.settings_manager.max_parallel_downloads
+        max_conversions = self.settings_manager.max_parallel_conversions
 
         self.download_pool.setMaxThreadCount(max_downloads)
         self.conversion_pool.setMaxThreadCount(max_conversions)
@@ -213,7 +209,7 @@ class DownloadManager(QObject):
             downloaded_file: Path to downloaded file
         """
         # Get target format from settings (ensure lowercase for AUDIO_FORMATS lookup)
-        target_format = self.settings_manager.get("default_audio_format", "mp3").lower()
+        target_format = self.settings_manager.preferred_audio_format.lower()
         downloaded_path = Path(downloaded_file)
 
         worker = ConversionWorker(
@@ -251,13 +247,11 @@ class DownloadManager(QObject):
             will_convert = False
             if self.license_manager.is_pro:
                 # Check if conversion is enabled
-                conversion_enabled = self.settings_manager.get(
-                    SETTING_ENABLE_AUDIO_CONVERSION, DEFAULT_ENABLE_AUDIO_CONVERSION
-                )
+                conversion_enabled = self.settings_manager.enable_audio_conversion
 
                 if conversion_enabled:
                     # Get target format to determine if conversion is needed (ensure lowercase)
-                    target_format = self.settings_manager.get("default_audio_format", "mp3").lower()
+                    target_format = self.settings_manager.preferred_audio_format.lower()
                     downloaded_path = Path(file_path)
                     current_format = downloaded_path.suffix.lstrip(".")
 

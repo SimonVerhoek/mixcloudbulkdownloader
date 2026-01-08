@@ -47,7 +47,7 @@ def mock_settings_manager():
     def mock_get(key, default=None):
         defaults = {
             "default_download_directory": None,
-            "default_audio_format": "MP3",
+            "preferred_audio_format": "MP3",
             SETTING_ENABLE_AUDIO_CONVERSION: DEFAULT_ENABLE_AUDIO_CONVERSION,
             SETTING_MAX_PARALLEL_DOWNLOADS: valid_downloads,
             SETTING_MAX_PARALLEL_CONVERSIONS: valid_conversions,
@@ -56,6 +56,15 @@ def mock_settings_manager():
 
     manager.get = Mock(side_effect=mock_get)
     manager.set = Mock()
+
+    # Add property attributes for new property-based interface
+    manager.default_download_directory = None
+    manager.check_updates_on_startup = DEFAULT_CHECK_UPDATES_ON_STARTUP
+    manager.enable_audio_conversion = DEFAULT_ENABLE_AUDIO_CONVERSION
+    manager.preferred_audio_format = "MP3"
+    manager.max_parallel_downloads = valid_downloads
+    manager.max_parallel_conversions = valid_conversions
+
     return manager
 
 
@@ -113,9 +122,13 @@ class TestSettingsDialog:
         test_dir = "/test/directory"
         test_format = "FLAC"
 
+        # Set properties directly for new property-based interface
+        mock_settings_manager.default_download_directory = test_dir
+        mock_settings_manager.preferred_audio_format = test_format
+
         mock_settings_manager.get.side_effect = lambda key, default=None: {
             "default_download_directory": test_dir,
-            "default_audio_format": test_format,
+            "preferred_audio_format": test_format,
         }.get(key, default)
 
         dialog = SettingsDialog(
@@ -133,7 +146,7 @@ class TestSettingsDialog:
         """Test pro settings are not loaded for free users."""
         mock_settings_manager.get.side_effect = lambda key, default=None: {
             "default_download_directory": "/test/directory",
-            "default_audio_format": "FLAC",
+            "preferred_audio_format": "FLAC",
         }.get(key, default)
 
         dialog = SettingsDialog(
@@ -224,7 +237,7 @@ class TestSettingsDialog:
             call(SETTING_CHECK_UPDATES_ON_STARTUP, DEFAULT_CHECK_UPDATES_ON_STARTUP),
             call("default_download_directory", test_directory),
             call(SETTING_ENABLE_AUDIO_CONVERSION, DEFAULT_ENABLE_AUDIO_CONVERSION),
-            call("default_audio_format", "FLAC"),
+            call("preferred_audio_format", "FLAC"),
         ]
         mock_settings_manager.set.assert_has_calls(expected_calls, any_order=True)
         mock_settings_manager.sync.assert_called_once()
@@ -340,6 +353,16 @@ class TestSettingsDialog:
         settings_manager_enabled.get = Mock(side_effect=mock_get_enabled)
         settings_manager_enabled.set = Mock()
         settings_manager_enabled.sync = Mock()
+
+        # Add property attributes for new property-based interface
+        settings_manager_enabled.default_download_directory = None
+        settings_manager_enabled.check_updates_on_startup = DEFAULT_CHECK_UPDATES_ON_STARTUP
+        settings_manager_enabled.enable_audio_conversion = (
+            True  # This test specifically tests enabled conversion
+        )
+        settings_manager_enabled.preferred_audio_format = "MP3"
+        settings_manager_enabled.max_parallel_downloads = 3
+        settings_manager_enabled.max_parallel_conversions = 2
 
         dialog = SettingsDialog(
             license_manager=pro_license_manager, settings_manager=settings_manager_enabled
@@ -564,12 +587,20 @@ class TestSettingsDialogThreadingSettings:
         mock_settings = Mock(spec=SettingsManager)
         mock_settings.get.side_effect = lambda key, default=None: {
             "default_download_directory": None,
-            "default_audio_format": "MP3",
+            "preferred_audio_format": "MP3",
             SETTING_MAX_PARALLEL_DOWNLOADS: valid_downloads,
             SETTING_MAX_PARALLEL_CONVERSIONS: valid_conversions,
         }.get(key, default)
         mock_settings.set = Mock()
         mock_settings.sync = Mock()
+
+        # Add property attributes for new property-based interface
+        mock_settings.default_download_directory = None
+        mock_settings.check_updates_on_startup = DEFAULT_CHECK_UPDATES_ON_STARTUP
+        mock_settings.enable_audio_conversion = DEFAULT_ENABLE_AUDIO_CONVERSION
+        mock_settings.preferred_audio_format = "MP3"
+        mock_settings.max_parallel_downloads = valid_downloads
+        mock_settings.max_parallel_conversions = valid_conversions
 
         dialog = SettingsDialog(license_manager=pro_license_manager, settings_manager=mock_settings)
         qtbot.addWidget(dialog)
@@ -712,13 +743,22 @@ class TestSettingsDialogThreadingSettings:
         mock_settings = Mock(spec=SettingsManager)
         mock_settings.get.side_effect = lambda key, default=None: {
             "default_download_directory": None,
-            "default_audio_format": "MP3",
+            "preferred_audio_format": "MP3",
             # Threading settings return defaults when not set
             SETTING_MAX_PARALLEL_DOWNLOADS: default,
             SETTING_MAX_PARALLEL_CONVERSIONS: default,
         }.get(key, default)
         mock_settings.set = Mock()
         mock_settings.sync = Mock()
+
+        # Add property attributes for new property-based interface
+        mock_settings.default_download_directory = None
+        mock_settings.check_updates_on_startup = DEFAULT_CHECK_UPDATES_ON_STARTUP
+        mock_settings.enable_audio_conversion = DEFAULT_ENABLE_AUDIO_CONVERSION
+        mock_settings.preferred_audio_format = "MP3"
+        # For this test, return default values from constants when settings not set
+        mock_settings.max_parallel_downloads = DEFAULT_MAX_PARALLEL_DOWNLOADS
+        mock_settings.max_parallel_conversions = DEFAULT_MAX_PARALLEL_CONVERSIONS
 
         dialog = SettingsDialog(license_manager=pro_license_manager, settings_manager=mock_settings)
         qtbot.addWidget(dialog)

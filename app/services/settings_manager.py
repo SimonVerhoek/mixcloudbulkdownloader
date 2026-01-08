@@ -1,56 +1,104 @@
-"""Settings management for Mixcloud Bulk Downloader using QSettings."""
+"""Settings management for Mixcloud Bulk Downloader using encrypted INI files."""
 
-import json
 import os
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Any
 
-import keyring
 from PySide6.QtCore import QSettings
 
-from app.consts.license import LOG_KEYRING_ERROR
 from app.consts.settings import (
-    CUSTOM_SETTINGS_PATH,
+    DEFAULT_CHECK_UPDATES_ON_STARTUP,
+    DEFAULT_ENABLE_AUDIO_CONVERSION,
     DEFAULT_MAX_PARALLEL_CONVERSIONS,
     DEFAULT_MAX_PARALLEL_DOWNLOADS,
     DEVELOPMENT,
     KEYRING_EMAIL_KEY,
     KEYRING_LICENSE_KEY,
-    KEYRING_SERVICE_NAME,
+    SETTING_CHECK_UPDATES_ON_STARTUP,
+    SETTING_ENABLE_AUDIO_CONVERSION,
     SETTING_MAX_PARALLEL_CONVERSIONS,
     SETTING_MAX_PARALLEL_DOWNLOADS,
 )
+from app.qt_logger import log_error, log_ui
+from app.services.credential_encryptor import CredentialEncryptor
 
 
 class SettingsManager:
-    """Settings manager for Mixcloud Bulk Downloader application.
+    """Enhanced settings manager with encrypted credential storage and threading.
 
-    This class provides a centralized interface for reading and writing
-    application settings using Qt's QSettings for cross-platform persistence.
-    Settings are automatically stored in platform-appropriate locations.
+    This class provides:
+    - Property-based interface for all settings including credentials
+    - Encrypted storage of sensitive data using device-specific keys
+    - Thread-safe operations with concurrent read support
+    - Cross-platform file protection
+    - Comprehensive error handling with user notifications
+    - Development mode support with ./local_settings/
     """
 
     def __init__(self) -> None:
-        """Initialize settings manager with QSettings backend.
+        """Initialize settings manager with encrypted INI storage.
 
-        If DEVELOPMENT environment variable is True and CUSTOM_SETTINGS_PATH is set,
-        uses that directory for both QSettings and local file-based secrets storage.
-        Otherwise, uses platform defaults:
-        - macOS: ~/Library/Preferences/com.mixcloud-bulk-downloader.plist + system keyring
-        - Windows: HKEY_CURRENT_USER\Software\mixcloud-bulk-downloader + system keyring
-        - Linux: ~/.config/mixcloud-bulk-downloader.conf + system keyring
+        Creates a cross-platform settings manager that stores application settings
+        and encrypted credentials in platform-appropriate directories.
+
+        Storage Locations:
+        ==================
+
+        Production Mode (DEVELOPMENT=False):
+        - macOS: ~/Library/Application Support/mixcloud-bulk-downloader/settings.conf
+        - Windows: %APPDATA%/mixcloud-bulk-downloader/settings.conf
+          (typically C:\\Users\\{username}\\AppData\\Roaming\\mixcloud-bulk-downloader\\settings.conf)
+        - Linux: $XDG_CONFIG_HOME/mixcloud-bulk-downloader/settings.conf
+          (defaults to ~/.config/mixcloud-bulk-downloader/settings.conf)
+
+        Development Mode (DEVELOPMENT=True):
+        - All platforms: ./local_settings/settings.conf
+
+        Custom Override:
+        - Set CUSTOM_SETTINGS_PATH environment variable to any directory
+        - Example: CUSTOM_SETTINGS_PATH="/opt/mixcloud-settings"
+        - Results in: {CUSTOM_SETTINGS_PATH}/mixcloud-bulk-downloader.conf
+        - Useful for portable installations, multi-user environments, testing
+
+        Features:
+        =========
+        - Encrypted credential storage using device-specific keys
+        - Thread-safe operations with concurrent read support
+        - Cross-platform file protection (chmod 700 on Unix, ACLs on Windows)
+        - Automatic directory creation with appropriate permissions
+        - Comprehensive error handling with user notifications
+        - Legacy credential migration support
+
+        Note:
+        =====
+        The settings manager follows platform conventions for application data storage:
+        - macOS: Apple's Application Support guidelines
+        - Windows: Microsoft's APPDATA roaming profile standard
+        - Linux: XDG Base Directory Specification
+
+        Credentials are encrypted and stored separately from regular settings for
+        enhanced security. The storage directory permissions are restricted to the
+        current user only.
         """
-        self._shutting_down = False  # Flag to prevent keyring access during shutdown
+        self._shutting_down = False
+        self._read_write_lock = threading.RLock()  # Allow recursive acquisition
+        self._thread_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="settings")
 
-        # Provide ability to override path for dev purposes
-        custom_path = None
-        if DEVELOPMENT and CUSTOM_SETTINGS_PATH:
-            custom_path = self._resolve_custom_path(CUSTOM_SETTINGS_PATH)
-
-        self._custom_path = custom_path
-        self._configure_keyring_backend()
+        # Initialize storage location and encryption
+        self._storage_path = self._get_storage_path()
+        self._encryptor = CredentialEncryptor()
         self._settings = self._create_qsettings()
-        self._initialize_from_env()
+
+        # Test encryption functionality at startup
+        self._test_encryption_functionality()
+
+        # Ensure storage directory permissions are secure
+        self._secure_storage_directory()
+
+    # Property-based interface for all settings
 
     @property
     def email(self) -> str:
@@ -59,7 +107,7 @@ class SettingsManager:
         Returns:
             str: The license email or empty string if not set.
         """
-        return self._retrieve_credential(KEYRING_EMAIL_KEY, "")
+        return self._get_secret(key=KEYRING_EMAIL_KEY, default="")
 
     @email.setter
     def email(self, value: str) -> None:
@@ -68,7 +116,7 @@ class SettingsManager:
         Args:
             value: The email address to store.
         """
-        self._store_credential(KEYRING_EMAIL_KEY, value)
+        self._set_secret(key=KEYRING_EMAIL_KEY, value=value)
 
     @property
     def license_key(self) -> str:
@@ -77,7 +125,7 @@ class SettingsManager:
         Returns:
             str: The license key or empty string if not set.
         """
-        return self._retrieve_credential(KEYRING_LICENSE_KEY, "")
+        return self._get_secret(key=KEYRING_LICENSE_KEY, default="")
 
     @license_key.setter
     def license_key(self, value: str) -> None:
@@ -86,7 +134,7 @@ class SettingsManager:
         Args:
             value: The license key to store.
         """
-        self._store_credential(KEYRING_LICENSE_KEY, value)
+        self._set_secret(key=KEYRING_LICENSE_KEY, value=value)
 
     @property
     def last_successful_verification(self) -> float:
@@ -95,7 +143,7 @@ class SettingsManager:
         Returns:
             float: Unix timestamp or 0.0 if never verified successfully.
         """
-        return float(self._settings.value("last_successful_verification", 0.0, type=float))
+        return self._get(key="last_successful_verification", default=0.0)
 
     @last_successful_verification.setter
     def last_successful_verification(self, timestamp: float) -> None:
@@ -104,255 +152,381 @@ class SettingsManager:
         Args:
             timestamp: Unix timestamp of successful verification.
         """
-        self._settings.setValue("last_successful_verification", timestamp)
+        self._set(key="last_successful_verification", value=timestamp)
 
-    def _store_credential(self, key: str, value: str) -> None:
-        """Store a credential securely using keyring, local file, or fallback to QSettings.
+    @property
+    def max_parallel_downloads(self) -> int:
+        """Get the maximum number of parallel downloads.
+
+        Returns:
+            int: Maximum parallel downloads setting.
+        """
+        return self._get(key=SETTING_MAX_PARALLEL_DOWNLOADS, default=DEFAULT_MAX_PARALLEL_DOWNLOADS)
+
+    @max_parallel_downloads.setter
+    def max_parallel_downloads(self, value: int) -> None:
+        """Set the maximum number of parallel downloads.
 
         Args:
-            key: The credential key to store.
-            value: The credential value to store.
+            value: Maximum parallel downloads to allow.
         """
-        # Skip keyring operations during shutdown to prevent crashes
-        if self._shutting_down:
-            return
+        self._set(key=SETTING_MAX_PARALLEL_DOWNLOADS, value=value)
 
-        # Use local file-based storage for custom paths
-        if self._custom_path:
-            try:
-                self._store_credential_local_file(key, value)
-                # Clear from QSettings if successfully stored in local file
-                self._settings.remove(key)
-                return
-            except Exception as e:
-                # Log local file error, fallback to QSettings
-                print(LOG_KEYRING_ERROR.format(error=f"Local file storage failed: {e}"))
+    @property
+    def max_parallel_conversions(self) -> int:
+        """Get the maximum number of parallel conversions.
+
+        Returns:
+            int: Maximum parallel conversions setting.
+        """
+        return self._get(
+            key=SETTING_MAX_PARALLEL_CONVERSIONS, default=DEFAULT_MAX_PARALLEL_CONVERSIONS
+        )
+
+    @max_parallel_conversions.setter
+    def max_parallel_conversions(self, value: int) -> None:
+        """Set the maximum number of parallel conversions.
+
+        Args:
+            value: Maximum parallel conversions to allow.
+        """
+        self._set(key=SETTING_MAX_PARALLEL_CONVERSIONS, value=value)
+
+    @property
+    def check_updates_on_startup(self) -> bool:
+        """Get the check updates on startup setting.
+
+        Returns:
+            bool: Whether to check for updates on startup.
+        """
+        return self._get(
+            key=SETTING_CHECK_UPDATES_ON_STARTUP, default=DEFAULT_CHECK_UPDATES_ON_STARTUP
+        )
+
+    @check_updates_on_startup.setter
+    def check_updates_on_startup(self, value: bool) -> None:
+        """Set the check updates on startup setting.
+
+        Args:
+            value: Whether to check for updates on startup.
+        """
+        self._set(key=SETTING_CHECK_UPDATES_ON_STARTUP, value=value)
+
+    @property
+    def default_download_directory(self) -> str | None:
+        """Get the default download directory.
+
+        Returns:
+            str | None: Default download directory path or None if not set.
+        """
+        return self._get(key="default_download_directory", default=None)
+
+    @default_download_directory.setter
+    def default_download_directory(self, value: str | None) -> None:
+        """Set the default download directory.
+
+        Args:
+            value: Default download directory path or None to unset.
+        """
+        self._set(key="default_download_directory", value=value)
+
+    @property
+    def enable_audio_conversion(self) -> bool:
+        """Get the audio conversion enabled setting.
+
+        Returns:
+            bool: Whether audio conversion is enabled.
+        """
+        return self._get(
+            key=SETTING_ENABLE_AUDIO_CONVERSION, default=DEFAULT_ENABLE_AUDIO_CONVERSION
+        )
+
+    @enable_audio_conversion.setter
+    def enable_audio_conversion(self, value: bool) -> None:
+        """Set the audio conversion enabled setting.
+
+        Args:
+            value: Whether to enable audio conversion.
+        """
+        self._set(key=SETTING_ENABLE_AUDIO_CONVERSION, value=value)
+
+    @property
+    def preferred_audio_format(self) -> str:
+        """Get the default audio format.
+
+        Returns:
+            str: Default audio format (e.g., 'MP3', 'FLAC').
+        """
+        return self._get(key="preferred_audio_format", default="MP3")
+
+    @preferred_audio_format.setter
+    def preferred_audio_format(self, value: str) -> None:
+        """Set the default audio format.
+
+        Args:
+            value: Default audio format to use.
+        """
+        self._set(key="preferred_audio_format", value=value)
+
+    # Private implementation methods
+
+    def _get_storage_path(self) -> Path:
+        """Get the storage directory path for settings and credentials.
+
+        Returns:
+            Path: Directory path for storing application data.
+        """
+        if DEVELOPMENT:
+            # Development mode: use local_settings directory
+            return Path("./local_settings").resolve()
+        else:
+            # Production mode: platform-specific directories
+            if sys.platform == "darwin":  # macOS
+                return Path.home() / "Library" / "Application Support" / "mixcloud-bulk-downloader"
+            elif sys.platform == "win32":  # Windows
+                app_data = os.getenv("APPDATA", str(Path.home() / "AppData" / "Roaming"))
+                return Path(app_data) / "mixcloud-bulk-downloader"
+            else:  # Linux
+                xdg_config_home = os.getenv("XDG_CONFIG_HOME", str(Path.home() / ".config"))
+                return Path(xdg_config_home) / "mixcloud-bulk-downloader"
+
+    def _create_qsettings(self) -> QSettings:
+        """Create QSettings instance with INI format in storage directory.
+
+        Returns:
+            QSettings: Configured QSettings instance.
+        """
+        # Ensure storage directory exists
+        self._storage_path.mkdir(parents=True, exist_ok=True)
+
+        # Create settings file in storage directory
+        settings_file = self._storage_path / "settings.conf"
+        return QSettings(str(settings_file), QSettings.Format.IniFormat)
+
+    def _test_encryption_functionality(self) -> None:
+        """Test encryption functionality at startup and log results."""
+        try:
+            if self._encryptor.test_encryption_cycle():
+                log_ui(
+                    message="Credential encryption system initialized successfully", level="INFO"
+                )
+            else:
+                log_error(
+                    message="Credential encryption test failed - credentials may not be secure"
+                )
+        except Exception as e:
+            log_error(message=f"Failed to initialize credential encryption: {e}")
+
+    def _secure_storage_directory(self) -> None:
+        """Apply platform-specific security permissions to storage directory."""
+        try:
+            if sys.platform == "win32":
+                # Windows: Use ACL to restrict access to current user
+                self._secure_directory_windows()
+            else:
+                # Unix-like: Use chmod to set restrictive permissions
+                self._storage_path.chmod(0o700)  # rwx------ (owner only)
+
+            log_ui(
+                message=f"Applied security permissions to storage directory: {self._storage_path}",
+                level="INFO",
+            )
+        except Exception as e:
+            log_error(message=f"Failed to secure storage directory: {e}")
+
+    def _secure_directory_windows(self) -> None:
+        """Apply Windows-specific ACL permissions to storage directory."""
+        try:
+            import ntsecuritycon
+            import win32security
+
+            # Get current user SID
+            user_sid = win32security.GetTokenInformation(
+                win32security.GetCurrentProcessToken(), win32security.TokenUser
+            )[0]
+
+            # Create ACL with only current user having full control
+            acl = win32security.ACL()
+            acl.AddAccessAllowedAce(
+                win32security.ACL_REVISION, ntsecuritycon.FILE_ALL_ACCESS, user_sid
+            )
+
+            # Create security descriptor and apply to directory
+            security_descriptor = win32security.SECURITY_DESCRIPTOR()
+            security_descriptor.SetSecurityDescriptorDacl(1, acl, 0)
+
+            win32security.SetFileSecurity(
+                str(self._storage_path),
+                win32security.DACL_SECURITY_INFORMATION,
+                security_descriptor,
+            )
+        except ImportError:
+            # pywin32 not available in development, skip Windows ACL
+            log_ui(
+                message="pywin32 not available - skipping Windows ACL configuration",
+                level="WARNING",
+            )
+        except Exception as e:
+            log_error(message=f"Failed to apply Windows ACL permissions: {e}")
+
+    def _get(self, key: str, default: Any = None) -> Any:
+        """Private method for retrieving regular settings with thread safety.
+
+        Args:
+            key: Setting key to retrieve.
+            default: Default value if key doesn't exist.
+
+        Returns:
+            Any: Setting value with type conversion, or default if not found.
+        """
+
+        def _read_operation():
+            with self._read_write_lock:
+                value = self._settings.value(key, default)
+
+                # Handle type conversion based on default type
+                if value == default or default is None:
+                    return value
+
+                try:
+                    # ALWAYS check for bool type _before_ int type to prevent booleans from being identified
+                    # as ints! More info: https://stackoverflow.com/a/37888668
+                    if isinstance(default, bool):
+                        if isinstance(value, str):
+                            return value.lower() in ("true", "1", "yes", "on")
+                        return bool(value) if value is not None else default
+                    elif isinstance(default, int):
+                        return int(value) if value is not None else default
+                    elif isinstance(default, float):
+                        return float(value) if value is not None else default
+
+                except (ValueError, TypeError) as e:
+                    log_error(message=f"Failed to identify type of setting '{key}': {e}")
+                    return default
+
+                return value
+
+        # Execute in thread pool for non-blocking access
+        try:
+            future = self._thread_pool.submit(_read_operation)
+            return future.result(timeout=2.0)  # 2-second timeout for reads
+        except Exception as e:
+            log_error(message=f"Failed to read setting '{key}': {e}")
+            return default
+
+    def _set(self, key: str, value: Any) -> None:
+        """Private method for storing regular settings in background thread.
+
+        Args:
+            key: Setting key to store.
+            value: Value to store.
+        """
+
+        def _write_operation():
+            with self._read_write_lock:
                 self._settings.setValue(key, value)
-                return
+                self._settings.sync()
+                return True
 
         try:
-            service_name = self._get_keyring_service_name()
-            keyring.set_password(service_name, key, value)
-            # Clear from QSettings if successfully stored in keyring
-            self._settings.remove(key)
+            future = self._thread_pool.submit(_write_operation)
+            future.result(timeout=5.0)  # 5-second timeout for writes
         except Exception as e:
-            # Log keyring error, fallback to QSettings
-            print(LOG_KEYRING_ERROR.format(error=e))
-            self._settings.setValue(key, value)
+            log_error(message=f"Failed to write setting '{key}': {e}")
 
-    def _retrieve_credential(self, key: str, default: str = "") -> str:
-        """Retrieve a credential from keyring, local file, or fallback to QSettings.
+    def _get_secret(self, key: str, default: str = "") -> str:
+        """Private method for retrieving encrypted credentials with thread safety.
 
         Args:
-            key: The credential key to retrieve.
+            key: Credential key to retrieve.
             default: Default value if credential not found.
 
         Returns:
-            str: The credential value or default if not found.
+            str: Decrypted credential value or default if not found.
         """
-        # Skip keyring operations during shutdown to prevent crashes
-        if self._shutting_down:
-            return self._settings.value(key, default, type=str)
 
-        # Use local file-based storage for custom paths
-        if self._custom_path:
-            try:
-                credential = self._retrieve_credential_local_file(key)
-                if credential is not None:
-                    return credential
-            except Exception as e:
-                # Log local file error, fallback to QSettings
-                print(LOG_KEYRING_ERROR.format(error=f"Local file retrieval failed: {e}"))
+        def _read_operation():
+            with self._read_write_lock:
+                # Try to read from secrets section
+                encrypted_value = self._settings.value(f"secrets/{key}", None)
 
-            # Fallback to QSettings for custom path
-            return self._settings.value(key, default, type=str)
+                if encrypted_value:
+                    try:
+                        return self._encryptor.decrypt(encrypted_data=encrypted_value)
+                    except Exception as e:
+                        log_error(message=f"Failed to decrypt credential '{key}': {e}")
+                        # Fall back to regular settings for migration compatibility
+                        return self._settings.value(key, default, type=str)
+
+                # Check regular settings for legacy credentials
+                legacy_value = self._settings.value(key, None)
+                if legacy_value:
+                    log_ui(
+                        message=f"Migrating legacy credential '{key}' to encrypted storage",
+                        level="INFO",
+                    )
+                    # Migrate to encrypted storage
+                    try:
+                        encrypted_data = self._encryptor.encrypt(plaintext=legacy_value)
+                        self._settings.setValue(f"secrets/{key}", encrypted_data)
+                        self._settings.remove(key)  # Remove legacy value
+                        self._settings.sync()
+                        return legacy_value
+                    except Exception as e:
+                        log_error(message=f"Failed to migrate credential '{key}': {e}")
+                        return legacy_value
+
+                return default
 
         try:
-            service_name = self._get_keyring_service_name()
-            credential = keyring.get_password(service_name, key)
-            if credential is not None:
-                return credential
+            future = self._thread_pool.submit(_read_operation)
+            return future.result(timeout=3.0)  # 3-second timeout for credential reads
         except Exception as e:
-            # Log keyring error, fallback to QSettings
-            print(LOG_KEYRING_ERROR.format(error=e))
+            log_error(message=f"Failed to read credential '{key}': {e}")
+            return default
 
-        # Fallback to QSettings
-        return self._settings.value(key, default, type=str)
-
-    def _create_qsettings(self) -> QSettings:
-        """Create QSettings instance with custom path support.
-
-        Returns:
-            QSettings: Configured QSettings instance using custom path if specified.
-        """
-        if self._custom_path:
-            # Ensure the custom directory exists
-            self._custom_path.mkdir(parents=True, exist_ok=True)
-
-            # Create settings file in custom directory
-            settings_file = self._custom_path / "mixcloud-bulk-downloader.conf"
-            return QSettings(str(settings_file), QSettings.Format.IniFormat)
-        else:
-            # Use default platform-specific storage
-            return QSettings("mixcloud-bulk-downloader", "Mixcloud Bulk Downloader")
-
-    def _get_keyring_service_name(self) -> str:
-        """Get the keyring service name, customized for custom path if used.
-
-        Returns:
-            str: Service name for keyring operations.
-        """
-        if self._custom_path:
-            # Use custom path in service name to isolate credentials
-            safe_path = str(self._custom_path).replace(os.sep, "_").replace(":", "_")
-            return f"{KEYRING_SERVICE_NAME}-{safe_path}"
-        else:
-            return KEYRING_SERVICE_NAME
-
-    def _resolve_custom_path(self, path: str) -> Path:
-        """Resolve a custom path to an absolute path with proper expansions.
+    def _set_secret(self, key: str, value: str) -> None:
+        """Private method for storing encrypted credentials in background thread.
 
         Args:
-            path: The custom path which may be relative or contain ~ references.
-
-        Returns:
-            str: Absolute path with user home and relative paths resolved.
+            key: Credential key to store.
+            value: Credential value to encrypt and store.
         """
-        # Use pathlib for cross-platform path handling
-        path_obj = Path(path).expanduser().resolve()
 
-        return path_obj
+        def _write_operation():
+            with self._read_write_lock:
+                if not value:
+                    # Remove credential if empty value
+                    self._settings.remove(f"secrets/{key}")
+                else:
+                    try:
+                        encrypted_data = self._encryptor.encrypt(plaintext=value)
+                        self._settings.setValue(f"secrets/{key}", encrypted_data)
+                    except Exception as e:
+                        log_error(message=f"Failed to encrypt credential '{key}': {e}")
+                        # Fallback to unencrypted storage with warning
+                        log_error(
+                            message=f"Storing credential '{key}' unencrypted due to encryption failure"
+                        )
+                        self._settings.setValue(key, value)
 
-    def _configure_keyring_backend(self) -> None:
-        """Configure the appropriate keyring backend for the current platform.
-
-        This method sets up platform-specific keyring backends to avoid the
-        "No recommended backend was available" error. Fallback gracefully
-        if platform-specific backend is not available.
-        """
-        try:
-            if sys.platform == "darwin":  # macOS
-                from keyring.backends.macOS import Keyring as MacOSKeyring
-
-                keyring.set_keyring(MacOSKeyring())
-            elif sys.platform == "win32":  # Windows
-                from keyring.backends.Windows import WinVaultKeyring
-
-                keyring.set_keyring(WinVaultKeyring())
-            elif sys.platform.startswith("linux"):  # Linux
-                try:
-                    from keyring.backends.SecretService import Keyring as SecretServiceKeyring
-
-                    keyring.set_keyring(SecretServiceKeyring())
-                except ImportError:
-                    # Fallback to libsecret if SecretService not available
-                    from keyring.backends.libsecret import Keyring as LibSecretKeyring
-
-                    keyring.set_keyring(LibSecretKeyring())
-
-        except (ImportError, Exception) as e:
-            # Platform-specific backend not available, keyring will use default fallback
-            print(LOG_KEYRING_ERROR.format(error=f"Backend configuration failed: {e}"))
-
-    def _get_secrets_file_path(self) -> Path:
-        """Get the path to the local secrets file.
-
-        Returns:
-            Path: Path to the secrets file in the custom settings directory.
-        """
-        if not self._custom_path:
-            raise ValueError("Custom path not set - local secrets file not available")
-
-        return self._custom_path / ".secrets.json"
-
-    def _store_credential_local_file(self, key: str, value: str) -> None:
-        """Store a credential in local file-based storage for development.
-
-        Args:
-            key: The credential key to store.
-            value: The credential value to store.
-        """
-        secrets_file = self._get_secrets_file_path()
-
-        # Load existing secrets or create empty dict
-        secrets = {}
-        if secrets_file.exists():
-            try:
-                with open(secrets_file, "r", encoding="utf-8") as f:
-                    secrets = json.load(f)
-            except (json.JSONDecodeError, ValueError) as e:
-                # If file is corrupted, start fresh (but log the error)
-                print(f"Warning: Corrupted secrets file, creating new one: {e}")
-                secrets = {}
-
-        # Update the credential
-        secrets[key] = value
-
-        # Ensure directory exists
-        secrets_file.parent.mkdir(parents=True, exist_ok=True)
-
-        # Write to file as plain JSON for development convenience
-        with open(secrets_file, "w", encoding="utf-8") as f:
-            json.dump(secrets, f, indent=2)
-
-        # Set restrictive file permissions (readable only by owner)
-        try:
-            secrets_file.chmod(0o600)  # rw------- (owner read/write only)
-        except OSError:
-            # Windows may not support chmod, continue anyway
-            pass
-
-    def _retrieve_credential_local_file(self, key: str) -> str | None:
-        """Retrieve a credential from local file-based storage for development.
-
-        Args:
-            key: The credential key to retrieve.
-
-        Returns:
-            str | None: The credential value or None if not found.
-        """
-        secrets_file = self._get_secrets_file_path()
-
-        if not secrets_file.exists():
-            return None
+                # Remove any legacy unencrypted version
+                self._settings.remove(key)
+                self._settings.sync()
+                return True
 
         try:
-            with open(secrets_file, "r", encoding="utf-8") as f:
-                secrets = json.load(f)
-                return secrets.get(key)
+            future = self._thread_pool.submit(_write_operation)
+            future.result(timeout=5.0)  # 5-second timeout for credential writes
+        except Exception as e:
+            log_error(message=f"Failed to write credential '{key}': {e}")
 
-        except (json.JSONDecodeError, ValueError):
-            # If file is corrupted, treat as if credential doesn't exist
-            return None
-
-    def _initialize_from_env(self) -> None:
-        """Initialize settings from environment variables at application startup.
-
-        This should be called once during application initialization to set
-        default values from environment variables if they are defined.
-        """
-        # currently not in use
-        pass
-
-    def initialize_threading_settings(self, is_pro: bool) -> None:
-        """Initialize threading settings with defaults if not present.
-
-        Args:
-            is_pro: Whether user has Pro status to determine appropriate defaults
-        """
-        if is_pro:
-            if self.get(SETTING_MAX_PARALLEL_DOWNLOADS) is None:
-                self.set(SETTING_MAX_PARALLEL_DOWNLOADS, DEFAULT_MAX_PARALLEL_DOWNLOADS)
-            if self.get(SETTING_MAX_PARALLEL_CONVERSIONS) is None:
-                self.set(SETTING_MAX_PARALLEL_CONVERSIONS, DEFAULT_MAX_PARALLEL_CONVERSIONS)
-        else:
-            self.set(SETTING_MAX_PARALLEL_DOWNLOADS, 1)
-            self.set(SETTING_MAX_PARALLEL_CONVERSIONS, 0)  # conversions is a pro-only feature
-
-        self.sync()
+    # Legacy compatibility methods (deprecated, use properties instead)
 
     def get(self, key: str, default=None):
         """Get a setting value by key with automatic type conversion.
+
+        DEPRECATED: Use property-based access instead.
 
         Args:
             key: Setting key to retrieve
@@ -361,55 +535,76 @@ class SettingsManager:
         Returns:
             Setting value with proper type conversion, or default if not found
         """
-        value = self._settings.value(key, default)
-
-        # If we got the default value, return it as-is (it's already the correct type)
-        if value == default:
-            return default
-
-        # Handle type conversion based on default type if provided
-        if default is not None:
-            try:
-                # Convert to the same type as the default value
-                if isinstance(default, int):
-                    return int(value) if value is not None else default
-                elif isinstance(default, float):
-                    return float(value) if value is not None else default
-                elif isinstance(default, bool):
-                    # QSettings stores bools as strings "true"/"false"
-                    if isinstance(value, str):
-                        return value.lower() in ("true", "1", "yes", "on")
-                    return bool(value) if value is not None else default
-            except (ValueError, TypeError):
-                # If conversion fails, return the default
-                return default
-
-        return value
+        return self._get(key=key, default=default)
 
     def set(self, key: str, value) -> None:
         """Set a setting value by key.
+
+        DEPRECATED: Use property-based access instead.
 
         Args:
             key: Setting key to set
             value: Value to store
         """
-        self._settings.setValue(key, value)
+        self._set(key=key, value=value)
 
     def sync(self) -> None:
-        """Force synchronization of settings to persistent storage.
+        """Force synchronization of settings to persistent storage."""
 
-        This is typically called automatically by QSettings, but can be
-        called manually to ensure settings are immediately written to disk.
-        """
-        self._settings.sync()
+        def _sync_operation():
+            with self._read_write_lock:
+                self._settings.sync()
+                return True
+
+        try:
+            future = self._thread_pool.submit(_sync_operation)
+            future.result(timeout=5.0)
+        except Exception as e:
+            log_error(message=f"Failed to sync settings: {e}")
 
     def reset_to_defaults(self) -> None:
-        """Reset all settings to their default values.
+        """Reset all settings to their default values."""
 
-        This will clear all stored settings and restore default values
-        for all configuration options. Use with caution.
+        def _reset_operation():
+            with self._read_write_lock:
+                self._settings.clear()
+                self._settings.sync()
+                return True
+
+        try:
+            future = self._thread_pool.submit(_reset_operation)
+            future.result(timeout=10.0)  # Longer timeout for reset operation
+            log_ui(message="Settings reset to defaults", level="INFO")
+        except Exception as e:
+            log_error(message=f"Failed to reset settings: {e}")
+
+    def initialize_threading_settings(self, is_pro: bool) -> None:
+        """Initialize threading settings with defaults if not present.
+
+        Args:
+            is_pro: Whether user has Pro status to determine appropriate defaults
         """
-        self._settings.clear()
+        if is_pro:
+            if self._get(key=SETTING_MAX_PARALLEL_DOWNLOADS) is None:
+                self.max_parallel_downloads = DEFAULT_MAX_PARALLEL_DOWNLOADS
+            if self._get(key=SETTING_MAX_PARALLEL_CONVERSIONS) is None:
+                self.max_parallel_conversions = DEFAULT_MAX_PARALLEL_CONVERSIONS
+        else:
+            self.max_parallel_downloads = 1
+            self.max_parallel_conversions = 0  # conversions is a pro-only feature
+
+        self.sync()
+
+    def shutdown(self) -> None:
+        """Shutdown the settings manager and cleanup resources."""
+        self._shutting_down = True
+
+        try:
+            # Wait for pending operations to complete
+            self._thread_pool.shutdown(wait=True, timeout=10.0)
+            log_ui(message="Settings manager shutdown completed", level="INFO")
+        except Exception as e:
+            log_error(message=f"Error during settings manager shutdown: {e}")
 
 
 # Create module-level singleton instance

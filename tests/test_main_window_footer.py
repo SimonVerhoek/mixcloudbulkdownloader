@@ -41,7 +41,7 @@ def mock_services():
         mock_settings.get.side_effect = lambda key, default=None: {
             "check_updates_on_startup": False,  # Disable update checking
             "default_download_directory": None,
-            "default_audio_format": "MP3",
+            "preferred_audio_format": "MP3",
         }.get(key, default)
 
         # Mock thread to prevent actual startup verification

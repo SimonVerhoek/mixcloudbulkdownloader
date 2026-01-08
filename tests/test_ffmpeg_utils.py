@@ -24,7 +24,10 @@ class TestGetFFmpegPath:
         result = get_ffmpeg_path()
 
         # Verify the path structure
-        assert str(result).endswith("resources/ffmpeg/windows/ffmpeg.exe")
+        path_parts = result.parts
+        assert "resources" in path_parts
+        assert "ffmpeg" in path_parts
+        assert "windows" in path_parts
         assert "app" in str(result)
         assert result.name == "ffmpeg.exe"
 
@@ -38,7 +41,11 @@ class TestGetFFmpegPath:
         result = get_ffmpeg_path()
 
         # Verify the path structure
-        assert str(result).endswith("resources/ffmpeg/macos/arm64/ffmpeg")
+        path_parts = result.parts
+        assert "resources" in path_parts
+        assert "ffmpeg" in path_parts
+        assert "macos" in path_parts
+        assert "arm64" in path_parts
         assert "app" in str(result)
         assert result.name == "ffmpeg"
 
@@ -104,7 +111,10 @@ class TestGetFFprobePath:
         result = get_ffprobe_path()
 
         # Verify the path structure
-        assert str(result).endswith("resources/ffmpeg/windows/ffprobe.exe")
+        path_parts = result.parts
+        assert "resources" in path_parts
+        assert "ffmpeg" in path_parts
+        assert "windows" in path_parts
         assert "app" in str(result)
         assert result.name == "ffprobe.exe"
 
@@ -118,7 +128,11 @@ class TestGetFFprobePath:
         result = get_ffprobe_path()
 
         # Verify the path structure
-        assert str(result).endswith("resources/ffmpeg/macos/arm64/ffprobe")
+        path_parts = result.parts
+        assert "resources" in path_parts
+        assert "ffmpeg" in path_parts
+        assert "macos" in path_parts
+        assert "arm64" in path_parts
         assert "app" in str(result)
         assert result.name == "ffprobe"
 

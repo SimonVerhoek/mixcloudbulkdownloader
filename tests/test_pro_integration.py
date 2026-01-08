@@ -42,6 +42,7 @@ def mock_pro_license_manager():
     return mock_manager
 
 
+@pytest.mark.qt
 class TestCentralWidgetProIntegration:
     """Test CentralWidget Pro integration functionality."""
 
@@ -72,6 +73,7 @@ class TestCentralWidgetProIntegration:
         assert hasattr(widget, "cancel_button")
 
 
+@pytest.mark.qt
 class TestMainWindowProIntegration:
     """Test MainWindow Pro integration functionality."""
 
@@ -159,6 +161,7 @@ class TestMainWindowProIntegration:
             assert not window.footer_widget.get_pro_button.isVisible()
 
 
+@pytest.mark.qt
 class TestStartupVerification:
     """Test startup license verification functionality."""
 
@@ -244,6 +247,7 @@ class TestStartupVerification:
         mock_license_manager.verify_license.assert_called_once_with(timeout=10)
 
 
+@pytest.mark.qt
 class TestMainWindowStartupIntegration:
     """Test MainWindow startup verification integration."""
 

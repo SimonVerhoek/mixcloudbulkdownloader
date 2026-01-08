@@ -215,7 +215,7 @@ class FileService:
         """
         if license_manager.is_pro:
             # Check for saved default
-            default_dir = settings_manager.get("default_download_directory", None)
+            default_dir = settings_manager.default_download_directory
             if default_dir and Path(default_dir).exists():
                 return default_dir
 

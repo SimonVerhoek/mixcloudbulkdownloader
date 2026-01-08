@@ -280,7 +280,7 @@ class SettingsDialog(ProFeatureWidget, QDialog):
         if not self.license_manager.is_pro:
             return
 
-        current_dir = self.settings_manager.get("default_download_directory", str(Path.home()))
+        current_dir = self.settings_manager.default_download_directory or str(Path.home())
 
         directory = QFileDialog.getExistingDirectory(
             self, "Select Default Download Directory", current_dir
@@ -292,15 +292,13 @@ class SettingsDialog(ProFeatureWidget, QDialog):
     def _load_current_settings(self) -> None:
         """Load current settings from settings manager."""
         # Load update settings (available to all users)
-        check_updates = self.settings_manager.get(
-            SETTING_CHECK_UPDATES_ON_STARTUP, DEFAULT_CHECK_UPDATES_ON_STARTUP
-        )
+        check_updates = self.settings_manager.check_updates_on_startup
         self.update_checkbox.setChecked(check_updates)
 
         # Load Pro settings if Pro user
         if self.license_manager.is_pro:
             # Load default download directory
-            default_dir = self.settings_manager.get("default_download_directory", None)
+            default_dir = self.settings_manager.default_download_directory
             if default_dir:
                 self._set_directory_text(default_dir)
             else:
@@ -308,27 +306,21 @@ class SettingsDialog(ProFeatureWidget, QDialog):
                 self._full_download_path = None
 
             # Load audio conversion setting
-            conversion_enabled = self.settings_manager.get(
-                SETTING_ENABLE_AUDIO_CONVERSION, DEFAULT_ENABLE_AUDIO_CONVERSION
-            )
+            conversion_enabled = self.settings_manager.enable_audio_conversion
             self.enable_conversion_checkbox.setChecked(conversion_enabled)
             self.audio_format_combo.setEnabled(conversion_enabled)
 
             # Load default audio format
-            audio_format = self.settings_manager.get("default_audio_format", "MP3")
+            audio_format = self.settings_manager.preferred_audio_format
             index = self.audio_format_combo.findText(audio_format)
             if index >= 0:
                 self.audio_format_combo.setCurrentIndex(index)
 
             # Load threading settings
-            max_downloads = self.settings_manager.get(
-                SETTING_MAX_PARALLEL_DOWNLOADS, DEFAULT_MAX_PARALLEL_DOWNLOADS
-            )
+            max_downloads = self.settings_manager.max_parallel_downloads
             self.parallel_downloads_combo.setCurrentText(str(max_downloads))
 
-            max_conversions = self.settings_manager.get(
-                SETTING_MAX_PARALLEL_CONVERSIONS, DEFAULT_MAX_PARALLEL_CONVERSIONS
-            )
+            max_conversions = self.settings_manager.max_parallel_conversions
             self.parallel_conversions_combo.setCurrentText(str(max_conversions))
 
     @Slot()
@@ -352,7 +344,7 @@ class SettingsDialog(ProFeatureWidget, QDialog):
 
             # Save default audio format
             audio_format = self.audio_format_combo.currentText()
-            self.settings_manager.set("default_audio_format", audio_format)
+            self.settings_manager.set("preferred_audio_format", audio_format)
 
             # Save threading settings
             max_downloads = int(self.parallel_downloads_combo.currentText())

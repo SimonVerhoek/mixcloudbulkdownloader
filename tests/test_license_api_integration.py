@@ -1,7 +1,7 @@
 """Integration tests for license API functionality."""
 
 import time
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, PropertyMock, patch
 
 import pytest
 
@@ -65,51 +65,52 @@ class TestLicenseAPIIntegration:
         """Test successful license verification flow."""
         manager, settings, mock_qsettings = fresh_license_manager
 
-        # Mock credential retrieval to return test credentials
-        def mock_retrieve_credential(key, default):
-            if "email" in key:
-                return "test@example.com"
-            elif "license_key" in key:
-                return "valid-key-123"
-            return default
+        # Mock credential properties directly to return test credentials
+        with (
+            patch.object(type(settings), "email", new_callable=PropertyMock) as mock_email,
+            patch.object(
+                type(settings), "license_key", new_callable=PropertyMock
+            ) as mock_license_key,
+        ):
 
-        settings._retrieve_credential.side_effect = mock_retrieve_credential
+            mock_email.return_value = "test@example.com"
+            mock_license_key.return_value = "valid-key-123"
 
-        # Mock successful API response
-        with patch("httpx.Client") as mock_client_class:
-            mock_client = Mock()
-            mock_client_class.return_value.__enter__.return_value = mock_client
-            mock_client_class.return_value.__exit__.return_value = None
+            # Mock successful API response
+            with patch("httpx.Client") as mock_client_class:
+                mock_client = Mock()
+                mock_client_class.return_value.__enter__.return_value = mock_client
+                mock_client_class.return_value.__exit__.return_value = None
 
-            mock_response = Mock()
-            mock_response.json.return_value = {
-                "valid": True,
-                "product_name": "mixcloud_bulk_downloader",
-                "product_title": "Mixcloud Bulk Downloader Pro",
-                "expires_at": None,
-                "error": None,
-            }
-            mock_client.request.return_value = mock_response
+                mock_response = Mock()
+                mock_response.json.return_value = {
+                    "valid": True,
+                    "product_name": "mixcloud_bulk_downloader",
+                    "product_title": "Mixcloud Bulk Downloader Pro",
+                    "expires_at": None,
+                    "error": None,
+                }
+                mock_client.request.return_value = mock_response
 
-            # Test successful verification
-            result = manager.verify_license()
+                # Test successful verification
+                result = manager.verify_license()
 
-            # Verify API call was made correctly
-            mock_client.request.assert_called_once_with(
-                method="POST",
-                url=f"{LICENSE_SERVER_URL}/public/license/verify",
-                json={"email": "test@example.com", "license_key": "valid-key-123"},
-            )
+                # Verify API call was made correctly
+                mock_client.request.assert_called_once_with(
+                    method="POST",
+                    url=f"{LICENSE_SERVER_URL}/public/license/verify",
+                    json={"email": "test@example.com", "license_key": "valid-key-123"},
+                )
 
-            # Verify results
-            assert result is True
-            assert manager.is_pro is True
+                # Verify results
+                assert result is True
+                assert manager.is_pro is True
 
-            # Verify timestamp was updated
-            assert any(
-                call[0][0] == "last_successful_verification"
-                for call in mock_qsettings.setValue.call_args_list
-            )
+                # Verify timestamp was updated
+                assert any(
+                    call[0][0] == "last_successful_verification"
+                    for call in mock_qsettings.setValue.call_args_list
+                )
 
     def test_invalid_license_verification(self, fresh_license_manager):
         """Test invalid license verification."""
@@ -222,20 +223,18 @@ class TestLicenseAPIIntegration:
         """Test network error handling with retry logic."""
         manager, settings, mock_qsettings = fresh_license_manager
 
-        # Mock credential retrieval to return test credentials
-        def mock_retrieve_credential(key, default):
-            if "email" in key:
-                return "test@example.com"
-            elif "license_key" in key:
-                return "valid-key-123"
-            return default
-
-        settings._retrieve_credential.side_effect = mock_retrieve_credential
-
+        # Mock credential properties directly to return test credentials
         with (
+            patch.object(type(settings), "email", new_callable=PropertyMock) as mock_email,
+            patch.object(
+                type(settings), "license_key", new_callable=PropertyMock
+            ) as mock_license_key,
             patch("httpx.Client") as mock_client_class,
             patch("time.sleep") as mock_sleep,
         ):  # Mock sleep to speed up test
+
+            mock_email.return_value = "test@example.com"
+            mock_license_key.return_value = "valid-key-123"
 
             mock_client = Mock()
             mock_client_class.return_value.__enter__.return_value = mock_client
@@ -262,17 +261,18 @@ class TestLicenseAPIIntegration:
         """Test timeout error handling."""
         manager, settings, mock_qsettings = fresh_license_manager
 
-        # Mock credential retrieval to return test credentials
-        def mock_retrieve_credential(key, default):
-            if "email" in key:
-                return "test@example.com"
-            elif "license_key" in key:
-                return "valid-key-123"
-            return default
+        # Mock credential properties directly to return test credentials
+        with (
+            patch.object(type(settings), "email", new_callable=PropertyMock) as mock_email,
+            patch.object(
+                type(settings), "license_key", new_callable=PropertyMock
+            ) as mock_license_key,
+            patch("httpx.Client") as mock_client_class,
+            patch("time.sleep"),
+        ):
 
-        settings._retrieve_credential.side_effect = mock_retrieve_credential
-
-        with patch("httpx.Client") as mock_client_class, patch("time.sleep"):
+            mock_email.return_value = "test@example.com"
+            mock_license_key.return_value = "valid-key-123"
 
             mock_client = Mock()
             mock_client_class.return_value.__enter__.return_value = mock_client
@@ -355,16 +355,6 @@ class TestLicenseAPIIntegration:
         """Test offline grace period when verification fails."""
         manager, settings, mock_qsettings = fresh_license_manager
 
-        # Mock credential retrieval to return test credentials
-        def mock_retrieve_credential(key, default):
-            if "email" in key:
-                return "test@example.com"
-            elif "license_key" in key:
-                return "valid-key-123"
-            return default
-
-        settings._retrieve_credential.side_effect = mock_retrieve_credential
-
         # Set up existing successful verification timestamp (within grace period)
         recent_timestamp = time.time() - (
             OFFLINE_GRACE_PERIOD_DAYS * 24 * 60 * 60 / 2
@@ -378,7 +368,18 @@ class TestLicenseAPIIntegration:
         mock_qsettings.value.side_effect = mock_value_with_timestamp
         manager.is_pro = True  # Previously verified
 
-        with patch("httpx.Client") as mock_client_class, patch("time.sleep"):
+        # Mock credential properties directly to return test credentials
+        with (
+            patch.object(type(settings), "email", new_callable=PropertyMock) as mock_email,
+            patch.object(
+                type(settings), "license_key", new_callable=PropertyMock
+            ) as mock_license_key,
+            patch("httpx.Client") as mock_client_class,
+            patch("time.sleep"),
+        ):
+
+            mock_email.return_value = "test@example.com"
+            mock_license_key.return_value = "valid-key-123"
 
             mock_client = Mock()
             mock_client_class.return_value.__enter__.return_value = mock_client
@@ -442,17 +443,17 @@ class TestLicenseAPIIntegration:
         """Test retrieving credentials from settings when not provided."""
         manager, settings, mock_qsettings = fresh_license_manager
 
-        # Mock the _retrieve_credential method to return specific values
-        def mock_retrieve_credential(key, default):
-            if "email" in key:  # KEYRING_EMAIL_KEY
-                return "settings@example.com"
-            elif "license_key" in key:  # KEYRING_LICENSE_KEY
-                return "settings-key-123"
-            return default
+        # Mock credential properties directly to return test credentials
+        with (
+            patch.object(type(settings), "email", new_callable=PropertyMock) as mock_email,
+            patch.object(
+                type(settings), "license_key", new_callable=PropertyMock
+            ) as mock_license_key,
+            patch("httpx.Client") as mock_client_class,
+        ):
 
-        settings._retrieve_credential.side_effect = mock_retrieve_credential
-
-        with patch("httpx.Client") as mock_client_class:
+            mock_email.return_value = "settings@example.com"
+            mock_license_key.return_value = "settings-key-123"
 
             mock_client = Mock()
             mock_client_class.return_value.__enter__.return_value = mock_client
@@ -485,20 +486,18 @@ class TestLicenseAPIIntegration:
         """Test that integer timeout is converted to httpx.Timeout."""
         manager, settings, mock_qsettings = fresh_license_manager
 
-        # Mock credential retrieval to return test credentials
-        def mock_retrieve_credential(key, default):
-            if "email" in key:
-                return "test@example.com"
-            elif "license_key" in key:
-                return "valid-key"
-            return default
-
-        settings._retrieve_credential.side_effect = mock_retrieve_credential
-
+        # Mock credential properties directly to return test credentials
         with (
+            patch.object(type(settings), "email", new_callable=PropertyMock) as mock_email,
+            patch.object(
+                type(settings), "license_key", new_callable=PropertyMock
+            ) as mock_license_key,
             patch("httpx.Client") as mock_client_class,
             patch("httpx.Timeout") as mock_timeout_class,
         ):
+
+            mock_email.return_value = "test@example.com"
+            mock_license_key.return_value = "valid-key"
 
             mock_client = Mock()
             mock_client_class.return_value.__enter__.return_value = mock_client
@@ -527,17 +526,18 @@ class TestLicenseAPIIntegration:
         """Test custom retry parameters are respected."""
         manager, settings, mock_qsettings = fresh_license_manager
 
-        # Mock credential retrieval to return test credentials
-        def mock_retrieve_credential(key, default):
-            if "email" in key:
-                return "test@example.com"
-            elif "license_key" in key:
-                return "valid-key"
-            return default
+        # Mock credential properties directly to return test credentials
+        with (
+            patch.object(type(settings), "email", new_callable=PropertyMock) as mock_email,
+            patch.object(
+                type(settings), "license_key", new_callable=PropertyMock
+            ) as mock_license_key,
+            patch("httpx.Client") as mock_client_class,
+            patch("time.sleep") as mock_sleep,
+        ):
 
-        settings._retrieve_credential.side_effect = mock_retrieve_credential
-
-        with patch("httpx.Client") as mock_client_class, patch("time.sleep") as mock_sleep:
+            mock_email.return_value = "test@example.com"
+            mock_license_key.return_value = "valid-key"
 
             mock_client = Mock()
             mock_client_class.return_value.__enter__.return_value = mock_client

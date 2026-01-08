@@ -13,19 +13,11 @@ from tests.stubs.api_stubs import StubMixcloudAPIService
 from tests.stubs.file_stubs import StubFileService
 
 
-@pytest.fixture
-def qt_app():
-    """Create QApplication instance for Qt tests."""
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication([])
-    yield app
-
-
+@pytest.mark.qt
 class TestUnicodeProgressMatching:
     """Test cases for Unicode character handling in progress matching."""
 
-    def test_normalize_expected_name_basic(self, qt_app):
+    def test_normalize_expected_name_basic(self, qapp):
         """Test basic expected name normalization."""
         widget = CloudcastQTreeWidget()
 
@@ -46,7 +38,7 @@ class TestUnicodeProgressMatching:
 
         assert expected == "testuser - test mix"
 
-    def test_normalize_expected_name_full_width_characters(self, qt_app):
+    def test_normalize_expected_name_full_width_characters(self, qapp):
         """Test normalization of full-width Unicode characters."""
         widget = CloudcastQTreeWidget()
 
@@ -74,7 +66,7 @@ class TestUnicodeProgressMatching:
             == "prettylights - ep302 ft. modern measure :: pretty lights - 10.25.17 - the hot sh*t"
         )
 
-    def test_progress_matching_with_unicode_differences(self, qt_app):
+    def test_progress_matching_with_unicode_differences(self, qapp):
         """Test that progress matching works despite Unicode character differences."""
         # Create widget with services
         api_service = StubMixcloudAPIService()
@@ -114,7 +106,7 @@ class TestUnicodeProgressMatching:
         # Verify progress was set
         assert item.text(2) == "50% completed"
 
-    def test_progress_matching_no_match_different_content(self, qt_app):
+    def test_progress_matching_no_match_different_content(self, qapp):
         """Test that progress matching fails correctly for different content."""
         widget = CloudcastQTreeWidget()
 
@@ -141,7 +133,7 @@ class TestUnicodeProgressMatching:
         # Progress should not be set
         assert item.text(2) == ""
 
-    def test_unicode_character_replacements(self, qt_app):
+    def test_unicode_character_replacements(self, qapp):
         """Test specific Unicode character replacements."""
         widget = CloudcastQTreeWidget()
 
@@ -174,7 +166,7 @@ class TestUnicodeProgressMatching:
 
             assert result == f"user - {expected_output}"
 
-    def test_nfkc_normalization(self, qt_app):
+    def test_nfkc_normalization(self, qapp):
         """Test that NFKC normalization is applied correctly."""
         widget = CloudcastQTreeWidget()
 
@@ -211,7 +203,7 @@ class TestUnicodeProgressMatching:
         # Should match and update progress since both normalize to same ASCII form
         assert test_item.text(2) == "25% completed"
 
-    def test_big_solidus_progress_matching(self, qt_app):
+    def test_big_solidus_progress_matching(self, qapp):
         """Test progress matching with BIG SOLIDUS character (U+29F8)."""
         # Create widget with services
         api_service = StubMixcloudAPIService()
@@ -260,7 +252,7 @@ class TestUnicodeProgressMatching:
         # Verify progress was set
         assert item.text(2) == "75% completed"
 
-    def test_big_solidus_normalization_unit(self, qt_app):
+    def test_big_solidus_normalization_unit(self, qapp):
         """Test that BIG SOLIDUS character is properly normalized."""
         widget = CloudcastQTreeWidget()
 
@@ -287,7 +279,7 @@ class TestUnicodeProgressMatching:
         expected_result = "user - test mix 280821"  # Unicode characters removed
         assert result == expected_result
 
-    def test_comprehensive_unicode_normalization(self, qt_app):
+    def test_comprehensive_unicode_normalization(self, qapp):
         """Test comprehensive Unicode character handling with various scenarios."""
         widget = CloudcastQTreeWidget()
 
@@ -323,7 +315,7 @@ class TestUnicodeProgressMatching:
             # Only check for truly problematic characters (: and * are generally safe)
             assert not any(char in result for char in '<>"/\\|?'), f"Unsafe chars in: {result}"
 
-    def test_full_width_characters_progress_matching(self, qt_app):
+    def test_full_width_characters_progress_matching(self, qapp):
         """Test progress matching with full-width Unicode characters from user's specific case."""
         api_service = StubMixcloudAPIService()
         file_service = StubFileService()
@@ -365,7 +357,7 @@ class TestUnicodeProgressMatching:
         # Verify progress was set
         assert item.text(2) == "85% completed"
 
-    def test_progress_matching_without_username_prefix(self, qt_app):
+    def test_progress_matching_without_username_prefix(self, qapp):
         """Test progress matching when yt-dlp provides filename without username prefix."""
         api_service = StubMixcloudAPIService()
         file_service = StubFileService()
@@ -409,7 +401,7 @@ class TestUnicodeProgressMatching:
             # Verify progress was set
             assert item.text(2) == expected_progress
 
-    def test_file_extension_handling_with_dots_in_names(self, qt_app):
+    def test_file_extension_handling_with_dots_in_names(self, qapp):
         """Test that only actual file extensions are stripped, not date parts like .17."""
         api_service = StubMixcloudAPIService()
         file_service = StubFileService()
@@ -481,7 +473,7 @@ class TestUnicodeProgressMatching:
             else:
                 assert not progress_set, f"Progress should NOT be set for: {filename}"
 
-    def test_known_audio_extensions_list(self, qt_app):
+    def test_known_audio_extensions_list(self, qapp):
         """Test that all common audio/video extensions are properly handled."""
         widget = CloudcastQTreeWidget()
 

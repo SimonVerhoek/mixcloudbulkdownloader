@@ -54,7 +54,7 @@ Requirements Export Check:
   script:
     - scripts/check_requirements_export.sh
 
-Test:
+Test Linux:
   stage: test
   image: python:3.11.5
   only:
@@ -81,7 +81,7 @@ Test:
     - poetry config virtualenvs.create false
     - poetry install --with=test,ci --without dev
   script:
-    - pytest
+    - pytest -m "not windows and not macos"
   artifacts:
     paths:
       - htmlcov/
@@ -90,6 +90,60 @@ Test:
         coverage_format: cobertura
         path: coverage.xml
     expire_in: 1 week
+
+Test Windows Settings:
+  stage: test
+  tags:
+    - saas-windows-medium-amd64
+  variables:
+    PYTHON_KEYRING_BACKEND: keyring.backends.null.Keyring
+    KEYRING_PROPERTY_TRUST_REPO: false
+  only:
+    - branches
+  except:
+    - master
+  before_script:
+    - choco install python --version=3.11.5 --force -y
+    - C:\Python311\python.exe -m pip install poetry==2.1.4
+    - C:\Python311\Scripts\poetry.exe config virtualenvs.create false
+    - C:\Python311\Scripts\poetry.exe install --with=test --without dev,ci
+  script:
+    - C:\Python311\Scripts\poetry.exe run pytest -m "not qt" --tb=short -v --cov-append
+  artifacts:
+    paths:
+      - htmlcov/
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    expire_in: 1 week
+
+# Commented out because we currently are running in free tier, which gives no access to MacOS VMs.
+# As we are currently developing on a MacOS system, MacOS-specific tests will be covered there.
+#Test macOS Settings:
+#  stage: test
+#  tags:
+#    - saas-macos-medium-m1
+#  only:
+#    - branches
+#  except:
+#    - master
+#  before_script:
+#    - export PATH="/opt/homebrew/bin:$PATH"
+#    - brew install python@3.11 poetry || true
+#    - python3.11 -m pip install poetry==2.1.4
+#    - poetry config virtualenvs.create false
+#    - poetry install --with=test --without dev,ci
+#  script:
+#    - poetry run pytest -m macos --cov-append
+#  artifacts:
+#    paths:
+#      - htmlcov/
+#    reports:
+#      coverage_report:
+#        coverage_format: cobertura
+#        path: coverage.xml
+#    expire_in: 1 week
 
 build-windows:
   stage: build

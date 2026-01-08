@@ -86,10 +86,17 @@ def stub_settings_manager():
         side_effect=lambda key, default=None: {
             "max_parallel_downloads": 3,
             "max_parallel_conversions": 2,
-            "default_audio_format": "mp3",
+            "preferred_audio_format": "mp3",
             SETTING_ENABLE_AUDIO_CONVERSION: True,  # Enable by default for tests
         }.get(key, default)
     )
+
+    # Add property attributes for new property-based interface
+    settings.max_parallel_downloads = 3
+    settings.max_parallel_conversions = 2
+    settings.preferred_audio_format = "mp3"
+    settings.enable_audio_conversion = True
+
     return settings
 
 
@@ -615,10 +622,16 @@ class TestConversionTriggerLogic:
             side_effect=lambda key, default=None: {
                 "max_parallel_downloads": 3,
                 "max_parallel_conversions": 2,
-                "default_audio_format": "mp3",
+                "preferred_audio_format": "mp3",
                 SETTING_ENABLE_AUDIO_CONVERSION: True,
             }.get(key, default)
         )
+
+        # Add property attributes for new property-based interface
+        download_manager.settings_manager.max_parallel_downloads = 3
+        download_manager.settings_manager.max_parallel_conversions = 2
+        download_manager.settings_manager.preferred_audio_format = "mp3"
+        download_manager.settings_manager.enable_audio_conversion = True
 
         # Settings return mp3 as target format
         with patch("app.services.conversion_worker.ConversionWorker", StubConversionWorker):
@@ -642,10 +655,16 @@ class TestConversionTriggerLogic:
             side_effect=lambda key, default=None: {
                 "max_parallel_downloads": 3,
                 "max_parallel_conversions": 2,
-                "default_audio_format": "mp3",
+                "preferred_audio_format": "mp3",
                 SETTING_ENABLE_AUDIO_CONVERSION: True,
             }.get(key, default)
         )
+
+        # Add property attributes for new property-based interface
+        download_manager.settings_manager.max_parallel_downloads = 3
+        download_manager.settings_manager.max_parallel_conversions = 2
+        download_manager.settings_manager.preferred_audio_format = "mp3"
+        download_manager.settings_manager.enable_audio_conversion = True
 
         # Mock result signal
         result_signal = Mock()
@@ -686,8 +705,12 @@ class TestDownloadManagerEdgeCases:
         stub_settings_manager.get.side_effect = lambda key, default=None: {
             "max_parallel_downloads": 5,
             "max_parallel_conversions": 3,
-            "default_audio_format": "flac",
+            "preferred_audio_format": "flac",
         }.get(key, default)
+
+        # Update property attributes for new property-based interface
+        stub_settings_manager.max_parallel_downloads = 5
+        stub_settings_manager.max_parallel_conversions = 3
 
         # Update thread pool sizes
         download_manager._update_thread_pool_sizes()
@@ -717,9 +740,15 @@ class TestDownloadManagerEdgeCases:
         settings_manager.get = Mock(
             side_effect=lambda key, default=None: {
                 SETTING_ENABLE_AUDIO_CONVERSION: False,
-                "default_audio_format": "mp3",
+                "preferred_audio_format": "mp3",
             }.get(key, default)
         )
+
+        # Add property attributes for new property-based interface
+        settings_manager.enable_audio_conversion = False
+        settings_manager.preferred_audio_format = "mp3"
+        settings_manager.max_parallel_downloads = 3
+        settings_manager.max_parallel_conversions = 2
 
         # Set up Pro license manager
         license_manager = Mock()
@@ -745,9 +774,15 @@ class TestDownloadManagerEdgeCases:
         settings_manager.get = Mock(
             side_effect=lambda key, default=None: {
                 SETTING_ENABLE_AUDIO_CONVERSION: True,
-                "default_audio_format": "mp3",
+                "preferred_audio_format": "mp3",
             }.get(key, default)
         )
+
+        # Add property attributes for new property-based interface
+        settings_manager.enable_audio_conversion = True
+        settings_manager.preferred_audio_format = "mp3"
+        settings_manager.max_parallel_downloads = 3
+        settings_manager.max_parallel_conversions = 2
 
         # Set up Pro license manager
         license_manager = Mock()
@@ -773,9 +808,15 @@ class TestDownloadManagerEdgeCases:
         settings_manager.get = Mock(
             side_effect=lambda key, default=None: {
                 SETTING_ENABLE_AUDIO_CONVERSION: False,
-                "default_audio_format": "mp3",
+                "preferred_audio_format": "mp3",
             }.get(key, default)
         )
+
+        # Add property attributes for new property-based interface
+        settings_manager.enable_audio_conversion = False
+        settings_manager.preferred_audio_format = "mp3"
+        settings_manager.max_parallel_downloads = 3
+        settings_manager.max_parallel_conversions = 2
 
         license_manager = Mock()
         license_manager.is_pro = True
@@ -803,9 +844,15 @@ class TestDownloadManagerEdgeCases:
         settings_manager.get = Mock(
             side_effect=lambda key, default=None: {
                 SETTING_ENABLE_AUDIO_CONVERSION: True,
-                "default_audio_format": "mp3",
+                "preferred_audio_format": "mp3",
             }.get(key, default)
         )
+
+        # Add property attributes for new property-based interface
+        settings_manager.enable_audio_conversion = True
+        settings_manager.preferred_audio_format = "mp3"
+        settings_manager.max_parallel_downloads = 3
+        settings_manager.max_parallel_conversions = 2
 
         license_manager = Mock()
         license_manager.is_pro = True
