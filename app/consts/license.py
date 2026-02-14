@@ -21,7 +21,7 @@ OFFLINE_GRACE_PERIOD_DAYS: int = 30
 LICENSE_SERVER_URL: str = env.str("LICENSE_SERVER_URL", default="https://payments.simonic.nl")
 STRIPE_CHECKOUT_URI: str = env.str(
     "STRIPE_CHECKOUT_URI",
-    default="/public/checkout/product/mixcloud_bulk_downloader/checkout/price_1S97L9Kz6QHWHfkNOu1VgYy3",
+    default="/public/checkout/product/mixcloud_bulk_downloader/checkout/price_1T0h673H8e3spQBkiNZzy07r",
 )
 USER_FEEDBACK_BEARER_TOKEN: str = env.str(
     "USER_FEEDBACK_BEARER_TOKEN", default="EDaPmPUqVBB29aG6PydU8bWS0SFIO*RR$qIU8@yVEo#B1WIdar"

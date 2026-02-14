@@ -5,7 +5,7 @@ import unicodedata
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Slot
-from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem
+from PySide6.QtWidgets import QHeaderView, QTreeWidget, QTreeWidgetItem
 
 from app.consts.audio import AUDIO_FORMATS
 from app.consts.ui import (
@@ -61,9 +61,23 @@ class CloudcastQTreeWidget(QTreeWidget):
         # Configure tree widget columns
         self.setColumnCount(3)
         self.setHeaderLabels(["select", "title", "download status"])
-        self.header().resizeSection(0, TREE_SELECT_COLUMN_WIDTH)
-        self.header().resizeSection(1, TREE_TITLE_COLUMN_WIDTH)
-        self.header().resizeSection(2, TREE_STATUS_COLUMN_WIDTH)
+        self.setMinimumWidth(
+            TREE_SELECT_COLUMN_WIDTH + TREE_TITLE_COLUMN_WIDTH + TREE_STATUS_COLUMN_WIDTH
+        )
+
+        # Set column resize modes for dynamic resizing
+        header = self.header()
+
+        self.setColumnWidth(0, TREE_SELECT_COLUMN_WIDTH)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)  # Select column - fixed size
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)  # Title column - stretches
+        header.setSectionResizeMode(
+            2, QHeaderView.ResizeMode.ResizeToContents
+        )  # Status column - content-aware size
+
+        # Initially hide the status column until downloads start
+        self.setColumnHidden(2, True)
+
         self.setHeaderHidden(True)
 
         # Initialize and connect cloudcast fetching thread
@@ -148,6 +162,17 @@ class CloudcastQTreeWidget(QTreeWidget):
             dialog.exec()
 
     @Slot()
+    def hide_status_column(self) -> None:
+        """Hide the status column when all downloads are finished."""
+        self.setColumnHidden(2, True)
+
+    def clear(self) -> None:
+        """Clear all items from the tree and hide the status column."""
+        super().clear()
+        # Hide status column since there are no items with progress to display
+        self.setColumnHidden(2, True)
+
+    @Slot()
     def select_all(self) -> None:
         """Select all cloudcast items in the tree."""
         for item in self._get_tree_items():
@@ -173,6 +198,9 @@ class CloudcastQTreeWidget(QTreeWidget):
         items = self.get_selected_cloudcasts()
         if not items:  # No items selected
             return
+
+        # Show status column since downloads will start
+        self.setColumnHidden(2, False)
 
         # Extract cloudcasts from tree items
         cloudcasts = [item.cloudcast for item in items]

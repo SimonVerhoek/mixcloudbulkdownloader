@@ -7,7 +7,7 @@ MAIN_WINDOW_MIN_HEIGHT: int = 450
 # Tree widget column sizes
 TREE_SELECT_COLUMN_WIDTH: int = 50
 TREE_TITLE_COLUMN_WIDTH: int = 400
-TREE_STATUS_COLUMN_WIDTH: int = 250
+TREE_STATUS_COLUMN_WIDTH: int = 300
 
 # Layout stretch ratios
 SEARCH_LABEL_STRETCH: int = 1

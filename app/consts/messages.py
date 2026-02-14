@@ -10,5 +10,5 @@ ERROR_NO_USER_PROVIDED: str = "No user provided"
 ERROR_NO_SEARCH_PHRASE: str = "No search phrase provided"
 
 # Feedback
-FEEDBACK_EMAIL: str = "simon@simonic.nl"
+FEEDBACK_EMAIL: str = "support+mixcloudbulkdownloader@simonverhoek.com"
 FEEDBACK_SUBJECT: str = "Mixcloud Bulk Downloader Feedback"

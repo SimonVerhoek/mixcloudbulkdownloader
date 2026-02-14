@@ -25,8 +25,12 @@ class CloudcastQTreeWidgetItem(QTreeWidgetItem):
 
         # Set up the tree item columns
         self.setCheckState(0, Qt.CheckState.Unchecked)  # Column 0: Checkbox (unchecked by default)
+        self.setTextAlignment(0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+
         self.setText(1, cloudcast.name)  # Column 1: Cloudcast title
+
         # Column 2: Download progress (initially empty)
+        self.setTextAlignment(2, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
     def update_download_progress(self, progress: str) -> None:
         """Update the download progress display for this item.
