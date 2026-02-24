@@ -8,7 +8,7 @@ packages = [{include = "app"}]
 
 [tool.poetry.dependencies]
 python = "3.11.5"
-yt-dlp = "^2025.7.21"
+yt-dlp = "^2026.2.21"
 httpx = "^0.28.1"
 pyside6 = "^6.8.3"
 environs = "^14.5.0"
