@@ -62,8 +62,9 @@ class DownloadWorker(QRunnable):
 
         # Set up file paths using existing naming convention
         self.safe_title = self._sanitize_filename(cloudcast.name)
-        self.downloading_filename = f"{cloudcast.user.name} - {self.safe_title}.webm.downloading"
-        self.final_filename = f"{cloudcast.user.name} - {self.safe_title}.webm"
+        self.safe_username = self._sanitize_filename(cloudcast.user.name)
+        self.downloading_filename = f"{self.safe_username} - {self.safe_title}.webm.downloading"
+        self.final_filename = f"{self.safe_username} - {self.safe_title}.webm"
 
         self.download_file_path = Path(download_dir) / self.downloading_filename
         self.final_file_path = Path(download_dir) / self.final_filename
@@ -180,8 +181,11 @@ class DownloadWorker(QRunnable):
                         ascii_normalized += component
                         break
 
-        # Remove problematic filesystem characters
-        cleaned = re.sub(r'[<>"/\\|?*]', "", ascii_normalized)
+        # Replace colon with hyphen to preserve title structure (colon is illegal on Windows)
+        cleaned = re.sub(r"\s*:\s*", " - ", ascii_normalized)
+
+        # Remove remaining problematic filesystem characters
+        cleaned = re.sub(r'[<>"/\\|?*]', "", cleaned)
 
         # Replace multiple spaces with single space
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
@@ -203,9 +207,9 @@ class DownloadWorker(QRunnable):
 
         # Update filenames with correct extension
         self.downloading_filename = (
-            f"{self.cloudcast.user.name} - {self.safe_title}.{extension}.downloading"
+            f"{self.safe_username} - {self.safe_title}.{extension}.downloading"
         )
-        self.final_filename = f"{self.cloudcast.user.name} - {self.safe_title}.{extension}"
+        self.final_filename = f"{self.safe_username} - {self.safe_title}.{extension}"
 
         # Update file paths
         self.download_file_path = Path(self.download_dir) / self.downloading_filename

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mixcloud-bulk-downloader"
-version = "3.0.1"
+version = "3.0.2"
 description = "Download for FREE all cloudcasts of your favorite Mixcloud artist at one go!"
 authors = ["Simon Verhoek <contact+mixcloudbulkdownloader@simonverhoek.com>"]
 readme = "README.md"

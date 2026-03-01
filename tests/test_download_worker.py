@@ -518,9 +518,10 @@ class TestDownloadWorkerSanitization:
             ("Mix with <special> chars", "Mix with special chars"),
             ("Mix/with\\bad|chars", "Mixwithbadchars"),
             ('Mix"with"quotes', "Mixwithquotes"),
-            ("Mix?with*wild:cards", "Mixwithwild:cards"),
+            ("Mix?with*wild:cards", "Mixwithwild - cards"),
             ("Mix   with    spaces", "Mix with spaces"),
             ("Mix\twith\ttabs", "Mix with tabs"),
+            ("UNICORN POWER: Seagulls", "UNICORN POWER - Seagulls"),
         ]
 
         for input_name, expected in test_cases:
