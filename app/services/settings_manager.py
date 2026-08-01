@@ -22,7 +22,7 @@ from app.consts.settings import (
     SETTING_MAX_PARALLEL_CONVERSIONS,
     SETTING_MAX_PARALLEL_DOWNLOADS,
 )
-from app.qt_logger import log_error, log_ui
+from app.logger import log_error, log_ui
 from app.services.credential_encryptor import CredentialEncryptor
 
 
@@ -601,7 +601,7 @@ class SettingsManager:
 
         try:
             # Wait for pending operations to complete
-            self._thread_pool.shutdown(wait=True, timeout=10.0)
+            self._thread_pool.shutdown(wait=True, cancel_futures=False)
             log_ui(message="Settings manager shutdown completed", level="INFO")
         except Exception as e:
             log_error(message=f"Error during settings manager shutdown: {e}")

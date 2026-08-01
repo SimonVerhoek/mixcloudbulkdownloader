@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.custom_widgets.dialogs.error_dialog import ErrorDialog
-from app.qt_logger import log_error_with_traceback
+from app.logger import log_error_with_traceback
 from app.services.update_service import UpdateService, update_service
 from app.threads.update_download_thread import UpdateDownloadThread
 

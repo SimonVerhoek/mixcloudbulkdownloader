@@ -12,6 +12,7 @@ from PySide6.QtCore import QRunnable
 
 from app.consts.audio import AUDIO_FORMATS
 from app.consts.ui import CANCELLED_ICON, CONVERSION_ICON
+from app.logger import log_api, log_error
 from app.services.license_manager import LicenseManager
 from app.services.settings_manager import SettingsManager
 from app.utils.ffmpeg import get_ffmpeg_path
@@ -97,8 +98,6 @@ class ConversionWorker(QRunnable):
             cmd = self._build_ffmpeg_command(str(ffmpeg_path))
 
             # Log the full FFmpeg command for debugging
-            from app.qt_logger import log_api
-
             log_api(f"Starting FFmpeg conversion: {' '.join(cmd)}")
             log_api(f"Input file: {self.input_file}")
             log_api(f"Output file: {self.converting_file_path}")
@@ -138,8 +137,6 @@ class ConversionWorker(QRunnable):
 
             if retcode != 0:
                 # Log detailed error information for debugging
-                from app.qt_logger import log_error
-
                 log_error(f"FFmpeg conversion failed with exit code {retcode}")
 
                 # Note: stderr was redirected to stdout, so error details were already processed
@@ -370,8 +367,6 @@ class ConversionWorker(QRunnable):
 
         if not ffmpeg_path.is_file():
             raise ValueError(f"FFmpeg path is not a file: {ffmpeg_path}")
-
-        from app.qt_logger import log_api
 
         log_api(f"Conversion prerequisites validated successfully")
         log_api(f"Input file size: {input_path.stat().st_size} bytes")

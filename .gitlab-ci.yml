@@ -103,7 +103,7 @@ Test Windows Settings:
   except:
     - master
   before_script:
-    - choco install python --version=3.11.5 --force -y
+    - choco install python311 --version=3.11.5 --force -y
     - C:\Python311\python.exe -m pip install poetry==2.1.4
     - C:\Python311\Scripts\poetry.exe config virtualenvs.create false
     - C:\Python311\Scripts\poetry.exe install --with=test --without dev,ci

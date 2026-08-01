@@ -4,7 +4,7 @@ from PySide6.QtCore import QThread, Signal
 
 from app.consts.messages import ERROR_NO_USER_PROVIDED
 from app.data_classes import Cloudcast, MixcloudUser
-from app.qt_logger import log_error, log_thread
+from app.logger import log_error, log_thread
 from app.services.api_service import MixcloudAPIService, api_service
 
 

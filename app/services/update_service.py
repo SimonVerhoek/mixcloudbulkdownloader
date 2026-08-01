@@ -16,7 +16,7 @@ from app.consts.settings import (
 )
 from app.data_classes import GitHubAsset, GitHubRelease
 from app.interfaces.http_client import HTTPClientBase, RateLimitError
-from app.qt_logger import log_error_with_traceback
+from app.logger import log_error_with_traceback
 from app.services.settings_manager import SettingsManager, settings
 from app.utils.ffmpeg import _get_macos_architecture
 from app.utils.version import is_prerelease_version

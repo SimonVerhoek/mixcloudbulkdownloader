@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 import httpx
 
-from app.qt_logger import log_api
+from app.logger import log_api
 
 
 class RateLimitError(Exception):

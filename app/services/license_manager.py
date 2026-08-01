@@ -18,7 +18,7 @@ from app.consts.license import (
     STRIPE_CHECKOUT_URI,
     USER_FEEDBACK_BEARER_TOKEN,
 )
-from app.qt_logger import log_api, log_error
+from app.logger import log_api, log_error
 from app.services.settings_manager import settings
 
 

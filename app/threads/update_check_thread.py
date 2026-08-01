@@ -3,7 +3,7 @@
 from PySide6.QtCore import QCoreApplication, QThread, Signal
 
 from app.data_classes import GitHubRelease
-from app.qt_logger import log_error, log_thread
+from app.logger import log_error, log_thread
 from app.services.update_service import UpdateService, update_service
 from app.utils.version import compare_versions, normalize_version_tag
 

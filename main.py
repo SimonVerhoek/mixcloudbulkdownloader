@@ -5,7 +5,8 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from app.main_window import MainWindow
-from app.qt_logger import log_ui, QtLogger
+from app.logger import log_ui
+from app.qt_logger import QtLogger
 from app.styles import load_application_styles
 from app.utils.version import set_current_version
 

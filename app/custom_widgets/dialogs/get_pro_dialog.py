@@ -33,7 +33,7 @@ from app.custom_widgets.dialogs.license_verification_failure_dialog import (
 from app.custom_widgets.dialogs.license_verification_success_dialog import (
     LicenseVerificationSuccessDialog,
 )
-from app.qt_logger import log_error
+from app.logger import log_error
 from app.services.license_manager import license_manager
 
 

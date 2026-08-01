@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
-from app.qt_logger import log_error_with_traceback, log_thread
+from app.logger import log_error_with_traceback, log_thread
 from app.services.update_service import UpdateService
 
 

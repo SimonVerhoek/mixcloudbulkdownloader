@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLa
 
 from app.consts.license import LICENSE_CHECKOUT_ERROR, PRO_FEATURES_LIST, PRO_PRICE_TEXT
 from app.custom_widgets.dialogs.error_dialog import ErrorDialog
-from app.qt_logger import log_error
+from app.logger import log_error
 from app.services.license_manager import license_manager
 
 

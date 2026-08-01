@@ -10,7 +10,7 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-from app.qt_logger import log_error
+from app.logger import log_error
 
 
 def get_device_salt() -> str:

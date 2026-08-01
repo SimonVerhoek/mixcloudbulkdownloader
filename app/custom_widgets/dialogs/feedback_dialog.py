@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 
 from app.consts.license import LICENSE_FEEDBACK_ERROR
 from app.custom_widgets.dialogs.error_dialog import ErrorDialog
-from app.qt_logger import log_error_with_traceback, log_ui
+from app.logger import log_error_with_traceback, log_ui
 from app.services.license_manager import license_manager
 
 

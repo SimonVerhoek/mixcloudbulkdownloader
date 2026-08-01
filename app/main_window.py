@@ -11,7 +11,7 @@ from app.custom_widgets.dialogs.get_pro_dialog import GetProDialog
 from app.custom_widgets.dialogs.settings_dialog import SettingsDialog
 from app.custom_widgets.dialogs.update_dialog import UpdateDialog
 from app.custom_widgets.footer_widget import FooterWidget
-from app.qt_logger import log_ui
+from app.logger import log_ui
 from app.services.license_manager import license_manager
 from app.services.settings_manager import settings
 from app.services.update_service import update_service

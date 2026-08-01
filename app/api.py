@@ -3,7 +3,7 @@
 import httpx
 
 from app.consts.api import ERROR_API_REQUEST_FAILED, MIXCLOUD_API_URL
-from app.qt_logger import log_api, log_error
+from app.logger import log_api, log_error
 
 
 def search_user_API_url(phrase: str) -> str:

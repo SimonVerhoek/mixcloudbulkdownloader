@@ -13,7 +13,7 @@ from PySide6.QtCore import QRunnable
 
 from app.consts.ui import CANCELLED_ICON, DOWNLOAD_ICON
 from app.data_classes import Cloudcast
-from app.qt_logger import log_error_with_traceback
+from app.logger import log_error_with_traceback
 from app.services.license_manager import LicenseManager
 from app.services.settings_manager import SettingsManager
 from app.utils.yt_dlp import QuietLogger, get_stable_size_estimate

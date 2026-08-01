@@ -2,7 +2,7 @@
 
 from PySide6.QtCore import QThread
 
-from app.qt_logger import log_error, log_thread
+from app.logger import log_error, log_thread
 from app.services.license_manager import LicenseManager
 
 

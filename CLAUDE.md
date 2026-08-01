@@ -16,7 +16,8 @@ Mixcloud Bulk Downloader is a desktop application built with PySide6 that allows
 - **app/threads.py**: Background threading for API calls and downloads
 - **app/custom_widgets/**: Custom Qt widgets for the UI
 - **app/consts.py**: Application constants and configuration values
-- **app/logging.py**: Logging configuration
+- **app/logger.py**: Qt-free logging module — owns all logging configuration and convenience functions; safe to import in any layer
+- **app/qt_logger.py**: Thin Qt adapter — captures Qt framework messages only; imported solely in `main.py`
 
 ### Key Dependencies
 
@@ -59,7 +60,7 @@ Mixcloud Bulk Downloader is a desktop application built with PySide6 that allows
 
 - **Always Log Exceptions**: All exceptions should be logged using the configured logging system
 - **Prefer Logging**: Always choose logging over print statements for debugging and error reporting
-- **Use Appropriate Log Levels**: Use `log_error()`, `log_api()`, `log_ui()` functions from `app.qt_logger`
+- **Use Appropriate Log Levels**: Use `log_error()`, `log_api()`, `log_ui()` functions from `app.logger` (never from `app.qt_logger`)
 - **Structured Error Messages**: Use error message constants from `app/consts.py` for consistency
 
 ### File Organization
@@ -70,8 +71,9 @@ app/
 ├── consts.py              # Application constants
 ├── data_classes.py        # Data models
 ├── api.py                 # Mixcloud API functions
+├── logger.py              # Qt-free logging (convenience functions + file handler setup)
+├── qt_logger.py           # Qt adapter (Qt message capture only; imported only in main.py)
 ├── threads.py             # Background threading classes
-├── logging.py             # Logging configuration
 └── custom_widgets/        # Qt custom widgets
     ├── __init__.py
     ├── cloudcast_q_tree_widget.py
@@ -80,6 +82,22 @@ app/
     ├── user_q_list_widget_item.py
     └── error_dialog.py
 ```
+
+### Logging Architecture
+
+The logging system is split into two modules to enforce the Qt boundary rule:
+
+- **`app/logger.py`** — Qt-free. Configures Python's standard `logging` module, owns all
+  convenience functions (`log_api`, `log_ui`, `log_download`, `log_thread`, `log_error`,
+  `log_error_with_traceback`, `log_exception`), and detects the platform-appropriate log
+  directory. **Import this module in all layers** (logic, services, UI, threads).
+
+- **`app/qt_logger.py`** — Qt adapter only. Calls `logger.configure()` once (after
+  `QApplication` exists) and installs `qInstallMessageHandler` to route Qt's own internal
+  messages into the `qt` Python logger. **Only `main.py` should import from this module.**
+
+This separation means that services, API clients, and utilities never transitively pull in
+PySide6, keeping them fully testable without a running `QApplication`.
 
 ### Import Guidelines
 
