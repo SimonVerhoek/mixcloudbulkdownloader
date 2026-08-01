@@ -667,3 +667,105 @@ class TestDownloadWorkerYtDlpOptions:
         mock_callback_bridge.emit_progress.assert_called_once()
         call_args = mock_callback_bridge.emit_progress.call_args[0]
         assert "Complete" in call_args[1]
+
+    @patch("app.services.download_worker.get_ffmpeg_path")
+    def test_ydl_opts_fixup_is_never(
+        self,
+        mock_get_ffmpeg_path,
+        sample_cloudcast,
+        temp_dir,
+        mock_callback_bridge,
+        mock_settings_manager,
+        mock_license_manager,
+    ):
+        """Regression guard: fixup must be 'never' to prevent FFmpegFixupM3u8PP from running."""
+        mock_get_ffmpeg_path.return_value = Path("/fake/ffmpeg")
+
+        worker = DownloadWorker(
+            cloudcast=sample_cloudcast,
+            download_dir=str(temp_dir),
+            callback_bridge=mock_callback_bridge,
+            settings_manager=mock_settings_manager,
+            license_manager=mock_license_manager,
+        )
+
+        opts = worker._generate_ydl_opts()
+
+        assert opts["fixup"] == "never"
+
+    @patch("app.services.download_worker.get_ffmpeg_path")
+    def test_ydl_opts_uses_bundled_ffmpeg_location(
+        self,
+        mock_get_ffmpeg_path,
+        sample_cloudcast,
+        temp_dir,
+        mock_callback_bridge,
+        mock_settings_manager,
+        mock_license_manager,
+    ):
+        """Regression guard: ffmpeg_location must point to the bundled binary's parent directory."""
+        mock_get_ffmpeg_path.return_value = Path("/fake/bundled/ffmpeg")
+
+        worker = DownloadWorker(
+            cloudcast=sample_cloudcast,
+            download_dir=str(temp_dir),
+            callback_bridge=mock_callback_bridge,
+            settings_manager=mock_settings_manager,
+            license_manager=mock_license_manager,
+        )
+
+        opts = worker._generate_ydl_opts()
+
+        assert "ffmpeg_location" in opts
+        assert opts["ffmpeg_location"] == str(Path("/fake/bundled/ffmpeg").parent)
+
+    @patch("app.services.download_worker.get_ffmpeg_path")
+    def test_ydl_opts_ffmpeg_location_omitted_on_unsupported_platform(
+        self,
+        mock_get_ffmpeg_path,
+        sample_cloudcast,
+        temp_dir,
+        mock_callback_bridge,
+        mock_settings_manager,
+        mock_license_manager,
+    ):
+        """Regression guard: ffmpeg_location must be omitted when platform is unsupported (e.g. Linux)."""
+        mock_get_ffmpeg_path.side_effect = RuntimeError("Unsupported platform")
+
+        worker = DownloadWorker(
+            cloudcast=sample_cloudcast,
+            download_dir=str(temp_dir),
+            callback_bridge=mock_callback_bridge,
+            settings_manager=mock_settings_manager,
+            license_manager=mock_license_manager,
+        )
+
+        opts = worker._generate_ydl_opts()
+
+        assert "ffmpeg_location" not in opts
+
+    @patch("app.services.download_worker.get_ffmpeg_path")
+    def test_ydl_opts_retries_and_fragment_retries(
+        self,
+        mock_get_ffmpeg_path,
+        sample_cloudcast,
+        temp_dir,
+        mock_callback_bridge,
+        mock_settings_manager,
+        mock_license_manager,
+    ):
+        """Regression guard: retries and fragment_retries must be >= 1 to handle transient CDN errors."""
+        mock_get_ffmpeg_path.return_value = Path("/fake/ffmpeg")
+
+        worker = DownloadWorker(
+            cloudcast=sample_cloudcast,
+            download_dir=str(temp_dir),
+            callback_bridge=mock_callback_bridge,
+            settings_manager=mock_settings_manager,
+            license_manager=mock_license_manager,
+        )
+
+        opts = worker._generate_ydl_opts()
+
+        assert opts["retries"] >= 1
+        assert opts["fragment_retries"] >= 1

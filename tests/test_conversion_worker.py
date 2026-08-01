@@ -391,6 +391,24 @@ class TestConversionErrorHandling:
         assert "FFmpeg executable not found" in error_msg
         assert "exit code 127" in error_msg
 
+    def test_ffmpeg_error_no_double_prefix(self, conversion_worker):
+        """Regression guard: _parse_ffmpeg_error must not include 'Conversion failed:' prefix.
+
+        The run() method wraps the result in f"Conversion failed: {str(e)}".
+        If _parse_ffmpeg_error already adds the prefix, the user sees it twice.
+        """
+        msg_known = conversion_worker._parse_ffmpeg_error("", 127)
+        msg_unknown = conversion_worker._parse_ffmpeg_error("Some random error", 42)
+
+        assert not msg_known.startswith("Conversion failed:")
+        assert not msg_unknown.startswith("Conversion failed:")
+
+    def test_ffmpeg_error_windows_antivirus_exit_code(self, conversion_worker):
+        """Regression guard: exit code 3221225786 (0xC000013A) must map to an antivirus message."""
+        msg = conversion_worker._parse_ffmpeg_error("", 3221225786)
+
+        assert "antivirus" in msg.lower() or "security software" in msg.lower()
+
 
 @pytest.mark.integration
 class TestConversionWorkerIntegration:
@@ -472,6 +490,37 @@ class TestConversionWorkerIntegration:
         assert error["cloudcast_url"] == "https://mixcloud.com/test/mix"
         assert "Conversion failed" in error["error_msg"]
         assert error["task_type"] == "conversion"
+
+    @patch("app.services.conversion_worker.subprocess.Popen")
+    @patch("app.services.conversion_worker.get_ffmpeg_path")
+    def test_full_error_message_single_conversion_failed_prefix(
+        self, mock_ffmpeg_path, mock_popen, conversion_worker, stub_callback_bridge
+    ):
+        """Regression guard: end-to-end error for exit code 3221225786 must have exactly one prefix.
+
+        Before the fix, _parse_ffmpeg_error returned "Conversion failed: ..." which run()
+        then wrapped again as f"Conversion failed: {str(e)}", producing a double prefix.
+        This test also verifies the antivirus message reaches the user.
+        """
+        mock_ffmpeg_path.return_value = Path("/usr/bin/ffmpeg")
+
+        mock_process = Mock()
+        mock_process.stdout = []
+        mock_process.returncode = 3221225786
+        mock_popen.return_value = mock_process
+
+        with patch.object(conversion_worker, "_validate_conversion_prerequisites"):
+            conversion_worker.run()
+
+        assert len(stub_callback_bridge.error_calls) == 1
+        error_msg = stub_callback_bridge.error_calls[0]["error_msg"]
+
+        # Exactly one "Conversion failed: " prefix — not two
+        assert error_msg.startswith("Conversion failed: ")
+        assert not error_msg.startswith("Conversion failed: Conversion failed: ")
+
+        # Must surface the antivirus explanation to the user
+        assert "antivirus" in error_msg.lower() or "security software" in error_msg.lower()
 
     def test_cleanup_operations(self, conversion_worker, temp_dir):
         """Test file cleanup operations."""

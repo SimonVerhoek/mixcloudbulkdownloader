@@ -16,6 +16,7 @@ from app.data_classes import Cloudcast
 from app.logger import log_error_with_traceback
 from app.services.license_manager import LicenseManager
 from app.services.settings_manager import SettingsManager
+from app.utils.ffmpeg import get_ffmpeg_path
 from app.utils.yt_dlp import QuietLogger, get_stable_size_estimate
 
 
@@ -216,7 +217,26 @@ class DownloadWorker(QRunnable):
         self.final_file_path = Path(self.download_dir) / self.final_filename
 
     def _generate_ydl_opts(self) -> dict:
-        """Generate yt-dlp options with progress hooks and cancellation support."""
+        """Generate yt-dlp options with progress hooks and cancellation support.
+
+        FFmpeg fixup policy:
+            yt-dlp automatically injects ``FFmpegFixupM3u8PP`` for HLS streams (like Mixcloud)
+            to correct potential MPEG-TS-in-MP4 container issues. This fixup requires FFmpeg
+            and runs silently when any FFmpeg binary is found on the system PATH — including
+            third-party installs such as ImageMagick, OBS, or HandBrake.
+
+            On macOS, tests confirm that Mixcloud m4a files are valid without this fixup.
+            The ``fixup: never`` option is therefore set to prevent the fixup from running
+            on any platform, avoiding failures caused by incompatible system FFmpeg versions
+            (e.g. ImageMagick's FFmpeg applying ``aac_adtstoasc`` to non-ADTS audio).
+
+            ``ffmpeg_location`` is also set to the bundled binary so that if yt-dlp ever
+            needs FFmpeg for any purpose, it uses the app-bundled version rather than
+            whatever happens to be on the system PATH.
+
+        Returns:
+            Dictionary of yt-dlp options.
+        """
 
         # Use utility functions instead of inline definitions
         def progress_hook(progress_data: dict):
@@ -255,6 +275,13 @@ class DownloadWorker(QRunnable):
 
         audio_format = "bestaudio/best" if self.license_manager.is_pro else "worstaudio/worst"
 
+        # Use bundled FFmpeg so yt-dlp never falls back to a system install (e.g. ImageMagick).
+        # RuntimeError is raised for unsupported platforms (Linux); fall back gracefully in that case.
+        try:
+            ffmpeg_location = str(get_ffmpeg_path().parent)
+        except RuntimeError:
+            ffmpeg_location = None
+
         return {
             "outtmpl": str(self.download_file_path),
             "progress_hooks": [progress_hook],
@@ -265,8 +292,17 @@ class DownloadWorker(QRunnable):
             "format": audio_format,
             "abort_on_error": True,
             "no_continue": True,
-            "retries": 0,
-            "fragment_retries": 0,
+            # Disable yt-dlp's automatic HLS fixup postprocessor (FFmpegFixupM3u8PP).
+            # Mixcloud m4a files are valid without it (confirmed: macOS without FFmpeg works correctly).
+            # Without this, any system FFmpeg found on PATH (e.g. from ImageMagick on Windows) will run
+            # an unnecessary aac_adtstoasc bitstream filter, producing a malformed output or an error.
+            "fixup": "never",
+            # Point yt-dlp at the bundled FFmpeg binary directory. This is a safety net: if yt-dlp ever
+            # needs FFmpeg for any purpose other than the disabled fixup, it uses our tested binary instead
+            # of whatever is on the system PATH. Omitted on unsupported platforms (Linux).
+            **({"ffmpeg_location": ffmpeg_location} if ffmpeg_location else {}),
+            "retries": 3,  # WAS: 0 — resilience against transient network failures
+            "fragment_retries": 10,  # WAS: 0 — handles transient CDN HTTP 416 errors on HLS fragments
             "postprocessors": [],
         }
 

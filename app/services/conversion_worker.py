@@ -402,7 +402,7 @@ class ConversionWorker(QRunnable):
         stderr_lower = stderr.lower()
         for pattern, message in error_patterns.items():
             if re.search(pattern, stderr_lower, re.IGNORECASE):
-                return f"Conversion failed: {message} (FFmpeg exit code {exit_code})"
+                return f"{message} (FFmpeg exit code {exit_code})"
 
         # Exit code specific messages
         exit_code_messages = {
@@ -413,6 +413,7 @@ class ConversionWorker(QRunnable):
             127: "FFmpeg executable not found",
             -2: "Process interrupted",
             -9: "Process killed (out of memory?)",
+            3221225786: "Conversion was interrupted by the system (antivirus or security software may have blocked the FFmpeg process)",  # 0xC000013A STATUS_CONTROL_C_EXIT
         }
 
         if exit_code in exit_code_messages:
@@ -426,6 +427,6 @@ class ConversionWorker(QRunnable):
             stderr_lines = [line.strip() for line in stderr.split("\n") if line.strip()]
             if stderr_lines:
                 last_error = stderr_lines[-1][:100]  # Limit length
-                return f"Conversion failed: {base_message} - {last_error} (exit code {exit_code})"
+                return f"{base_message} - {last_error} (exit code {exit_code})"
 
-        return f"Conversion failed: {base_message} (exit code {exit_code})"
+        return f"{base_message} (exit code {exit_code})"
