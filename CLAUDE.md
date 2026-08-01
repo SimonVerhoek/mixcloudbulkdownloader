@@ -48,6 +48,7 @@ Mixcloud Bulk Downloader is a desktop application built with PySide6 that allows
   - Built-in functions and very common operations where positional arguments are conventional (e.g., `len(items)`, `str(value)`)
   - Methods/functions that do not accept keyword arguments (e.g., `QTimer.singleShot()`, some Qt methods)
   - When the API documentation explicitly states positional-only parameters
+- **Environment Variables**: Always use `environs` (`from environs import env`) for reading environment variables. Never use `os.getenv()` directly. Declare env var constants in `app/consts/settings.py` using `env.str()`, `env.bool()`, etc., so all env var access is centralised and consistently typed.
 
 ### Styling Guidelines
 

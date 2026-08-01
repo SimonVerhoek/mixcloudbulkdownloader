@@ -34,6 +34,17 @@ else:
 print(f"Loading environment from: {env_file}")
 env.read_env(env_file)
 
+# Generate a runtime hook that bakes SENTRY_DSN into os.environ before any app
+# module is imported. PyInstaller guarantees runtime hooks run first.
+_hook_path = Path("scripts") / "build_env_hook.py"
+_hook_path.write_text(
+    "import os\n"
+    f"os.environ.setdefault('SENTRY_DSN', {env.str('SENTRY_DSN', '').__repr__()})\n"
+    f"os.environ.setdefault('LICENSE_SERVER_URL', {env.str('LICENSE_SERVER_URL', '').__repr__()})\n"
+    f"os.environ.setdefault('STRIPE_CHECKOUT_URI', {env.str('STRIPE_CHECKOUT_URI', '').__repr__()})\n"
+    f"os.environ.setdefault('USER_FEEDBACK_BEARER_TOKEN', {env.str('USER_FEEDBACK_BEARER_TOKEN', '').__repr__()})\n"
+)
+
 block_cipher = None
 
 current_dir = os.getcwd()
@@ -98,7 +109,7 @@ a = Analysis(
     ],
     hiddenimports=[],
     hookspath=[],
-    runtime_hooks=[],
+    runtime_hooks=[str(_hook_path)],
     excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

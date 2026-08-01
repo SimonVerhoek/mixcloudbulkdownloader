@@ -54,3 +54,6 @@ local_settings
 
 # version file
 app/_version.py
+
+# generated build hook (contains live DSN, never commit)
+scripts/build_env_hook.py

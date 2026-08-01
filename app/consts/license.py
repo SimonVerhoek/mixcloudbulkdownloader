@@ -23,9 +23,7 @@ STRIPE_CHECKOUT_URI: str = env.str(
     "STRIPE_CHECKOUT_URI",
     default="/public/checkout/product/mixcloud_bulk_downloader/checkout/price_1T0h673H8e3spQBkiNZzy07r",
 )
-USER_FEEDBACK_BEARER_TOKEN: str = env.str(
-    "USER_FEEDBACK_BEARER_TOKEN", default="EDaPmPUqVBB29aG6PydU8bWS0SFIO*RR$qIU8@yVEo#B1WIdar"
-)
+USER_FEEDBACK_BEARER_TOKEN: str = env.str("USER_FEEDBACK_BEARER_TOKEN", default="")
 
 # Pro feature descriptions and pricing
 PRO_FEATURES_LIST: list[str] = [

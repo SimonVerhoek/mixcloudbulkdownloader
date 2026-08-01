@@ -3,7 +3,6 @@
 import os
 import sys
 import threading
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +11,8 @@ from PySide6.QtCore import QSettings
 from app.consts.settings import (
     DEFAULT_CHECK_UPDATES_ON_STARTUP,
     DEFAULT_ENABLE_AUDIO_CONVERSION,
+    DEFAULT_ERROR_REPORTING_CONSENT_SHOWN,
+    DEFAULT_ERROR_REPORTING_ENABLED,
     DEFAULT_MAX_PARALLEL_CONVERSIONS,
     DEFAULT_MAX_PARALLEL_DOWNLOADS,
     DEVELOPMENT,
@@ -19,6 +20,8 @@ from app.consts.settings import (
     KEYRING_LICENSE_KEY,
     SETTING_CHECK_UPDATES_ON_STARTUP,
     SETTING_ENABLE_AUDIO_CONVERSION,
+    SETTING_ERROR_REPORTING_CONSENT_SHOWN,
+    SETTING_ERROR_REPORTING_ENABLED,
     SETTING_MAX_PARALLEL_CONVERSIONS,
     SETTING_MAX_PARALLEL_DOWNLOADS,
 )
@@ -83,9 +86,7 @@ class SettingsManager:
         enhanced security. The storage directory permissions are restricted to the
         current user only.
         """
-        self._shutting_down = False
         self._read_write_lock = threading.RLock()  # Allow recursive acquisition
-        self._thread_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="settings")
 
         # Initialize storage location and encryption
         self._storage_path = self._get_storage_path()
@@ -211,6 +212,48 @@ class SettingsManager:
             value: Whether to check for updates on startup.
         """
         self._set(key=SETTING_CHECK_UPDATES_ON_STARTUP, value=value)
+
+    @property
+    def error_reporting_enabled(self) -> bool:
+        """Get whether the user has consented to error reporting.
+
+        Returns:
+            bool: Whether error reporting is enabled.
+        """
+        return self._get(
+            key=SETTING_ERROR_REPORTING_ENABLED,
+            default=DEFAULT_ERROR_REPORTING_ENABLED,
+        )
+
+    @error_reporting_enabled.setter
+    def error_reporting_enabled(self, value: bool) -> None:
+        """Set whether error reporting is enabled.
+
+        Args:
+            value: Whether to enable error reporting.
+        """
+        self._set(key=SETTING_ERROR_REPORTING_ENABLED, value=value)
+
+    @property
+    def error_reporting_consent_shown(self) -> bool:
+        """Get whether the first-run consent dialog has been shown.
+
+        Returns:
+            bool: Whether the consent dialog has already been displayed.
+        """
+        return self._get(
+            key=SETTING_ERROR_REPORTING_CONSENT_SHOWN,
+            default=DEFAULT_ERROR_REPORTING_CONSENT_SHOWN,
+        )
+
+    @error_reporting_consent_shown.setter
+    def error_reporting_consent_shown(self, value: bool) -> None:
+        """Set whether the first-run consent dialog has been shown.
+
+        Args:
+            value: Whether the consent dialog has been displayed.
+        """
+        self._set(key=SETTING_ERROR_REPORTING_CONSENT_SHOWN, value=value)
 
     @property
     def default_download_directory(self) -> str | None:
@@ -379,8 +422,7 @@ class SettingsManager:
         Returns:
             Any: Setting value with type conversion, or default if not found.
         """
-
-        def _read_operation():
+        try:
             with self._read_write_lock:
                 value = self._settings.value(key, default)
 
@@ -399,38 +441,26 @@ class SettingsManager:
                         return int(value) if value is not None else default
                     elif isinstance(default, float):
                         return float(value) if value is not None else default
-
                 except (ValueError, TypeError) as e:
                     log_error(message=f"Failed to identify type of setting '{key}': {e}")
                     return default
 
                 return value
-
-        # Execute in thread pool for non-blocking access
-        try:
-            future = self._thread_pool.submit(_read_operation)
-            return future.result(timeout=2.0)  # 2-second timeout for reads
         except Exception as e:
             log_error(message=f"Failed to read setting '{key}': {e}")
             return default
 
     def _set(self, key: str, value: Any) -> None:
-        """Private method for storing regular settings in background thread.
+        """Private method for storing regular settings with thread safety.
 
         Args:
             key: Setting key to store.
             value: Value to store.
         """
-
-        def _write_operation():
+        try:
             with self._read_write_lock:
                 self._settings.setValue(key, value)
                 self._settings.sync()
-                return True
-
-        try:
-            future = self._thread_pool.submit(_write_operation)
-            future.result(timeout=5.0)  # 5-second timeout for writes
         except Exception as e:
             log_error(message=f"Failed to write setting '{key}': {e}")
 
@@ -444,8 +474,7 @@ class SettingsManager:
         Returns:
             str: Decrypted credential value or default if not found.
         """
-
-        def _read_operation():
+        try:
             with self._read_write_lock:
                 # Try to read from secrets section
                 encrypted_value = self._settings.value(f"secrets/{key}", None)
@@ -477,23 +506,18 @@ class SettingsManager:
                         return legacy_value
 
                 return default
-
-        try:
-            future = self._thread_pool.submit(_read_operation)
-            return future.result(timeout=3.0)  # 3-second timeout for credential reads
         except Exception as e:
             log_error(message=f"Failed to read credential '{key}': {e}")
             return default
 
     def _set_secret(self, key: str, value: str) -> None:
-        """Private method for storing encrypted credentials in background thread.
+        """Private method for storing encrypted credentials with thread safety.
 
         Args:
             key: Credential key to store.
             value: Credential value to encrypt and store.
         """
-
-        def _write_operation():
+        try:
             with self._read_write_lock:
                 if not value:
                     # Remove credential if empty value
@@ -513,11 +537,6 @@ class SettingsManager:
                 # Remove any legacy unencrypted version
                 self._settings.remove(key)
                 self._settings.sync()
-                return True
-
-        try:
-            future = self._thread_pool.submit(_write_operation)
-            future.result(timeout=5.0)  # 5-second timeout for credential writes
         except Exception as e:
             log_error(message=f"Failed to write credential '{key}': {e}")
 
@@ -550,30 +569,18 @@ class SettingsManager:
 
     def sync(self) -> None:
         """Force synchronization of settings to persistent storage."""
-
-        def _sync_operation():
+        try:
             with self._read_write_lock:
                 self._settings.sync()
-                return True
-
-        try:
-            future = self._thread_pool.submit(_sync_operation)
-            future.result(timeout=5.0)
         except Exception as e:
             log_error(message=f"Failed to sync settings: {e}")
 
     def reset_to_defaults(self) -> None:
         """Reset all settings to their default values."""
-
-        def _reset_operation():
+        try:
             with self._read_write_lock:
                 self._settings.clear()
                 self._settings.sync()
-                return True
-
-        try:
-            future = self._thread_pool.submit(_reset_operation)
-            future.result(timeout=10.0)  # Longer timeout for reset operation
             log_ui(message="Settings reset to defaults", level="INFO")
         except Exception as e:
             log_error(message=f"Failed to reset settings: {e}")
@@ -596,12 +603,10 @@ class SettingsManager:
         self.sync()
 
     def shutdown(self) -> None:
-        """Shutdown the settings manager and cleanup resources."""
-        self._shutting_down = True
-
+        """Flush settings to disk and release resources."""
         try:
-            # Wait for pending operations to complete
-            self._thread_pool.shutdown(wait=True, cancel_futures=False)
+            with self._read_write_lock:
+                self._settings.sync()
             log_ui(message="Settings manager shutdown completed", level="INFO")
         except Exception as e:
             log_error(message=f"Error during settings manager shutdown: {e}")

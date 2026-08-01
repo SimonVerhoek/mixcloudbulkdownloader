@@ -41,13 +41,14 @@ class LicenseManager(QObject):
         super().__init__()
         self.settings = settings  # Use the singleton instance
         self._is_pro = False  # Private attribute to track changes
-
-        # Initialize Pro status for offline users with valid credentials
-        self._initialize_pro_status()
+        self._pro_status_initialized: bool = False  # Deferred until first is_pro access
 
     @property
     def is_pro(self) -> bool:
-        """Get the current Pro license status."""
+        """Get the current Pro license status, initializing on first access."""
+        if not self._pro_status_initialized:
+            self._pro_status_initialized = True
+            self._initialize_pro_status()
         return self._is_pro
 
     @is_pro.setter

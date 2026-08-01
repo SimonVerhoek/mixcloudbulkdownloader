@@ -140,18 +140,26 @@ class MainWindow(QMainWindow):
     def startup_update_check(self) -> None:
         """Check for updates on startup if enabled in settings."""
         if self.settings.check_updates_on_startup:
-            self.start_update_check()
+            self._run_update_check(is_startup=True)
 
     def start_update_check(self) -> None:
-        """Start update check in background thread."""
-        # Prevent multiple simultaneous checks
+        """Start an update check triggered manually (File → Check for Updates…)."""
+        self._run_update_check(is_startup=False)
+
+    def _run_update_check(self, is_startup: bool) -> None:
+        """Internal runner that wires the error signal to the appropriate handler.
+
+        Args:
+            is_startup: True when called from startup_update_check; False for manual checks.
+        """
         if self.update_check_thread and self.update_check_thread.isRunning():
             return
 
         self.update_check_thread = UpdateCheckThread(update_service)
         self.update_check_thread.update_available.connect(self._show_update_dialog)
         self.update_check_thread.no_update_available.connect(self._handle_no_update_available)
-        self.update_check_thread.error_signal.connect(self._handle_update_error)
+        error_slot = self._handle_startup_update_error if is_startup else self._handle_update_error
+        self.update_check_thread.error_signal.connect(error_slot)
         self.update_check_thread.start()
 
     def _show_update_dialog(
@@ -176,14 +184,23 @@ class MainWindow(QMainWindow):
         # Startup checks should be silent when no update is available
         pass
 
-    def _handle_update_error(self, error_message: str) -> None:
-        """Handle update check errors.
+    def _handle_startup_update_error(self, error_message: str) -> None:
+        """Silently log startup update-check errors; never show a dialog.
 
         Args:
             error_message: Error description
         """
-        # Only show error dialog for manual checks
-        # Startup checks should log errors but not show dialogs
+        log_ui(
+            message=f"Startup update check failed (network may be unavailable): {error_message}",
+            level="WARNING",
+        )
+
+    def _handle_update_error(self, error_message: str) -> None:
+        """Show an error dialog for manual update checks (File → Check for Updates…).
+
+        Args:
+            error_message: Error description
+        """
         ErrorDialog(self, f"Update check failed: {error_message}", "Update Error")
 
     def cleanup_partial_files(self) -> None:

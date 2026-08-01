@@ -14,10 +14,14 @@ from PySide6.QtCore import QSettings
 from app.consts.settings import (
     DEFAULT_CHECK_UPDATES_ON_STARTUP,
     DEFAULT_ENABLE_AUDIO_CONVERSION,
+    DEFAULT_ERROR_REPORTING_CONSENT_SHOWN,
+    DEFAULT_ERROR_REPORTING_ENABLED,
     KEYRING_EMAIL_KEY,
     KEYRING_LICENSE_KEY,
     SETTING_CHECK_UPDATES_ON_STARTUP,
     SETTING_ENABLE_AUDIO_CONVERSION,
+    SETTING_ERROR_REPORTING_CONSENT_SHOWN,
+    SETTING_ERROR_REPORTING_ENABLED,
     SETTING_MAX_PARALLEL_CONVERSIONS,
     SETTING_MAX_PARALLEL_DOWNLOADS,
 )
@@ -437,10 +441,8 @@ class TestSettingsManagerLegacyMethods:
 
     def test_shutdown(self, settings_manager):
         """Test shutdown() method."""
-        # Should not raise any exceptions
         settings_manager.shutdown()
-
-        assert settings_manager._shutting_down is True
+        # _shutting_down attribute removed; just verify no exception is raised
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only tests")
@@ -801,3 +803,46 @@ class TestSettingsManagerBooleanHandling:
         retrieved_value = settings_manager.check_updates_on_startup
         assert retrieved_value is new_value
         assert isinstance(retrieved_value, bool)
+
+    def test_error_reporting_enabled_default(self, settings_manager):
+        """error_reporting_enabled should default to DEFAULT_ERROR_REPORTING_ENABLED (True)."""
+        result = settings_manager.error_reporting_enabled
+        assert result == DEFAULT_ERROR_REPORTING_ENABLED
+        assert isinstance(result, bool)
+
+    def test_error_reporting_enabled_set_and_get(self, settings_manager):
+        """error_reporting_enabled setter and getter should round-trip correctly."""
+        settings_manager.error_reporting_enabled = True
+        result = settings_manager.error_reporting_enabled
+        assert result is True
+        assert isinstance(result, bool)
+
+        settings_manager.error_reporting_enabled = False
+        result = settings_manager.error_reporting_enabled
+        assert result is False
+        assert isinstance(result, bool)
+
+    def test_error_reporting_enabled_persists_string_storage(self, settings_manager):
+        """error_reporting_enabled should coerce a 'true' string stored by QSettings to True."""
+        settings_manager._settings.setValue(SETTING_ERROR_REPORTING_ENABLED, "true")
+        result = settings_manager.error_reporting_enabled
+        assert result is True
+        assert isinstance(result, bool)
+
+    def test_error_reporting_consent_shown_default(self, settings_manager):
+        """error_reporting_consent_shown should default to DEFAULT_ERROR_REPORTING_CONSENT_SHOWN (False)."""
+        result = settings_manager.error_reporting_consent_shown
+        assert result == DEFAULT_ERROR_REPORTING_CONSENT_SHOWN
+        assert isinstance(result, bool)
+
+    def test_error_reporting_consent_shown_set_and_get(self, settings_manager):
+        """error_reporting_consent_shown setter and getter should round-trip correctly."""
+        settings_manager.error_reporting_consent_shown = False
+        result = settings_manager.error_reporting_consent_shown
+        assert result is False
+        assert isinstance(result, bool)
+
+        settings_manager.error_reporting_consent_shown = True
+        result = settings_manager.error_reporting_consent_shown
+        assert result is True
+        assert isinstance(result, bool)

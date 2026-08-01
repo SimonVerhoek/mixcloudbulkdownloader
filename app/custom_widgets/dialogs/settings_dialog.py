@@ -23,12 +23,14 @@ from app.consts.audio import AUDIO_FORMATS
 from app.consts.settings import (
     DEFAULT_CHECK_UPDATES_ON_STARTUP,
     DEFAULT_ENABLE_AUDIO_CONVERSION,
+    DEFAULT_ERROR_REPORTING_ENABLED,
     DEFAULT_MAX_PARALLEL_CONVERSIONS,
     DEFAULT_MAX_PARALLEL_DOWNLOADS,
     PARALLEL_CONVERSIONS_OPTIONS,
     PARALLEL_DOWNLOADS_OPTIONS,
     SETTING_CHECK_UPDATES_ON_STARTUP,
     SETTING_ENABLE_AUDIO_CONVERSION,
+    SETTING_ERROR_REPORTING_ENABLED,
     SETTING_MAX_PARALLEL_CONVERSIONS,
     SETTING_MAX_PARALLEL_DOWNLOADS,
 )
@@ -96,6 +98,7 @@ class SettingsDialog(ProFeatureWidget, QDialog):
 
         # Create settings sections
         self._create_update_settings_section(main_layout)
+        self._create_error_reporting_section(main_layout)
         self._create_pro_features_section(main_layout)
 
         # Dialog buttons
@@ -136,6 +139,15 @@ class SettingsDialog(ProFeatureWidget, QDialog):
 
         # Add the layout to main layout with some spacing
         main_layout.addLayout(update_layout)
+        main_layout.addSpacing(10)
+
+    def _create_error_reporting_section(self, main_layout: QVBoxLayout) -> None:
+        """Create error reporting section (not Pro-gated, available to all users)."""
+        self.error_reporting_checkbox = QCheckBox(
+            "Automatically send crash reports to the developer for diagnosis"
+        )
+        self.error_reporting_checkbox.setChecked(DEFAULT_ERROR_REPORTING_ENABLED)
+        main_layout.addWidget(self.error_reporting_checkbox)
         main_layout.addSpacing(10)
 
     def _create_pro_features_section(self, main_layout: QVBoxLayout) -> None:
@@ -295,6 +307,10 @@ class SettingsDialog(ProFeatureWidget, QDialog):
         check_updates = self.settings_manager.check_updates_on_startup
         self.update_checkbox.setChecked(check_updates)
 
+        # Load error reporting setting (available to all users)
+        error_reporting = self.settings_manager.error_reporting_enabled
+        self.error_reporting_checkbox.setChecked(error_reporting)
+
         # Load Pro settings if Pro user
         if self.license_manager.is_pro:
             # Load default download directory
@@ -329,6 +345,10 @@ class SettingsDialog(ProFeatureWidget, QDialog):
         # Save update settings (available to all users)
         check_updates = self.update_checkbox.isChecked()
         self.settings_manager.set(SETTING_CHECK_UPDATES_ON_STARTUP, check_updates)
+
+        # Save error reporting setting (available to all users)
+        error_reporting = self.error_reporting_checkbox.isChecked()
+        self.settings_manager.set(SETTING_ERROR_REPORTING_ENABLED, error_reporting)
 
         # Save Pro settings if Pro user
         if self.license_manager.is_pro:

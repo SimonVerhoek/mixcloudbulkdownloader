@@ -47,6 +47,17 @@ KEYRING_EMAIL_KEY: str = "license_email"
 KEYRING_LICENSE_KEY: str = "license_key"
 
 
+# Sentry DSN (read from env, empty string disables Sentry)
+SENTRY_DSN: str = env.str("SENTRY_DSN", default="")
+
+# Error reporting consent
+SETTING_ERROR_REPORTING_ENABLED: str = "error_reporting_enabled"
+DEFAULT_ERROR_REPORTING_ENABLED: bool = True
+
+SETTING_ERROR_REPORTING_CONSENT_SHOWN: str = "error_reporting_consent_shown"
+DEFAULT_ERROR_REPORTING_CONSENT_SHOWN: bool = False
+
+
 # Update checking settings (startup only, no intervals)
 SETTING_CHECK_UPDATES_ON_STARTUP: str = "check_updates_on_startup"
 DEFAULT_CHECK_UPDATES_ON_STARTUP: bool = True

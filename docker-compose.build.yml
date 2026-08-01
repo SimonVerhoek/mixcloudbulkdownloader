@@ -8,3 +8,9 @@ services:
     container_name: MBD-windows
     volumes:
       - .:/src
+    environment:
+      - SENTRY_DSN
+      - LICENSE_SERVER_URL
+      - STRIPE_CHECKOUT_URI
+      - USER_FEEDBACK_BEARER_TOKEN
+      - BUILD_ENV=prod

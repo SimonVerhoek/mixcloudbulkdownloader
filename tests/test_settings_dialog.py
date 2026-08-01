@@ -64,6 +64,7 @@ def mock_settings_manager():
     manager.preferred_audio_format = "MP3"
     manager.max_parallel_downloads = valid_downloads
     manager.max_parallel_conversions = valid_conversions
+    manager.error_reporting_enabled = True
 
     return manager
 
@@ -363,6 +364,7 @@ class TestSettingsDialog:
         settings_manager_enabled.preferred_audio_format = "MP3"
         settings_manager_enabled.max_parallel_downloads = 3
         settings_manager_enabled.max_parallel_conversions = 2
+        settings_manager_enabled.error_reporting_enabled = True
 
         dialog = SettingsDialog(
             license_manager=pro_license_manager, settings_manager=settings_manager_enabled
@@ -601,6 +603,7 @@ class TestSettingsDialogThreadingSettings:
         mock_settings.preferred_audio_format = "MP3"
         mock_settings.max_parallel_downloads = valid_downloads
         mock_settings.max_parallel_conversions = valid_conversions
+        mock_settings.error_reporting_enabled = True
 
         dialog = SettingsDialog(license_manager=pro_license_manager, settings_manager=mock_settings)
         qtbot.addWidget(dialog)
@@ -759,6 +762,7 @@ class TestSettingsDialogThreadingSettings:
         # For this test, return default values from constants when settings not set
         mock_settings.max_parallel_downloads = DEFAULT_MAX_PARALLEL_DOWNLOADS
         mock_settings.max_parallel_conversions = DEFAULT_MAX_PARALLEL_CONVERSIONS
+        mock_settings.error_reporting_enabled = True
 
         dialog = SettingsDialog(license_manager=pro_license_manager, settings_manager=mock_settings)
         qtbot.addWidget(dialog)

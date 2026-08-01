@@ -1,0 +1,1 @@
+from app.custom_widgets.dialogs.error_reporting_consent_dialog import ErrorReportingConsentDialog
