@@ -6,7 +6,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 from PySide6.QtCore import QSettings
@@ -846,3 +846,102 @@ class TestSettingsManagerBooleanHandling:
         result = settings_manager.error_reporting_consent_shown
         assert result is True
         assert isinstance(result, bool)
+
+
+class TestSettingsManagerSelfHealing:
+    """Tests for the self-healing _get_secret() behaviour introduced to fix recurring
+    startup decryption errors caused by volatile encryption salts."""
+
+    @pytest.fixture
+    def settings_manager(self, temp_settings_dir):
+        """Create SettingsManager instance for testing."""
+        with (
+            patch.object(SettingsManager, "_get_storage_path", return_value=temp_settings_dir),
+            patch.object(SettingsManager, "_secure_storage_directory"),
+        ):
+            return SettingsManager()
+
+    @pytest.mark.unit
+    def test_credentials_were_cleared_false_initially(self, settings_manager):
+        """A freshly initialised manager reports no credentials were cleared."""
+        assert settings_manager.credentials_were_cleared is False
+
+    @pytest.mark.unit
+    def test_get_secret_returns_default_on_decryption_failure(self, settings_manager):
+        """_get_secret() returns the default value when decryption raises."""
+        settings_manager._settings.setValue(f"secrets/{KEYRING_EMAIL_KEY}", "bad_encrypted_value")
+        settings_manager._settings.sync()
+        with patch.object(
+            settings_manager._encryptor, "decrypt", side_effect=Exception("InvalidToken")
+        ):
+            result = settings_manager.email
+        assert result == ""
+
+    @pytest.mark.unit
+    def test_get_secret_clears_key_on_decryption_failure(self, settings_manager):
+        """_get_secret() removes the bad key from QSettings when decryption raises."""
+        settings_manager._settings.setValue(f"secrets/{KEYRING_EMAIL_KEY}", "bad_encrypted_value")
+        settings_manager._settings.sync()
+        with patch.object(
+            settings_manager._encryptor, "decrypt", side_effect=Exception("InvalidToken")
+        ):
+            settings_manager.email
+        assert settings_manager._settings.value(f"secrets/{KEYRING_EMAIL_KEY}") is None
+
+    @pytest.mark.unit
+    def test_get_secret_sets_flag_on_decryption_failure(self, settings_manager):
+        """credentials_were_cleared is set to True when a key cannot be decrypted."""
+        settings_manager._settings.setValue(f"secrets/{KEYRING_EMAIL_KEY}", "bad_encrypted_value")
+        settings_manager._settings.sync()
+        with patch.object(
+            settings_manager._encryptor, "decrypt", side_effect=Exception("InvalidToken")
+        ):
+            settings_manager.email
+        assert settings_manager.credentials_were_cleared is True
+
+    @pytest.mark.unit
+    def test_get_secret_logs_warning_not_error_on_failure(self, settings_manager):
+        """A decryption failure is logged at WARNING level, not ERROR."""
+        settings_manager._settings.setValue(f"secrets/{KEYRING_EMAIL_KEY}", "bad_encrypted_value")
+        settings_manager._settings.sync()
+        with (
+            patch("app.services.settings_manager.log_error") as mock_log_error,
+            patch.object(
+                settings_manager._encryptor, "decrypt", side_effect=Exception("InvalidToken")
+            ),
+        ):
+            settings_manager.email
+        mock_log_error.assert_called_once_with(message=ANY, level="WARNING")
+
+    @pytest.mark.unit
+    def test_get_secret_does_not_set_flag_when_no_credential_stored(self, settings_manager):
+        """credentials_were_cleared stays False when there is simply no credential stored."""
+        # No credential is written — just read the property
+        _ = settings_manager.email
+        assert settings_manager.credentials_were_cleared is False
+
+    @pytest.mark.unit
+    def test_credentials_were_cleared_accumulates_across_keys(self, settings_manager):
+        """credentials_were_cleared remains True after multiple bad keys are processed."""
+        settings_manager._settings.setValue(f"secrets/{KEYRING_EMAIL_KEY}", "bad_email")
+        settings_manager._settings.setValue(f"secrets/{KEYRING_LICENSE_KEY}", "bad_license")
+        settings_manager._settings.sync()
+        with patch.object(
+            settings_manager._encryptor, "decrypt", side_effect=Exception("InvalidToken")
+        ):
+            settings_manager.email
+            settings_manager.license_key
+        assert settings_manager.credentials_were_cleared is True
+
+    @pytest.mark.unit
+    def test_bad_credential_not_present_on_second_read(self, settings_manager):
+        """After the first failing read clears the bad key, a second read does not raise."""
+        settings_manager._settings.setValue(f"secrets/{KEYRING_EMAIL_KEY}", "bad_encrypted_value")
+        settings_manager._settings.sync()
+        with patch.object(
+            settings_manager._encryptor, "decrypt", side_effect=Exception("InvalidToken")
+        ):
+            settings_manager.email  # First read — clears the bad value
+        # Second read — no bad value remains; should return default silently
+        result = settings_manager.email
+        assert result == ""

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from PySide6.QtGui import QCloseEvent, QGuiApplication
-from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QVBoxLayout, QWidget
 
 from app.consts.settings import DEFAULT_CHECK_UPDATES_ON_STARTUP, SETTING_CHECK_UPDATES_ON_STARTUP
 from app.consts.ui import MAIN_WINDOW_MIN_HEIGHT, MAIN_WINDOW_MIN_WIDTH
@@ -84,6 +84,11 @@ class MainWindow(QMainWindow):
         # Initialize threading settings with defaults
         self.settings.initialize_threading_settings(self.license_manager.is_pro)
 
+        # If stored credentials could not be decrypted (e.g. after an OS update that changed
+        # the old volatile salt), prompt the user to re-enter their license once.
+        if self.settings.credentials_were_cleared:
+            self._prompt_credential_reentry()
+
         # Initialize Pro UI state
         self.refresh_pro_ui_elements()
 
@@ -102,6 +107,27 @@ class MainWindow(QMainWindow):
             app_instance.setQuitOnLastWindowClosed(True)
             app_instance.setApplicationDisplayName("Mixcloud Bulk Downloader")
             app_instance.processEvents()
+
+    def _prompt_credential_reentry(self) -> None:
+        """Inform the user that stored credentials were cleared and ask them to re-enter.
+
+        This is a one-time prompt shown when previously stored credentials cannot be
+        decrypted (for example because the encryption key has changed). The user's
+        license is not affected — they simply need to re-enter their details once.
+        """
+        msg = QMessageBox(self)
+        msg.setWindowTitle("License Re-entry Required")
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setText(
+            "Due to a security improvement in how your license credentials are stored, "
+            "you are required to re-enter your license email and key once more to continue.\n"
+            "Your license is still valid. If you have forgotten your license key, "
+            "please contact me.\n\n"
+            "Apologies for the inconvenience!"
+        )
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg.exec()
+        self._show_get_pro_dialog()
 
     def _show_settings_dialog(self) -> None:
         """Display the settings configuration dialog.

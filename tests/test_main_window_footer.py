@@ -43,6 +43,9 @@ def mock_services():
             "default_download_directory": None,
             "preferred_audio_format": "MP3",
         }.get(key, default)
+        # Explicitly set to False — MagicMock attributes are truthy by default, which would
+        # trigger _prompt_credential_reentry() and block on QMessageBox.exec().
+        mock_settings.credentials_were_cleared = False
 
         # Mock thread to prevent actual startup verification
         mock_thread_instance = Mock()

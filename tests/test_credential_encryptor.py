@@ -12,14 +12,12 @@ class TestDeviceSalt:
 
     @patch("platform.system")
     @patch("platform.machine")
-    @patch("platform.version")
     @patch("app.services.credential_encryptor.Path")
-    def test_get_device_salt_success(self, mock_path, mock_version, mock_machine, mock_system):
+    def test_get_device_salt_success(self, mock_path, mock_machine, mock_system):
         """Test successful device salt generation."""
         # Mock platform information
         mock_system.return_value = "Darwin"
         mock_machine.return_value = "arm64"
-        mock_version.return_value = "23.1.0"
 
         # Mock Path.home()
         mock_home = MagicMock()
@@ -32,6 +30,40 @@ class TestDeviceSalt:
         assert len(salt) == 32
         assert salt.isalnum()  # Should be hexadecimal
 
+    @pytest.mark.unit
+    def test_platform_version_not_consulted(self):
+        """Regression guard: platform.version() must not be called during salt generation.
+
+        If someone re-adds platform.version() to get_device_salt(), this test will fail,
+        protecting against the OS-update credential invalidation bug.
+        """
+        with patch("platform.version") as mock_version:
+            get_device_salt()
+        mock_version.assert_not_called()
+
+    @pytest.mark.unit
+    def test_salt_stable_when_os_version_changes(self):
+        """Salt must be identical before and after a simulated OS version change.
+
+        Verifies that injecting a different platform.version() string cannot alter the
+        salt, proving the version string plays no role in the derivation.
+        """
+        with (
+            patch("platform.system", return_value="Darwin"),
+            patch("platform.machine", return_value="arm64"),
+            patch("app.services.credential_encryptor.Path") as mock_path,
+        ):
+            mock_home = MagicMock()
+            mock_home.__str__ = MagicMock(return_value="/Users/testuser")
+            mock_path.home.return_value = mock_home
+
+            salt_baseline = get_device_salt()
+
+            with patch("platform.version", return_value="99.0-CHANGED"):
+                salt_with_changed_version = get_device_salt()
+
+        assert salt_baseline == salt_with_changed_version
+
     def test_get_device_salt_deterministic(self):
         """Test that device salt is deterministic (same device = same salt)."""
         salt1 = get_device_salt()
@@ -41,17 +73,13 @@ class TestDeviceSalt:
 
     @patch("platform.system")
     @patch("platform.machine")
-    @patch("platform.version")
     @patch("app.services.credential_encryptor.Path")
     @patch("os.getenv")
-    def test_get_device_salt_home_fallback(
-        self, mock_getenv, mock_path, mock_version, mock_machine, mock_system
-    ):
+    def test_get_device_salt_home_fallback(self, mock_getenv, mock_path, mock_machine, mock_system):
         """Test device salt generation with home directory fallback."""
         # Mock platform information
         mock_system.return_value = "Windows"
         mock_machine.return_value = "x86_64"
-        mock_version.return_value = "10.0.19041"
 
         # Mock Path.home() failing
         mock_path.home.side_effect = Exception("Home directory not accessible")

@@ -87,6 +87,7 @@ class SettingsManager:
         current user only.
         """
         self._read_write_lock = threading.RLock()  # Allow recursive acquisition
+        self._credentials_were_cleared: bool = False
 
         # Initialize storage location and encryption
         self._storage_path = self._get_storage_path()
@@ -294,6 +295,15 @@ class SettingsManager:
         self._set(key=SETTING_ENABLE_AUDIO_CONVERSION, value=value)
 
     @property
+    def credentials_were_cleared(self) -> bool:
+        """Whether any encrypted credentials were cleared during this session.
+
+        Returns:
+            bool: True if at least one credential was unreadable and cleared on startup.
+        """
+        return self._credentials_were_cleared
+
+    @property
     def preferred_audio_format(self) -> str:
         """Get the default audio format.
 
@@ -482,10 +492,17 @@ class SettingsManager:
                 if encrypted_value:
                     try:
                         return self._encryptor.decrypt(encrypted_data=encrypted_value)
-                    except Exception as e:
-                        log_error(message=f"Failed to decrypt credential '{key}': {e}")
-                        # Fall back to regular settings for migration compatibility
-                        return self._settings.value(key, default, type=str)
+                    except Exception:
+                        # Credential cannot be decrypted (e.g. OS was updated, changing the
+                        # old volatile salt). Clear it now so the error never repeats.
+                        log_error(
+                            message=f"Stored credential '{key}' could not be decrypted and has been cleared.",
+                            level="WARNING",
+                        )
+                        self._settings.remove(f"secrets/{key}")
+                        self._settings.sync()
+                        self._credentials_were_cleared = True
+                        return default
 
                 # Check regular settings for legacy credentials
                 legacy_value = self._settings.value(key, None)

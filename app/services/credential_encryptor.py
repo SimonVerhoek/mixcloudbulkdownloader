@@ -19,11 +19,11 @@ def get_device_salt() -> str:
     Returns:
         str: A 32-character hexadecimal salt unique to this device and user.
     """
-    # Use stable platform identifiers
+    # Use stable platform identifiers (intentionally excludes platform.version(),
+    # which changes on every OS update and would invalidate stored credentials)
     stable_identifiers = [
         platform.system(),  # 'Windows', 'Darwin', 'Linux'
         platform.machine(),  # 'x86_64', 'arm64', etc.
-        platform.version(),  # OS version (more stable than hostname)
     ]
 
     # Add user-specific component (stable per user)
