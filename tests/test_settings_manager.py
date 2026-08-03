@@ -62,31 +62,24 @@ class TestSettingsManagerInit:
 
     @patch("app.services.settings_manager.DEVELOPMENT", False)
     @patch("sys.platform", "win32")
-    @patch("os.getenv")
-    def test_init_production_windows(self, mock_getenv):
+    def test_init_production_windows(self):
         """Test initialization in production mode on Windows."""
-
-        # Configure mock to return different values for different keys
-        def mock_getenv_side_effect(key, default=None):
-            if key == "APPDATA":
-                return "C:\\Users\\Test\\AppData\\Roaming"
-            elif key == "DEVELOPMENT":
-                return None  # Ensures DEVELOPMENT defaults to False
-            return default
-
-        mock_getenv.side_effect = mock_getenv_side_effect
-
-        with patch("app.services.settings_manager.Path") as mock_path:
-            expected_path = (
-                mock_path("C:\\Users\\Test\\AppData\\Roaming") / "mixcloud-bulk-downloader"
-            )
-
+        fake_appdata = Path("C:/Users/Test/AppData/Roaming")
+        with patch("app.services.settings_manager.get_appdata_dir", return_value=fake_appdata):
             manager = SettingsManager()
+            assert manager._storage_path == fake_appdata / "mixcloud-bulk-downloader"
 
-            # Verify the APPDATA path construction logic was called
-            # Check that APPDATA was requested at some point
-            appdata_calls = [call for call in mock_getenv.call_args_list if call[0][0] == "APPDATA"]
-            assert len(appdata_calls) > 0, "APPDATA should have been requested"
+    @patch("app.services.settings_manager.DEVELOPMENT", False)
+    @patch("sys.platform", "linux")
+    def test_init_production_linux(self, tmp_path):
+        """Test initialization in production mode on Linux."""
+        fake_config_home = tmp_path / ".config"
+        fake_config_home.mkdir()
+        with patch(
+            "app.services.settings_manager.get_xdg_config_home", return_value=fake_config_home
+        ):
+            manager = SettingsManager()
+            assert manager._storage_path == fake_config_home / "mixcloud-bulk-downloader"
 
     @patch("app.services.settings_manager.DEVELOPMENT", True)
     def test_init_development_mode(self):

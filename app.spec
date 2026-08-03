@@ -9,14 +9,6 @@ from environs import Env
 from PyInstaller.building.api import COLLECT, EXE, PYZ
 from PyInstaller.building.build_main import Analysis
 from PyInstaller.building.osx import BUNDLE
-from PySide6.QtCore import QCoreApplication, Qt
-
-
-# Enable high DPI scaling
-QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
-QCoreApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
-
-
 # Load environment file based on mandatory BUILD_ENV variable
 env = Env()
 build_env = os.getenv("BUILD_ENV", "prod")

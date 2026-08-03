@@ -3,6 +3,7 @@
 import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -203,3 +204,19 @@ class TestGetLogDirectory:
     def test_is_a_directory(self):
         result = get_log_directory()
         assert result.is_dir()
+
+    @patch("sys.platform", "win32")
+    def test_windows(self, tmp_path: Path):
+        fake_appdata = tmp_path / "AppData" / "Roaming"
+        fake_appdata.mkdir(parents=True)
+        with patch("app.logger.get_appdata_dir", return_value=fake_appdata):
+            result = get_log_directory()
+            assert result == fake_appdata / "MixcloudBulkDownloader" / "logs"
+
+    @patch("sys.platform", "linux")
+    def test_linux(self, tmp_path: Path):
+        fake_data_home = tmp_path / ".local" / "share"
+        fake_data_home.mkdir(parents=True)
+        with patch("app.logger.get_xdg_data_home", return_value=fake_data_home):
+            result = get_log_directory()
+            assert result == fake_data_home / "MixcloudBulkDownloader" / "logs"

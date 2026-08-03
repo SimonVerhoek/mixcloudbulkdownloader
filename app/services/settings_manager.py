@@ -1,6 +1,5 @@
 """Settings management for Mixcloud Bulk Downloader using encrypted INI files."""
 
-import os
 import sys
 import threading
 from pathlib import Path
@@ -27,6 +26,7 @@ from app.consts.settings import (
 )
 from app.logger import log_error, log_ui
 from app.services.credential_encryptor import CredentialEncryptor
+from app.utils.platform_paths import get_appdata_dir, get_xdg_config_home
 
 
 class SettingsManager:
@@ -337,11 +337,9 @@ class SettingsManager:
             if sys.platform == "darwin":  # macOS
                 return Path.home() / "Library" / "Application Support" / "mixcloud-bulk-downloader"
             elif sys.platform == "win32":  # Windows
-                app_data = os.getenv("APPDATA", str(Path.home() / "AppData" / "Roaming"))
-                return Path(app_data) / "mixcloud-bulk-downloader"
+                return get_appdata_dir() / "mixcloud-bulk-downloader"
             else:  # Linux
-                xdg_config_home = os.getenv("XDG_CONFIG_HOME", str(Path.home() / ".config"))
-                return Path(xdg_config_home) / "mixcloud-bulk-downloader"
+                return get_xdg_config_home() / "mixcloud-bulk-downloader"
 
     def _create_qsettings(self) -> QSettings:
         """Create QSettings instance with INI format in storage directory.

@@ -54,6 +54,7 @@ class LicenseManager(QObject):
     @is_pro.setter
     def is_pro(self, value: bool) -> None:
         """Set the Pro license status and emit signal if changed."""
+        self._pro_status_initialized = True  # Explicit set bypasses lazy init
         if self._is_pro != value:
             self._is_pro = value
             self.license_status_changed.emit(value)

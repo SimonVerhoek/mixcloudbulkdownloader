@@ -2,7 +2,6 @@
 
 import base64
 import hashlib
-import os
 import platform
 from pathlib import Path
 
@@ -11,6 +10,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from app.logger import log_error
+from app.utils.platform_paths import get_current_user
 
 
 def get_device_salt() -> str:
@@ -33,8 +33,7 @@ def get_device_salt() -> str:
         stable_identifiers.append(home_path)
     except Exception:
         # Fallback if home directory unavailable
-        user_fallback = os.getenv("USER") or os.getenv("USERNAME") or "default"
-        stable_identifiers.append(user_fallback)
+        stable_identifiers.append(get_current_user())
 
     # Create deterministic hash
     combined = "|".join(stable_identifiers)

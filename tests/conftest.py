@@ -6,15 +6,17 @@ from pathlib import Path
 
 import pytest
 
-# Load test environment variables at import time, before any app modules are imported
-from environs import Env
+# Load test environment variables at import time, before any app modules are imported.
+# Use load_dotenv (python-dotenv) so values are written into os.environ, which environs
+# reads with highest priority — env._environ (written by Env.read_env) is a separate dict
+# and would not override the settings-module singleton's state.
+from dotenv import load_dotenv
 
 
 _project_root = Path(__file__).parent.parent
 _test_env_file = _project_root / ".env.test"
 if _test_env_file.exists():
-    _env = Env()
-    _env.read_env(str(_test_env_file))
+    load_dotenv(dotenv_path=_test_env_file, override=True)
 
 from tests.stubs.api_stubs import StubMixcloudAPIService
 from tests.stubs.file_stubs import StubFileService

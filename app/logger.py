@@ -16,10 +16,12 @@ Usage:
 """
 
 import logging
-import os
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+
+from app.consts.settings import DEVELOPMENT, LOGGING_LEVEL
+from app.utils.platform_paths import get_appdata_dir, get_xdg_data_home
 
 
 # Named loggers for each application domain
@@ -52,11 +54,9 @@ def get_log_directory() -> Path:
     if sys.platform == "darwin":  # macOS
         log_dir = Path.home() / "Library" / "Logs" / "MixcloudBulkDownloader"
     elif sys.platform == "win32":  # Windows
-        app_data = os.getenv("APPDATA", str(Path.home() / "AppData" / "Roaming"))
-        log_dir = Path(app_data) / "MixcloudBulkDownloader" / "logs"
+        log_dir = get_appdata_dir() / "MixcloudBulkDownloader" / "logs"
     else:  # Linux and other Unix-like systems
-        xdg_data_home = os.getenv("XDG_DATA_HOME", str(Path.home() / ".local" / "share"))
-        log_dir = Path(xdg_data_home) / "MixcloudBulkDownloader" / "logs"
+        log_dir = get_xdg_data_home() / "MixcloudBulkDownloader" / "logs"
 
     log_dir.mkdir(parents=True, exist_ok=True)
     return log_dir
@@ -94,13 +94,12 @@ def configure(log_file: Path) -> None:
         encoding="utf-8",
     )
     file_handler.setFormatter(formatter)
-    level_str = os.getenv("LOGGING_LEVEL", "INFO").upper()
-    file_level = _LEVEL_MAP.get(level_str, logging.INFO)
+    file_level = _LEVEL_MAP.get(LOGGING_LEVEL.upper(), logging.INFO)
     file_handler.setLevel(file_level)
     root_logger.addHandler(file_handler)
 
     # Console output in development mode
-    if os.getenv("DEVELOPMENT") == "True":
+    if DEVELOPMENT:
         stream_handler = logging.StreamHandler(sys.stdout)
         stream_handler.setFormatter(formatter)
         stream_handler.setLevel(logging.DEBUG)

@@ -50,6 +50,8 @@ Mixcloud Bulk Downloader is a desktop application built with PySide6 that allows
   - When the API documentation explicitly states positional-only parameters
 - **Environment Variables**: Always use `environs` (`from environs import env`) for reading environment variables. Never use `os.getenv()` directly. Declare env var constants in `app/consts/settings.py` using `env.str()`, `env.bool()`, etc., so all env var access is centralised and consistently typed.
 
+  **Exception — OS-standard platform env vars**: `APPDATA`, `XDG_DATA_HOME`, `XDG_CONFIG_HOME`, `USER`, and `USERNAME` are OS-defined path/identity variables, not app config. Using `os.getenv()` with a sensible fallback is the idiomatic Python approach for these and routing them through `environs` adds no value. All other env vars that represent app behaviour or configuration **must** go through `app/consts/settings.py`.
+
 ### Styling Guidelines
 
 - **QSS Files**: All styling should be defined in `.qss` files in `./app/styles/`

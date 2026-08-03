@@ -74,8 +74,10 @@ class TestDeviceSalt:
     @patch("platform.system")
     @patch("platform.machine")
     @patch("app.services.credential_encryptor.Path")
-    @patch("os.getenv")
-    def test_get_device_salt_home_fallback(self, mock_getenv, mock_path, mock_machine, mock_system):
+    @patch("app.services.credential_encryptor.get_current_user", return_value="testuser")
+    def test_get_device_salt_home_fallback(
+        self, mock_get_user, mock_path, mock_machine, mock_system
+    ):
         """Test device salt generation with home directory fallback."""
         # Mock platform information
         mock_system.return_value = "Windows"
@@ -83,12 +85,6 @@ class TestDeviceSalt:
 
         # Mock Path.home() failing
         mock_path.home.side_effect = Exception("Home directory not accessible")
-
-        # Mock environment variable fallback
-        mock_getenv.side_effect = lambda var, default=None: {
-            "USER": None,
-            "USERNAME": "testuser",
-        }.get(var, default)
 
         salt = get_device_salt()
 

@@ -15,6 +15,9 @@ except (OSError, FileNotFoundError):
 # Development flag
 DEVELOPMENT: bool = env.bool("DEVELOPMENT", default=False)
 
+# Logging level
+LOGGING_LEVEL: str = env.str("LOGGING_LEVEL", default="INFO")
+
 # Custom settings path override
 CUSTOM_SETTINGS_PATH: str = env.str("CUSTOM_SETTINGS_PATH", default="")
 
