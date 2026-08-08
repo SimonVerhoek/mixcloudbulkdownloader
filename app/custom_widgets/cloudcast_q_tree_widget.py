@@ -1,13 +1,10 @@
 """Tree widget for displaying and managing cloudcasts."""
 
-import re
-import unicodedata
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import QHeaderView, QTreeWidget, QTreeWidgetItem
 
-from app.consts.audio import AUDIO_FORMATS
 from app.consts.ui import (
     CANCELLED_ICON,
     COMPLETE_ICON,
@@ -161,11 +158,6 @@ class CloudcastQTreeWidget(QTreeWidget):
             dialog = GetProPersuasionDialog(self.parent())
             dialog.exec()
 
-    @Slot()
-    def hide_status_column(self) -> None:
-        """Hide the status column when all downloads are finished."""
-        self.setColumnHidden(2, True)
-
     def clear(self) -> None:
         """Clear all items from the tree and hide the status column."""
         super().clear()
@@ -218,110 +210,22 @@ class CloudcastQTreeWidget(QTreeWidget):
         item = CloudcastQTreeWidgetItem(cloudcast=cloudcast)
         self.addTopLevelItem(item)
 
+    @Slot(Cloudcast)
+    def add_single_cloudcast(self, cloudcast: Cloudcast) -> None:
+        """Clear the tree and show a single cloudcast selected directly from search.
+
+        Args:
+            cloudcast: Cloudcast to display as the sole tree item
+        """
+        if self.get_cloudcasts_thread.isRunning():
+            self.get_cloudcasts_thread.stop()
+        self.clear()
+        self.add_result(cloudcast=cloudcast)
+
     @Slot()
     def cancel_cloudcasts_download(self) -> None:
         """Cancel all active downloads using DownloadManager system."""
         self.download_manager.cancel_all()
-
-    def _normalize_filename(self, name: str) -> str:
-        """Normalize a filename for consistent matching using comprehensive Unicode handling.
-
-        This method systematically transforms Unicode characters to ASCII equivalents
-        for reliable filename matching between expected names and yt-dlp filenames.
-        It also removes known file extensions to focus on the content name.
-
-        Args:
-            name: Raw filename to normalize
-
-        Returns:
-            Normalized filename with Unicode characters properly handled and extensions removed
-        """
-        # Step 1: Unicode normalization (NFKC converts compatibility characters to standard forms)
-        # This handles characters like BIG SOLIDUS (⧸) -> SOLIDUS (/)
-        normalized = unicodedata.normalize("NFKC", name)
-
-        # Step 2: Handle accented characters by decomposing them and keeping base characters
-        # This converts characters like "á" to "a", "ñ" to "n", "ó" to "o", etc.
-        ascii_normalized = ""
-        for char in normalized:
-            if ord(char) < 128:
-                # Already ASCII, keep as-is
-                ascii_normalized += char
-            else:
-                # Try to decompose the character and extract the base character
-                decomposed = unicodedata.normalize("NFD", char)
-                base_char = ""
-                for component in decomposed:
-                    if ord(component) < 128:
-                        base_char += component
-                        break  # Take only the first ASCII component
-
-                # If we found a base character, use it; otherwise skip the character entirely
-                if base_char:
-                    ascii_normalized += base_char
-                # Characters that can't be decomposed to ASCII are simply removed
-
-        # Step 3: Clean up the result
-        # Remove only truly problematic filesystem characters
-        # Keep safe punctuation like colons, asterisks, hyphens, periods, parentheses
-        cleaned = re.sub(r'[<>"/\\|?]', "", ascii_normalized)
-
-        # Replace multiple spaces with single space (AFTER removing special chars)
-        cleaned = re.sub(r"\s+", " ", cleaned)
-
-        # Step 4: Remove actual file extensions (not date parts like .17)
-        # Only strip known audio/video file extensions
-        result = cleaned.lower().strip()
-        for audio_format in AUDIO_FORMATS.values():
-            extension = audio_format.extension  # Already has dot like ".mp3"
-            if result.endswith(extension):
-                result = result[: -len(extension)]
-                break
-
-        return result
-
-    def _get_normalized_expected_name(self, item: CloudcastQTreeWidgetItem) -> str:
-        """Get normalized expected name for a cloudcast item for matching with yt-dlp filenames.
-
-        Args:
-            item: CloudcastQTreeWidgetItem to get expected name for
-
-        Returns:
-            Normalized expected name in format "username - cloudcast_name"
-        """
-        expected_name = f"{item.cloudcast.user.name} - {item.cloudcast.name}"
-        return self._normalize_filename(expected_name)
-
-    @Slot(str, str)
-    def update_item_download_progress(self, name: str, progress: str) -> None:
-        """Update download progress for a specific cloudcast item.
-
-        Args:
-            name: Name of the cloudcast being downloaded (from yt-dlp filename)
-            progress: Progress information string
-        """
-        # Normalize the incoming name from yt-dlp (this also removes file extensions)
-        name_normalized = self._normalize_filename(name)
-
-        selected_items = self.get_selected_cloudcasts()
-
-        # Find exact match using normalized names
-        for item in selected_items:
-            expected_normalized = self._get_normalized_expected_name(item)
-
-            # Try exact match first
-            if name_normalized == expected_normalized:
-                item.update_download_progress(progress)
-                return
-
-            # Try matching without username prefix (yt-dlp sometimes omits it)
-            # Extract just the cloudcast name part from expected
-            username_prefix = self._normalize_filename(item.cloudcast.user.name) + " - "
-            if expected_normalized.startswith(username_prefix):
-                expected_without_username = expected_normalized[len(username_prefix) :]
-                if name_normalized == expected_without_username:
-                    item.update_download_progress(progress)
-                    return
 
     # TaskManager signal handlers for URL-based progress tracking
 

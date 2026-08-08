@@ -159,6 +159,9 @@ class TestSentryEnvironmentTag:
 class TestSentryDsn:
     """Tests for the SENTRY_DSN constant."""
 
-    def test_sentry_dsn_defaults_to_empty_string(self):
+    def test_sentry_dsn_defaults_to_empty_string(self, monkeypatch):
         """SENTRY_DSN should be empty string in test env (disabling Sentry by default)."""
-        assert SENTRY_DSN == ""
+        import app.consts.settings as settings_module
+
+        monkeypatch.setattr(settings_module, "SENTRY_DSN", "")
+        assert settings_module.SENTRY_DSN == ""

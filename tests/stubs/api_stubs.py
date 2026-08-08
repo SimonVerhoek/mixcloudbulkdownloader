@@ -32,6 +32,33 @@ class FakeHTTPClient:
                     },
                 ]
             },
+            # Cloudcast search responses
+            "search_cloudcast_success": {
+                "data": [
+                    {
+                        "name": "Test Mix A",
+                        "url": "https://www.mixcloud.com/djtest/test-mix-a/",
+                        "user": {
+                            "key": "/djtest/",
+                            "name": "DJ Test",
+                            "pictures": {},
+                            "url": "https://www.mixcloud.com/djtest/",
+                            "username": "djtest",
+                        },
+                    },
+                    {
+                        "name": "Test Mix B",
+                        "url": "https://www.mixcloud.com/djtest/test-mix-b/",
+                        "user": {
+                            "key": "/djtest/",
+                            "name": "DJ Test",
+                            "pictures": {},
+                            "url": "https://www.mixcloud.com/djtest/",
+                            "username": "djtest",
+                        },
+                    },
+                ]
+            },
             # Cloudcast responses
             "cloudcasts_page1": {
                 "data": [
@@ -44,6 +71,26 @@ class FakeHTTPClient:
                 "data": [
                     {"name": "Test Mix 3", "url": "https://www.mixcloud.com/testuser/test-mix-3/"}
                 ]
+            },
+            # Single-resource lookup responses
+            "get_user_success": {
+                "key": "/testuser/",
+                "name": "Test User",
+                "pictures": {"large": "https://example.com/large.jpg"},
+                "url": "https://www.mixcloud.com/testuser/",
+                "username": "testuser",
+            },
+            "get_cloudcast_success": {
+                "key": "/djtest/test-mix-a/",
+                "name": "Test Mix A",
+                "url": "https://www.mixcloud.com/djtest/test-mix-a/",
+                "user": {
+                    "key": "/djtest/",
+                    "name": "DJ Test",
+                    "pictures": {},
+                    "url": "https://www.mixcloud.com/djtest/",
+                    "username": "djtest",
+                },
             },
             # Error responses
             "user_not_found": {"error": {"type": "NotFound", "message": "User not found"}},
@@ -90,11 +137,25 @@ class FakeHTTPClient:
             else:
                 return FakeHTTPResponse(self.responses["search_user_success"])
 
+        elif "search" in url and "type=cloudcast" in url:
+            return FakeHTTPResponse(self.responses["search_cloudcast_success"])
+
         elif "cloudcasts" in url:
             if "offset=20" in url:
                 return FakeHTTPResponse(self.responses["cloudcasts_page2"])
             else:
                 return FakeHTTPResponse(self.responses["cloudcasts_page1"])
+
+        elif "search" not in url and "cloudcasts" not in url:
+            # Single-resource lookup: /{username}/ or /{username}/{slug}/
+            # Exclude the protocol ("https:") and the hostname from the path parts
+            path_parts = [
+                p for p in url.split("/") if p and ":" not in p and "api.mixcloud.com" not in p
+            ]
+            if len(path_parts) == 1:
+                return FakeHTTPResponse(self.responses["get_user_success"])
+            elif len(path_parts) == 2:
+                return FakeHTTPResponse(self.responses["get_cloudcast_success"])
 
         # Default empty response
         return FakeHTTPResponse({"data": []})

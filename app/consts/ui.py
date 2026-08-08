@@ -12,7 +12,9 @@ TREE_STATUS_COLUMN_WIDTH: int = 300
 # Layout stretch ratios
 SEARCH_LABEL_STRETCH: int = 1
 SEARCH_INPUT_STRETCH: int = 3
-SEARCH_BUTTON_STRETCH: int = 1
+
+# Search result limits
+SEARCH_RESULT_LIMIT: int = 5
 
 # Settings dialog dimensions
 SETTINGS_DIALOG_WIDTH: int = 650

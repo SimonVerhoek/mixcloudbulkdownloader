@@ -46,6 +46,7 @@ def mock_services():
         # Explicitly set to False — MagicMock attributes are truthy by default, which would
         # trigger _prompt_credential_reentry() and block on QMessageBox.exec().
         mock_settings.credentials_were_cleared = False
+        mock_settings.check_updates_on_startup = False
 
         # Mock thread to prevent actual startup verification
         mock_thread_instance = Mock()
@@ -155,6 +156,7 @@ class TestMainWindowFooterBehavior:
         # Footer should show Free status and Pro button
         assert window.footer_widget.status_label.text() == "MBD Free"
         assert window.footer_widget.get_pro_button.isVisible() == True
+        window.close()
 
     def test_footer_widget_default_state_pro_user(self, qt_app, mock_services):
         """Test footer shows correct default state for Pro users."""

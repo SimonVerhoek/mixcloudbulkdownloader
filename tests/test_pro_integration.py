@@ -68,7 +68,7 @@ class TestCentralWidgetProIntegration:
 
         # Should have main functional elements
         assert hasattr(widget, "search_user_input")
-        assert hasattr(widget, "get_cloudcasts_button")
+        assert hasattr(widget.search_user_input, "artist_selected")
         assert hasattr(widget, "download_button")
         assert hasattr(widget, "cancel_button")
 

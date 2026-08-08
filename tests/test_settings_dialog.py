@@ -428,7 +428,7 @@ class TestSettingsDialog:
 class TestSettingsDialogIntegration:
     """Integration tests for settings dialog with real components."""
 
-    def test_settings_dialog_with_real_managers(self, qtbot):
+    def test_settings_dialog_with_real_managers(self, qtbot, monkeypatch):
         """Test settings dialog with real license and settings managers."""
         from app.services.license_manager import LicenseManager
         from app.services.settings_manager import SettingsManager
@@ -437,8 +437,9 @@ class TestSettingsDialogIntegration:
         license_mgr = LicenseManager()
         settings_mgr = SettingsManager()
 
-        # Ensure clean state
-        license_mgr.is_pro = False
+        # Bypass lazy credential initialisation so is_pro reliably returns False
+        monkeypatch.setattr(license_mgr, "_is_pro", False)
+        monkeypatch.setattr(license_mgr, "_pro_status_initialized", True)
 
         dialog = SettingsDialog(license_manager=license_mgr, settings_manager=settings_mgr)
         qtbot.addWidget(dialog)

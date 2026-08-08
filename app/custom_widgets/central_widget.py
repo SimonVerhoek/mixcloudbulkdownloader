@@ -10,7 +10,6 @@ from PySide6.QtWidgets import (
 )
 
 from app.consts.ui import (
-    SEARCH_BUTTON_STRETCH,
     SEARCH_INPUT_STRETCH,
     SEARCH_LABEL_STRETCH,
 )
@@ -50,22 +49,18 @@ class CentralWidget(QWidget):
 
         self.layout = QVBoxLayout()
 
-        # Search user layout
+        # Search layout
         search_user_layout = QHBoxLayout()
         search_user_layout.setAlignment(Qt.AlignTop)
 
-        self.search_user_label = QLabel("Search account:")
+        self.search_user_label = QLabel("Search:")
         self.search_user_input = SearchUserQComboBox(api_service=self.api_service)
-        self.get_cloudcasts_button = QPushButton("Get cloudcasts")
-        self.get_cloudcasts_button.setObjectName("primaryButton")
 
         search_user_layout.addWidget(self.search_user_label)
         search_user_layout.addWidget(self.search_user_input)
-        search_user_layout.addWidget(self.get_cloudcasts_button)
 
         search_user_layout.setStretch(0, SEARCH_LABEL_STRETCH)
         search_user_layout.setStretch(1, SEARCH_INPUT_STRETCH)
-        search_user_layout.setStretch(2, SEARCH_BUTTON_STRETCH)
 
         # User cloudcasts layout
         user_cloudcasts_layout = QVBoxLayout()
@@ -104,9 +99,8 @@ class CentralWidget(QWidget):
         self._update_cancel_button_state(downloads_active=False)
 
         # Signal connections
-        self.get_cloudcasts_button.clicked.connect(
-            lambda: self.cloudcasts.get_cloudcasts(user=self.search_user_input.selected_result)
-        )
+        self.search_user_input.artist_selected.connect(self.cloudcasts.get_cloudcasts)
+        self.search_user_input.cloudcast_selected.connect(self.cloudcasts.add_single_cloudcast)
         self.select_all_button.clicked.connect(self.cloudcasts.select_all)
         self.unselect_all_button.clicked.connect(self.cloudcasts.unselect_all)
         self.download_button.clicked.connect(self.cloudcasts.download_selected_cloudcasts)

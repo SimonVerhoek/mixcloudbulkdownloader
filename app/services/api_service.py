@@ -26,7 +26,7 @@ class MixcloudAPIService:
         Returns:
             Tuple of (users_list, error_message). If successful, error_message is empty.
         """
-        url = f"{MIXCLOUD_API_URL}/search/?q={phrase}&type=user"
+        url = f"{MIXCLOUD_API_URL}/search/?q={phrase}&type=user&limit=5"
         response_data, error = self._make_api_request(url)
 
         if error:
@@ -43,6 +43,45 @@ class MixcloudAPIService:
                     continue
 
         return users, ""
+
+    def search_cloudcasts(self, phrase: str) -> tuple[list[Cloudcast], str]:
+        """Search for Mixcloud cloudcasts by phrase.
+
+        Args:
+            phrase: Search term to look for cloudcasts
+
+        Returns:
+            Tuple of (cloudcasts_list, error_message). If successful, error_message is empty.
+        """
+        url = f"{MIXCLOUD_API_URL}/search/?q={phrase}&type=cloudcast&limit=5"
+        response_data, error = self._make_api_request(url)
+
+        if error:
+            return [], error
+
+        cloudcasts = []
+        if response_data and "data" in response_data:
+            for cloudcast_data in response_data["data"]:
+                try:
+                    user_data = cloudcast_data.get("user", {})
+                    username = user_data.get("username", "")
+                    user = MixcloudUser(
+                        key=user_data.get("key", f"/{username}/"),
+                        name=user_data.get("name", username),
+                        pictures=user_data.get("pictures", {}),
+                        url=user_data.get("url", f"https://www.mixcloud.com/{username}/"),
+                        username=username,
+                    )
+                    cloudcast = Cloudcast(
+                        name=cloudcast_data["name"],
+                        url=cloudcast_data["url"],
+                        user=user,
+                    )
+                    cloudcasts.append(cloudcast)
+                except (TypeError, KeyError):
+                    continue
+
+        return cloudcasts, ""
 
     def get_user_cloudcasts(self, username: str, url: str = "") -> tuple[list[Cloudcast], str, str]:
         """Get cloudcasts for a specific user.
@@ -136,6 +175,68 @@ class MixcloudAPIService:
                 next_page = response_data["paging"]["next"]
 
         return cloudcasts, "", next_page
+
+    def get_user(self, username: str) -> tuple[MixcloudUser | None, str]:
+        """Fetch a single Mixcloud user profile by username.
+
+        Args:
+            username: Mixcloud username to fetch
+
+        Returns:
+            Tuple of (MixcloudUser, "") on success, or (None, error_message) on failure.
+        """
+        url = f"{MIXCLOUD_API_URL}/{username}/"
+        response_data, error = self._make_api_request(url)
+        if error:
+            return None, error
+        if not response_data:
+            return None, "No data returned for user"
+        try:
+            user = MixcloudUser(
+                key=response_data.get("key", f"/{username}/"),
+                name=response_data.get("name", username),
+                pictures=response_data.get("pictures", {}),
+                url=response_data.get("url", f"https://www.mixcloud.com/{username}/"),
+                username=response_data.get("username", username),
+            )
+            return user, ""
+        except (TypeError, KeyError):
+            return None, "Invalid user data returned from API"
+
+    def get_cloudcast(self, username: str, slug: str) -> tuple[Cloudcast | None, str]:
+        """Fetch a single Mixcloud cloudcast by username and slug.
+
+        Args:
+            username: Mixcloud username who owns the cloudcast
+            slug: URL slug identifying the cloudcast
+
+        Returns:
+            Tuple of (Cloudcast, "") on success, or (None, error_message) on failure.
+        """
+        url = f"{MIXCLOUD_API_URL}/{username}/{slug}/"
+        response_data, error = self._make_api_request(url)
+        if error:
+            return None, error
+        if not response_data:
+            return None, "No data returned for cloudcast"
+        try:
+            user_data = response_data.get("user", {})
+            user_username = user_data.get("username", username)
+            user = MixcloudUser(
+                key=user_data.get("key", f"/{user_username}/"),
+                name=user_data.get("name", user_username),
+                pictures=user_data.get("pictures", {}),
+                url=user_data.get("url", f"https://www.mixcloud.com/{user_username}/"),
+                username=user_username,
+            )
+            cloudcast = Cloudcast(
+                name=response_data["name"],
+                url=response_data["url"],
+                user=user,
+            )
+            return cloudcast, ""
+        except (TypeError, KeyError):
+            return None, "Invalid cloudcast data returned from API"
 
     def _make_api_request(self, url: str) -> tuple[dict | None, str]:
         """Make HTTP request to Mixcloud API.

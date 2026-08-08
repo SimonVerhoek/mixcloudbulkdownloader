@@ -1,18 +1,21 @@
 """Tests for custom Qt widgets."""
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QWidget
 
+from app.consts.ui import SEARCH_RESULT_LIMIT
 from app.custom_widgets.cloudcast_q_tree_widget import CloudcastQTreeWidget
 from app.custom_widgets.dialogs.feedback_dialog import FeedbackDialog
 from app.custom_widgets.dialogs.get_pro_persuasion_dialog import GetProPersuasionDialog
 from app.custom_widgets.footer_widget import FooterWidget
 from app.custom_widgets.search_user_q_combo_box import SearchUserQComboBox
 from app.data_classes import Cloudcast, MixcloudUser
+from app.threads.fetch_by_url_thread import FetchByUrlThread
+from app.threads.search_cloudcast_thread import SearchCloudcastThread
 from tests.stubs.api_stubs import StubMixcloudAPIService
 from tests.stubs.file_stubs import StubFileService
 
@@ -36,8 +39,8 @@ class TestSearchUserQComboBox:
 
         assert widget.api_service is stub_service
         assert widget.isEditable()
-        assert len(widget.results) == 0
-        assert widget.selected_result is None
+        assert len(widget._artist_results) == 0
+        assert len(widget._cloudcast_results) == 0
 
     def test_init_without_service(self, qt_app):
         """Test initialization without custom service."""
@@ -78,6 +81,422 @@ class TestSearchUserQComboBox:
 
         assert widget.isEditable()
         assert widget.count() == 0  # Should start empty
+
+    # --- Initialisation ---
+
+    def test_init_creates_cloudcast_thread(self, qt_app):
+        """Test that __init__ creates a SearchCloudcastThread attribute."""
+        stub_service = StubMixcloudAPIService()
+        widget = SearchUserQComboBox(api_service=stub_service)
+
+        assert hasattr(widget, "search_cloudcast_thread")
+        assert isinstance(widget.search_cloudcast_thread, SearchCloudcastThread)
+
+    def test_has_artist_and_cloudcast_selected_signals(self, qt_app):
+        """Test that artist_selected and cloudcast_selected are connectable signals."""
+        widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
+
+        assert isinstance(type(widget).artist_selected, Signal)
+        assert isinstance(type(widget).cloudcast_selected, Signal)
+        # Verify connectivity
+        widget.artist_selected.connect(lambda u: None)
+        widget.cloudcast_selected.connect(lambda c: None)
+
+    # --- Result buffering slots ---
+
+    def test_on_artist_result_buffers(self, qt_app):
+        """Test that _on_artist_result appends the user to _artist_results."""
+        widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
+        test_user = MixcloudUser(
+            key="/testuser/",
+            name="Test User",
+            pictures={},
+            url="https://www.mixcloud.com/testuser/",
+            username="testuser",
+        )
+
+        widget._on_artist_result(user=test_user)
+
+        assert len(widget._artist_results) == 1
+        assert widget._artist_results[0] is test_user
+
+    def test_on_cloudcast_result_buffers(self, qt_app):
+        """Test that _on_cloudcast_result appends the cloudcast to _cloudcast_results."""
+        widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
+        test_user = MixcloudUser(
+            key="/djtest/",
+            name="DJ Test",
+            pictures={},
+            url="https://www.mixcloud.com/djtest/",
+            username="djtest",
+        )
+        test_cloudcast = Cloudcast(
+            name="Test Mix A",
+            url="https://www.mixcloud.com/djtest/test-mix-a/",
+            user=test_user,
+        )
+
+        widget._on_cloudcast_result(cloudcast=test_cloudcast)
+
+        assert len(widget._cloudcast_results) == 1
+        assert widget._cloudcast_results[0] is test_cloudcast
+
+    def test_on_artists_finished_sets_flag(self, qt_app):
+        """Test that _on_artists_finished sets _artists_done to True."""
+        widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
+        # Pre-set cloudcasts_done so _build_model_and_show is not triggered
+        widget._cloudcasts_done = False
+
+        widget._on_artists_finished()
+
+        assert widget._artists_done is True
+
+    def test_on_cloudcasts_finished_sets_flag(self, qt_app):
+        """Test that _on_cloudcasts_finished sets _cloudcasts_done to True."""
+        widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
+        widget._artists_done = False
+
+        widget._on_cloudcasts_finished()
+
+        assert widget._cloudcasts_done is True
+
+    def test_get_suggestions_resets_buffers(self, qt_app):
+        """Test that get_suggestions clears buffers only on non-empty phrase."""
+        widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
+
+        test_user = MixcloudUser(
+            key="/testuser/",
+            name="Test User",
+            pictures={},
+            url="https://www.mixcloud.com/testuser/",
+            username="testuser",
+        )
+        widget._artist_results.append(test_user)
+        widget._cloudcast_results.append(
+            Cloudcast(
+                name="Mix",
+                url="https://www.mixcloud.com/testuser/mix/",
+                user=test_user,
+            )
+        )
+
+        # Empty phrase → returns early without clearing
+        widget.setEditText("")
+        widget.get_suggestions()
+        assert len(widget._artist_results) == 1
+        assert len(widget._cloudcast_results) == 1
+
+        # Non-empty phrase → clears both buffers then starts threads.
+        # Patch thread.start() so no real QThreads are spawned (avoids destruction crash).
+        with (
+            patch.object(widget.search_artist_thread, "start"),
+            patch.object(widget.search_cloudcast_thread, "start"),
+        ):
+            widget.setEditText("test")
+            widget.get_suggestions()
+
+        assert len(widget._artist_results) == 0
+        assert len(widget._cloudcast_results) == 0
+        assert widget._artists_done is False
+        assert widget._cloudcasts_done is False
+
+    # --- Model building ---
+
+    def test_build_model_creates_two_header_sections(self, qt_app):
+        """Test _build_model_and_show creates Artists and Mixes header rows with NoItemFlags."""
+        widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
+
+        widget._artist_results = []
+        widget._cloudcast_results = []
+        widget._build_model_and_show()
+        # Process the pending QTimer.singleShot callback while widget is alive.
+        qt_app.processEvents()
+
+        artists_header = widget._model.item(0)
+        assert artists_header.text() == "Artists"
+        assert artists_header.flags() == Qt.ItemFlag.NoItemFlags
+
+        # Mixes header is at row 2 (Artists header + placeholder)
+        mixes_header = widget._model.item(2)
+        assert mixes_header.text() == "Mixes"
+        assert mixes_header.flags() == Qt.ItemFlag.NoItemFlags
+
+    def test_build_model_respects_result_limit(self, qt_app):
+        """Test that only SEARCH_RESULT_LIMIT artist results appear in the model."""
+        widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
+
+        widget._artist_results = [
+            MixcloudUser(
+                key=f"/user{i}/",
+                name=f"User {i}",
+                pictures={},
+                url=f"https://www.mixcloud.com/user{i}/",
+                username=f"user{i}",
+            )
+            for i in range(10)
+        ]
+        widget._cloudcast_results = []
+        widget._build_model_and_show()
+        qt_app.processEvents()
+
+        # Row 0 = "Artists" header, rows 1..LIMIT = artists, next = "Mixes" header
+        mixes_header_row = 1 + SEARCH_RESULT_LIMIT
+        assert widget._model.item(mixes_header_row).text() == "Mixes"
+        # Total rows: 1 header + LIMIT artists + 1 Mixes header + 1 placeholder
+        assert widget._model.rowCount() == 2 + SEARCH_RESULT_LIMIT + 1
+
+    def test_build_model_placeholder_when_no_artists(self, qt_app):
+        """Test that an empty artist list shows a (no results) placeholder under Artists."""
+        widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
+        test_user = MixcloudUser(
+            key="/djtest/",
+            name="DJ Test",
+            pictures={},
+            url="https://www.mixcloud.com/djtest/",
+            username="djtest",
+        )
+
+        widget._artist_results = []
+        widget._cloudcast_results = [
+            Cloudcast(
+                name="Test Mix A",
+                url="https://www.mixcloud.com/djtest/test-mix-a/",
+                user=test_user,
+            )
+        ]
+        widget._build_model_and_show()
+        qt_app.processEvents()
+
+        placeholder = widget._model.item(1)
+        assert placeholder.text() == "(no results)"
+        assert placeholder.flags() == Qt.ItemFlag.NoItemFlags
+
+    def test_build_model_placeholder_when_no_cloudcasts(self, qt_app):
+        """Test that an empty cloudcast list shows a (no results) placeholder under Mixes."""
+        widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
+        test_user = MixcloudUser(
+            key="/testuser/",
+            name="Test User",
+            pictures={},
+            url="https://www.mixcloud.com/testuser/",
+            username="testuser",
+        )
+
+        widget._artist_results = [test_user]
+        widget._cloudcast_results = []
+        widget._build_model_and_show()
+        qt_app.processEvents()
+
+        # Row 0 = Artists header, Row 1 = artist, Row 2 = Mixes header, Row 3 = placeholder
+        placeholder = widget._model.item(3)
+        assert placeholder.text() == "(no results)"
+        assert placeholder.flags() == Qt.ItemFlag.NoItemFlags
+
+    # --- Item factory methods ---
+
+    def test_make_header_item_is_non_selectable(self, qt_app):
+        """Test that _make_header_item returns an item with NoItemFlags."""
+        widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
+
+        item = widget._make_header_item(text="Artists")
+
+        assert item.flags() == Qt.ItemFlag.NoItemFlags
+
+    def test_make_artist_item_stores_user_in_user_role(self, qt_app):
+        """Test that _make_artist_item stores the MixcloudUser in UserRole data."""
+        widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
+        test_user = MixcloudUser(
+            key="/testuser/",
+            name="Test User",
+            pictures={},
+            url="https://www.mixcloud.com/testuser/",
+            username="testuser",
+        )
+
+        item = widget._make_artist_item(user=test_user)
+
+        assert isinstance(item.data(Qt.ItemDataRole.UserRole), MixcloudUser)
+        assert item.data(Qt.ItemDataRole.UserRole) == test_user
+
+    def test_make_cloudcast_item_stores_cloudcast_in_user_role(self, qt_app):
+        """Test that _make_cloudcast_item stores the Cloudcast in UserRole data."""
+        widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
+        test_user = MixcloudUser(
+            key="/djtest/",
+            name="DJ Test",
+            pictures={},
+            url="https://www.mixcloud.com/djtest/",
+            username="djtest",
+        )
+        test_cloudcast = Cloudcast(
+            name="Test Mix A",
+            url="https://www.mixcloud.com/djtest/test-mix-a/",
+            user=test_user,
+        )
+
+        item = widget._make_cloudcast_item(cloudcast=test_cloudcast)
+
+        assert isinstance(item.data(Qt.ItemDataRole.UserRole), Cloudcast)
+        assert item.data(Qt.ItemDataRole.UserRole) == test_cloudcast
+
+    # --- Item activation / signal emission ---
+
+    def test_on_item_activated_artist_emits_artist_selected(self, qt_app):
+        """Test that activating an artist row emits artist_selected with the correct user."""
+        widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
+        test_user = MixcloudUser(
+            key="/testuser/",
+            name="Test User",
+            pictures={},
+            url="https://www.mixcloud.com/testuser/",
+            username="testuser",
+        )
+        test_cloudcast = Cloudcast(
+            name="Test Mix A",
+            url="https://www.mixcloud.com/testuser/test-mix-a/",
+            user=test_user,
+        )
+
+        widget._artist_results = [test_user]
+        widget._cloudcast_results = [test_cloudcast]
+        widget._build_model_and_show()
+        qt_app.processEvents()
+
+        emitted: list[MixcloudUser] = []
+        widget.artist_selected.connect(lambda u: emitted.append(u))
+
+        # Model: row 0 = Artists header, row 1 = artist item
+        widget._on_item_activated(index=1)
+
+        assert len(emitted) == 1
+        assert emitted[0] == test_user
+
+    def test_on_item_activated_cloudcast_emits_cloudcast_selected(self, qt_app):
+        """Test that activating a cloudcast row emits cloudcast_selected with the correct cloudcast."""
+        widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
+        test_user = MixcloudUser(
+            key="/djtest/",
+            name="DJ Test",
+            pictures={},
+            url="https://www.mixcloud.com/djtest/",
+            username="djtest",
+        )
+        test_cloudcast = Cloudcast(
+            name="Test Mix A",
+            url="https://www.mixcloud.com/djtest/test-mix-a/",
+            user=test_user,
+        )
+
+        widget._artist_results = [test_user]
+        widget._cloudcast_results = [test_cloudcast]
+        widget._build_model_and_show()
+        qt_app.processEvents()
+
+        emitted: list[Cloudcast] = []
+        widget.cloudcast_selected.connect(lambda c: emitted.append(c))
+
+        # Model: row 0 = Artists header, row 1 = artist, row 2 = Mixes header, row 3 = cloudcast
+        widget._on_item_activated(index=3)
+
+        assert len(emitted) == 1
+        assert emitted[0] == test_cloudcast
+
+    def test_on_item_activated_header_row_ignored(self, qt_app):
+        """Test that activating a header row emits neither artist_selected nor cloudcast_selected."""
+        widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
+
+        widget._artist_results = []
+        widget._cloudcast_results = []
+        widget._build_model_and_show()
+        qt_app.processEvents()
+
+        artist_emitted: list = []
+        cloudcast_emitted: list = []
+        widget.artist_selected.connect(lambda u: artist_emitted.append(u))
+        widget.cloudcast_selected.connect(lambda c: cloudcast_emitted.append(c))
+
+        # Row 0 = "Artists" header (NoItemFlags, UserRole=None)
+        widget._on_item_activated(index=0)
+
+        assert len(artist_emitted) == 0
+        assert len(cloudcast_emitted) == 0
+
+    # --- URL paste support ---
+
+    def test_init_creates_fetch_by_url_thread(self, qt_app):
+        """Test that __init__ creates a FetchByUrlThread attribute of the correct type."""
+        widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
+
+        assert hasattr(widget, "fetch_by_url_thread")
+        assert isinstance(widget.fetch_by_url_thread, FetchByUrlThread)
+
+    def test_parse_mixcloud_url_user_url(self, qt_app):
+        """Test _parse_mixcloud_url with a user profile URL returns (username, None)."""
+        result = SearchUserQComboBox._parse_mixcloud_url("https://www.mixcloud.com/djname/")
+
+        assert result == ("djname", None)
+
+    def test_parse_mixcloud_url_cloudcast_url(self, qt_app):
+        """Test _parse_mixcloud_url with a cloudcast URL returns (username, slug)."""
+        result = SearchUserQComboBox._parse_mixcloud_url(
+            "https://www.mixcloud.com/djname/their-mix/"
+        )
+
+        assert result == ("djname", "their-mix")
+
+    def test_parse_mixcloud_url_not_a_url(self, qt_app):
+        """Test _parse_mixcloud_url with a plain search phrase returns None."""
+        result = SearchUserQComboBox._parse_mixcloud_url("some artist name")
+
+        assert result is None
+
+    def test_parse_mixcloud_url_trailing_slash_optional(self, qt_app):
+        """Test _parse_mixcloud_url handles URLs with and without trailing slashes."""
+        with_slash = SearchUserQComboBox._parse_mixcloud_url("https://www.mixcloud.com/djname/")
+        without_slash = SearchUserQComboBox._parse_mixcloud_url("https://www.mixcloud.com/djname")
+
+        assert with_slash == ("djname", None)
+        assert without_slash == ("djname", None)
+
+    def test_parse_mixcloud_url_deep_path_returns_none(self, qt_app):
+        """Test _parse_mixcloud_url returns None for URLs with more than two path segments."""
+        result = SearchUserQComboBox._parse_mixcloud_url(
+            "https://www.mixcloud.com/djname/mix/extra/"
+        )
+
+        assert result is None
+
+    def test_get_suggestions_routes_user_url_to_fetch_thread(self, qt_app):
+        """Test get_suggestions() starts fetch_by_url_thread for a Mixcloud URL and not the search threads."""
+        widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
+
+        with (
+            patch.object(widget.fetch_by_url_thread, "start") as mock_fetch_start,
+            patch.object(widget.search_artist_thread, "start") as mock_artist_start,
+            patch.object(widget.search_cloudcast_thread, "start") as mock_cloudcast_start,
+        ):
+            widget.setEditText("https://www.mixcloud.com/djname/")
+            widget.get_suggestions()
+
+        mock_fetch_start.assert_called_once()
+        mock_artist_start.assert_not_called()
+        mock_cloudcast_start.assert_not_called()
+
+    def test_get_suggestions_routes_plain_text_to_search_threads(self, qt_app):
+        """Test get_suggestions() starts the dual search threads for a plain text phrase."""
+        widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
+
+        with (
+            patch.object(widget.fetch_by_url_thread, "start") as mock_fetch_start,
+            patch.object(widget.search_artist_thread, "start") as mock_artist_start,
+            patch.object(widget.search_cloudcast_thread, "start") as mock_cloudcast_start,
+        ):
+            widget.setEditText("some artist name")
+            widget.get_suggestions()
+
+        mock_fetch_start.assert_not_called()
+        mock_artist_start.assert_called_once()
+        mock_cloudcast_start.assert_called_once()
 
 
 class TestCloudcastQTreeWidget:
@@ -213,30 +632,6 @@ class TestCloudcastQTreeWidget:
         widget.clear()
         items = widget._get_tree_items()
         assert len(items) == 0
-
-    def test_update_item_download_progress(self, qt_app):
-        """Test updating download progress for items."""
-        widget = CloudcastQTreeWidget()
-
-        # Add test item first
-        user = MixcloudUser(
-            key="/testuser/",
-            name="Test User",
-            pictures={},
-            url="https://www.mixcloud.com/testuser/",
-            username="testuser",
-        )
-        cloudcast = Cloudcast(
-            name="Test Mix", url="https://www.mixcloud.com/testuser/test-mix/", user=user
-        )
-        widget.add_result(cloudcast)
-
-        # Update progress
-        widget.update_item_download_progress("Test Mix", "50% completed")
-
-        # Verify the item still exists (progress update shouldn't remove it)
-        items = widget._get_tree_items()
-        assert len(items) == 1
 
     def test_select_all_functionality(self, qt_app):
         """Test select all functionality."""
