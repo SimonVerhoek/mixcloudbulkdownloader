@@ -19,6 +19,7 @@ class StubCallbackBridge:
         self.progress_calls = []
         self.completed_calls = []
         self.error_calls = []
+        self.cancelled_calls = []
 
     def emit_progress(self, cloudcast_url: str, progress_text: str, task_type: str = "conversion"):
         """Record progress emission call."""
@@ -38,11 +39,16 @@ class StubCallbackBridge:
             {"cloudcast_url": cloudcast_url, "error_msg": error_msg, "task_type": task_type}
         )
 
+    def emit_cancelled(self, cloudcast_url: str, task_type: str = "conversion"):
+        """Record cancellation emission call."""
+        self.cancelled_calls.append({"cloudcast_url": cloudcast_url, "task_type": task_type})
+
     def reset(self):
         """Reset call history."""
         self.progress_calls.clear()
         self.completed_calls.clear()
         self.error_calls.clear()
+        self.cancelled_calls.clear()
 
 
 @pytest.fixture
@@ -325,17 +331,27 @@ class TestConversionCancellation:
     """Test conversion cancellation handling."""
 
     def test_cancel_before_start(self, conversion_worker, stub_callback_bridge):
-        """Test cancellation before conversion starts."""
+        """Test cancellation before conversion starts emits emit_cancelled."""
         conversion_worker.cancel()
 
         with patch("app.services.conversion_worker.get_ffmpeg_path") as mock_ffmpeg:
             mock_ffmpeg.return_value = Path("/usr/bin/ffmpeg")
-
             conversion_worker.run()
 
-        # Should emit cancellation signal
-        assert len(stub_callback_bridge.progress_calls) == 1
-        assert "Cancelled" in stub_callback_bridge.progress_calls[0]["progress_text"]
+        # Must emit emit_cancelled, not a progress "Cancelled" message
+        assert len(stub_callback_bridge.cancelled_calls) == 1
+        assert (
+            stub_callback_bridge.cancelled_calls[0]["cloudcast_url"]
+            == "https://mixcloud.com/test/mix"
+        )
+        assert stub_callback_bridge.cancelled_calls[0]["task_type"] == "conversion"
+        # No spurious progress signal
+        cancelled_progress = [
+            c
+            for c in stub_callback_bridge.progress_calls
+            if "Cancelled" in c.get("progress_text", "")
+        ]
+        assert len(cancelled_progress) == 0
 
     def test_cancel_during_process(self, conversion_worker):
         """Test cancellation during FFmpeg process."""
@@ -362,6 +378,62 @@ class TestConversionCancellation:
         # Should terminate, then kill when timeout occurs
         mock_process.terminate.assert_called_once()
         mock_process.kill.assert_called_once()
+
+    def test_cancel_run_emits_cancelled_and_removes_source_file(
+        self, conversion_worker, stub_callback_bridge, test_input_file
+    ):
+        """Cancelling run() emits emit_cancelled and deletes the source file."""
+        conversion_worker.cancel()
+
+        with patch("app.services.conversion_worker.get_ffmpeg_path") as mock_ffmpeg:
+            mock_ffmpeg.return_value = Path("/usr/bin/ffmpeg")
+            conversion_worker.run()
+
+        # emit_cancelled fired, not emit_progress
+        assert len(stub_callback_bridge.cancelled_calls) == 1
+        assert len(stub_callback_bridge.progress_calls) == 0 or all(
+            "Cancelled" not in c.get("progress_text", "")
+            for c in stub_callback_bridge.progress_calls
+        )
+        # Source file deleted
+        assert not Path(test_input_file).exists()
+
+
+@pytest.mark.unit
+class TestCleanupSourceFile:
+    """Test _cleanup_source_file behaviour."""
+
+    def test_cleanup_source_file_removes_existing_file(self, conversion_worker, test_input_file):
+        """_cleanup_source_file() deletes the source file when it exists."""
+        assert Path(test_input_file).exists()
+        conversion_worker._cleanup_source_file()
+        assert not Path(test_input_file).exists()
+
+    def test_cleanup_source_file_safe_when_file_missing(self, conversion_worker, test_input_file):
+        """_cleanup_source_file() does not raise when source file is already gone."""
+        Path(test_input_file).unlink()
+        conversion_worker._cleanup_source_file()  # Must not raise
+
+    def test_cleanup_source_file_not_called_on_error(
+        self, conversion_worker, stub_callback_bridge, test_input_file
+    ):
+        """On conversion error the source file must be preserved for retry."""
+        with (
+            patch("app.services.conversion_worker.get_ffmpeg_path") as mock_ffmpeg,
+            patch("app.services.conversion_worker.subprocess.Popen") as mock_popen,
+            patch.object(conversion_worker, "_validate_conversion_prerequisites"),
+        ):
+            mock_ffmpeg.return_value = Path("/usr/bin/ffmpeg")
+            mock_process = Mock()
+            mock_process.stdout = []
+            mock_process.returncode = 1
+            mock_popen.return_value = mock_process
+
+            conversion_worker.run()
+
+        # Error path: source file must still exist
+        assert Path(test_input_file).exists()
+        assert len(stub_callback_bridge.error_calls) == 1
 
 
 @pytest.mark.unit

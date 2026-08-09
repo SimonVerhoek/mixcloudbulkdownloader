@@ -38,6 +38,7 @@ class CallbackBridge:
             download_manager: DownloadManager instance to emit signals through
         """
         self.download_manager = download_manager
+        self.shutting_down = False
 
     def emit_progress(self, cloudcast_url: str, progress_text: str, task_type: str = "download"):
         """Emit progress update signal in thread-safe manner.
@@ -47,6 +48,8 @@ class CallbackBridge:
             progress_text: Progress information to display
             task_type: Type of task ("download" or "conversion")
         """
+        if self.shutting_down:
+            return
         QMetaObject.invokeMethod(
             self.download_manager,
             "_emit_progress_signal",
@@ -64,6 +67,8 @@ class CallbackBridge:
             file_path: Path to completed file
             task_type: Type of task ("download" or "conversion")
         """
+        if self.shutting_down:
+            return
         QMetaObject.invokeMethod(
             self.download_manager,
             "_emit_completed_signal",
@@ -81,12 +86,31 @@ class CallbackBridge:
             error_msg: Error message
             task_type: Type of task ("download" or "conversion")
         """
+        if self.shutting_down:
+            return
         QMetaObject.invokeMethod(
             self.download_manager,
             "_emit_error_signal",
             Qt.QueuedConnection,
             Q_ARG(str, cloudcast_url),
             Q_ARG(str, error_msg),
+            Q_ARG(str, task_type),
+        )
+
+    def emit_cancelled(self, cloudcast_url: str, task_type: str = "download"):
+        """Emit task cancelled signal in thread-safe manner.
+
+        Args:
+            cloudcast_url: Cloudcast URL (task identifier)
+            task_type: Type of task ("download" or "conversion")
+        """
+        if self.shutting_down:
+            return
+        QMetaObject.invokeMethod(
+            self.download_manager,
+            "_emit_cancelled_signal",
+            Qt.QueuedConnection,
+            Q_ARG(str, cloudcast_url),
             Q_ARG(str, task_type),
         )
 
@@ -201,6 +225,17 @@ class DownloadManager(QObject):
         for worker in self.active_conversions.values():
             worker.cancel()
 
+    def shutdown(self) -> None:
+        """Gracefully shut down all workers and wait for thread pools to drain.
+
+        Call this before the application exits to prevent crashes caused by
+        workers running in custom QThreadPool instances after the manager is destroyed.
+        """
+        self.callback_bridge.shutting_down = True
+        self.cancel_all()
+        self.download_pool.waitForDone(5000)
+        self.conversion_pool.waitForDone(5000)
+
     def _start_conversion(self, cloudcast_url: str, downloaded_file: str) -> None:
         """Start conversion worker for Pro users.
 
@@ -282,4 +317,15 @@ class DownloadManager(QObject):
             self.active_conversions.pop(cloudcast_url, None)
 
         self.task_error.emit(cloudcast_url, error_msg)
+        self._check_all_finished()
+
+    @Slot(str, str)
+    def _emit_cancelled_signal(self, cloudcast_url: str, task_type: str):
+        """Emit cancellation signal from main thread (called by CallbackBridge)."""
+        if task_type == "download":
+            self.active_downloads.pop(cloudcast_url, None)
+        elif task_type == "conversion":
+            self.active_conversions.pop(cloudcast_url, None)
+
+        self.task_cancelled.emit(cloudcast_url)
         self._check_all_finished()

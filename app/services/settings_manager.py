@@ -88,11 +88,18 @@ class SettingsManager:
         """
         self._read_write_lock = threading.RLock()  # Allow recursive acquisition
         self._credentials_were_cleared: bool = False
+        self._shutting_down: bool = False
 
         # Initialize storage location and encryption
         self._storage_path = self._get_storage_path()
         self._encryptor = CredentialEncryptor()
         self._settings = self._create_qsettings()
+
+        # Pre-load as a plain Python bool so error_reporting_enabled is safe to read
+        # from any thread (Sentry's before_send may fire on worker threads).
+        self._consent_cache: bool = bool(
+            self._get(key=SETTING_ERROR_REPORTING_ENABLED, default=DEFAULT_ERROR_REPORTING_ENABLED)
+        )
 
         # Test encryption functionality at startup
         self._test_encryption_functionality()
@@ -218,21 +225,24 @@ class SettingsManager:
     def error_reporting_enabled(self) -> bool:
         """Get whether the user has consented to error reporting.
 
+        Returns the cached Python bool, which is safe to read from any thread
+        (including Sentry's before_send callback running on a worker thread).
+
         Returns:
             bool: Whether error reporting is enabled.
         """
-        return self._get(
-            key=SETTING_ERROR_REPORTING_ENABLED,
-            default=DEFAULT_ERROR_REPORTING_ENABLED,
-        )
+        return self._consent_cache
 
     @error_reporting_enabled.setter
     def error_reporting_enabled(self, value: bool) -> None:
         """Set whether error reporting is enabled.
 
+        Updates the in-memory cache immediately, then persists to QSettings.
+
         Args:
             value: Whether to enable error reporting.
         """
+        self._consent_cache = value
         self._set(key=SETTING_ERROR_REPORTING_ENABLED, value=value)
 
     @property
@@ -430,6 +440,8 @@ class SettingsManager:
         Returns:
             Any: Setting value with type conversion, or default if not found.
         """
+        if self._shutting_down:
+            return default
         try:
             with self._read_write_lock:
                 value = self._settings.value(key, default)
@@ -465,6 +477,8 @@ class SettingsManager:
             key: Setting key to store.
             value: Value to store.
         """
+        if self._shutting_down:
+            return
         try:
             with self._read_write_lock:
                 self._settings.setValue(key, value)

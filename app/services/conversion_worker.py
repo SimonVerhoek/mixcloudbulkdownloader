@@ -11,7 +11,7 @@ from pathlib import Path
 from PySide6.QtCore import QRunnable
 
 from app.consts.audio import AUDIO_FORMATS
-from app.consts.ui import CANCELLED_ICON, CONVERSION_ICON
+from app.consts.ui import CONVERSION_ICON
 from app.logger import log_api, log_error
 from app.services.license_manager import LicenseManager
 from app.services.settings_manager import SettingsManager
@@ -166,11 +166,9 @@ class ConversionWorker(QRunnable):
                 raise RuntimeError(f"Converted file not found: {self.converting_file_path}")
 
         except ConversionCancelled:
-            # Emit cancellation signal and clean up
-            self.callback_bridge.emit_progress(
-                self.cloudcast_url, f"{CANCELLED_ICON} Cancelled", "conversion"
-            )
             self._cleanup_partial_conversion()
+            self._cleanup_source_file()
+            self.callback_bridge.emit_cancelled(self.cloudcast_url, "conversion")
 
         except Exception as e:
             self.callback_bridge.emit_error(
@@ -300,6 +298,19 @@ class ConversionWorker(QRunnable):
             self._cleanup_temp_directory()
         except (OSError, PermissionError):
             pass  # Ignore cleanup errors
+
+    def _cleanup_source_file(self) -> None:
+        """Remove the original downloaded file after conversion is cancelled.
+
+        Only called on cancellation. On error the source file is kept so the
+        user can retry conversion without re-downloading.
+        """
+        try:
+            input_path = Path(self.input_file)
+            if input_path.exists() and input_path.is_file():
+                input_path.unlink()
+        except (OSError, PermissionError):
+            pass
 
     def _cleanup_temp_directory(self):
         """Clean up temporary conversion directory if empty."""

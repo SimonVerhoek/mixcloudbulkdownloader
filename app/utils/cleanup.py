@@ -90,7 +90,7 @@ class PartialFileCleanup:
             return 0
 
         cleaned_count = 0
-        fragment_patterns = ["*.part", "*.part-Frag*", "*.webm.part*", "*.mp4.part*"]
+        fragment_patterns = ["*.part", "*.part-Frag*", "*.webm.part*", "*.mp4.part*", "*.ytdl"]
 
         for pattern in fragment_patterns:
             for fragment_file in directory.glob(pattern):

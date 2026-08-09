@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from PySide6.QtCore import QCoreApplication
 from PySide6.QtGui import QCloseEvent, QGuiApplication
 from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QVBoxLayout, QWidget
 
@@ -310,6 +311,15 @@ class MainWindow(QMainWindow):
             if hasattr(self, "license_manager") and hasattr(self.license_manager, "settings"):
                 # Mark settings as shutting down to prevent keyring access
                 self.license_manager.settings._shutting_down = True
+
+            # Shut down download workers before window destruction to prevent crashes
+            if (
+                hasattr(self, "central_widget")
+                and hasattr(self.central_widget, "cloudcasts")
+                and hasattr(self.central_widget.cloudcasts, "download_manager")
+            ):
+                self.central_widget.cloudcasts.download_manager.shutdown()
+                QCoreApplication.processEvents()  # drain queued _emit_*_signal events
 
         except Exception:
             # Ignore any errors during cleanup to ensure app can exit

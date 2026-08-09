@@ -370,9 +370,10 @@ class TestDownloadWorkerErrorHandling:
         worker.run()
 
         # Should emit cancellation and not attempt download
-        mock_callback_bridge.emit_progress.assert_called_once()
-        call_args = mock_callback_bridge.emit_progress.call_args[0]
-        assert "Cancelled" in call_args[1]
+        mock_callback_bridge.emit_cancelled.assert_called_once_with(
+            worker.cloudcast.url, "download"
+        )
+        mock_callback_bridge.emit_progress.assert_not_called()
 
     @patch("app.services.download_worker.yt_dlp.YoutubeDL")
     def test_format_detection_network_error(
@@ -616,10 +617,10 @@ class TestDownloadWorkerYtDlpOptions:
         # Cancel the worker
         worker.cancel()
 
-        # Progress hook should raise DownloadError when cancelled
-        from yt_dlp.utils import DownloadError
+        # Progress hook should raise DownloadAborted when cancelled
+        from app.services.download_worker import DownloadAborted
 
-        with pytest.raises(DownloadError, match="cancelled by user"):
+        with pytest.raises(DownloadAborted, match="aborted by user"):
             progress_hook({"status": "downloading"})
 
     def test_generate_ydl_opts_progress_hook_signals(

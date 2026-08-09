@@ -11,7 +11,7 @@ from pathlib import Path
 import yt_dlp
 from PySide6.QtCore import QRunnable
 
-from app.consts.ui import CANCELLED_ICON, DOWNLOAD_ICON
+from app.consts.ui import DOWNLOAD_ICON
 from app.data_classes import Cloudcast
 from app.logger import log_error_with_traceback
 from app.services.license_manager import LicenseManager
@@ -22,6 +22,17 @@ from app.utils.yt_dlp import QuietLogger, get_stable_size_estimate
 
 class DownloadCancelled(Exception):
     """Exception raised when download is cancelled."""
+
+    pass
+
+
+class DownloadAborted(BaseException):
+    """Raised in the progress hook to abort yt-dlp without triggering retry logic.
+
+    Uses BaseException (not Exception) so it is NOT caught by yt-dlp's
+    ``except DownloadError`` or ``except Exception`` fragment-retry handlers,
+    ensuring immediate propagation with zero retries.
+    """
 
     pass
 
@@ -101,6 +112,10 @@ class DownloadWorker(QRunnable):
                     )
                     # Filenames already default to .webm, so continue with those
 
+                # If cancel() was called while extract_info was blocking, abort before download
+                if self.cancelled:
+                    raise DownloadCancelled("Cancelled during format detection")
+
                 # Now perform the actual download
                 ydl.download([self.cloudcast.url])
 
@@ -116,10 +131,11 @@ class DownloadWorker(QRunnable):
                     raise RuntimeError(f"Download file not found: {self.download_file_path}")
 
         except DownloadCancelled:
-            # Emit cancellation signal and clean up
-            self.callback_bridge.emit_progress(
-                self.cloudcast.url, f"{CANCELLED_ICON} Cancelled", "download"
-            )
+            self.callback_bridge.emit_cancelled(self.cloudcast.url, "download")
+            self._cleanup()
+
+        except DownloadAborted:
+            self.callback_bridge.emit_cancelled(self.cloudcast.url, "download")
             self._cleanup()
 
         except yt_dlp.utils.DownloadError as e:
@@ -133,9 +149,7 @@ class DownloadWorker(QRunnable):
                     "No such file or directory",
                 ]
             ):
-                self.callback_bridge.emit_progress(
-                    self.cloudcast.url, f"{CANCELLED_ICON} Cancelled", "download"
-                )
+                self.callback_bridge.emit_cancelled(self.cloudcast.url, "download")
             else:
                 log_error_with_traceback(message=error_msg, level="ERROR")
                 self.callback_bridge.emit_error(
@@ -151,10 +165,13 @@ class DownloadWorker(QRunnable):
             self._cleanup()
 
     def cancel(self):
-        """Cancel the download operation."""
+        """Cancel the download operation.
+
+        Sets the cancellation flag. The progress hook will raise DownloadAborted on
+        its next call, which propagates immediately through yt-dlp without retries.
+        File cleanup happens in _cleanup() when the exception is handled in run().
+        """
         self.cancelled = True
-        # Clean up immediately
-        self._immediate_cleanup()
 
     def _sanitize_filename(self, name: str) -> str:
         """Sanitize filename for filesystem compatibility.
@@ -242,8 +259,7 @@ class DownloadWorker(QRunnable):
         def progress_hook(progress_data: dict):
             """Handle yt-dlp progress updates with stable size estimates."""
             if self.cancelled:
-                self._immediate_cleanup()
-                raise yt_dlp.utils.DownloadError("Download cancelled by user")
+                raise DownloadAborted("Download aborted by user")
 
             status = progress_data.get("status", "")
             if status == "downloading":
@@ -345,6 +361,7 @@ class DownloadWorker(QRunnable):
                 f"{base_name}*.part",
                 f"{base_name}*.part-Frag*",
                 f"{base_name}*.*part*",  # Catch any extension with .part
+                f"{base_name}*.ytdl",  # yt-dlp DASH/HTTP resume-state sidecar files
             ]:
                 for fragment_file in download_dir.glob(pattern):
                     try:

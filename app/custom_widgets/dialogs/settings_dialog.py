@@ -30,7 +30,6 @@ from app.consts.settings import (
     PARALLEL_DOWNLOADS_OPTIONS,
     SETTING_CHECK_UPDATES_ON_STARTUP,
     SETTING_ENABLE_AUDIO_CONVERSION,
-    SETTING_ERROR_REPORTING_ENABLED,
     SETTING_MAX_PARALLEL_CONVERSIONS,
     SETTING_MAX_PARALLEL_DOWNLOADS,
 )
@@ -348,7 +347,7 @@ class SettingsDialog(ProFeatureWidget, QDialog):
 
         # Save error reporting setting (available to all users)
         error_reporting = self.error_reporting_checkbox.isChecked()
-        self.settings_manager.set(SETTING_ERROR_REPORTING_ENABLED, error_reporting)
+        self.settings_manager.error_reporting_enabled = error_reporting
 
         # Save Pro settings if Pro user
         if self.license_manager.is_pro:
