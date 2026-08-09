@@ -6,6 +6,7 @@ import pytest
 from PySide6.QtCore import QCoreApplication, QTimer
 
 from app.data_classes import Cloudcast, MixcloudUser
+from app.services.api_service import MixcloudAPIService
 from app.threads.fetch_by_url_thread import FetchByUrlThread
 from app.threads.get_cloudcasts_thread import GetCloudcastsThread
 from app.threads.search_artist_thread import SearchArtistThread
@@ -18,7 +19,7 @@ class TestGetCloudcastsThread:
 
     def test_init_with_service(self):
         """Test initialization with custom API service."""
-        mock_service = Mock()
+        mock_service = Mock(spec=MixcloudAPIService)
         thread = GetCloudcastsThread(api_service=mock_service)
 
         assert thread.api_service is mock_service
@@ -104,7 +105,7 @@ class TestSearchArtistThread:
 
     def test_init_with_service(self):
         """Test initialization with custom API service."""
-        mock_service = Mock()
+        mock_service = Mock(spec=MixcloudAPIService)
         thread = SearchArtistThread(api_service=mock_service)
 
         assert thread.api_service is mock_service
@@ -197,7 +198,7 @@ class TestSearchCloudcastThread:
 
     def test_init_with_service(self):
         """Test initialization with custom API service stores the injected service."""
-        mock_service = Mock()
+        mock_service = Mock(spec=MixcloudAPIService)
         thread = SearchCloudcastThread(api_service=mock_service)
 
         assert thread.api_service is mock_service
@@ -264,7 +265,7 @@ class TestFetchByUrlThread:
 
     def test_init_with_service(self):
         """Test initialization with custom API service stores the injected service."""
-        mock_service = Mock()
+        mock_service = Mock(spec=MixcloudAPIService)
         thread = FetchByUrlThread(api_service=mock_service)
 
         assert thread.api_service is mock_service

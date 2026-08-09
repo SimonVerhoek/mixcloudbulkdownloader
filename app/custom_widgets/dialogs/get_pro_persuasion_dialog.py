@@ -1,14 +1,16 @@
 """Pro persuasion dialog widget for encouraging users to upgrade to Pro after download completion."""
 
 import webbrowser
+from collections.abc import Callable
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
+import app.services.license_manager as _lm_module
 from app.consts.license import LICENSE_CHECKOUT_ERROR, PRO_FEATURES_LIST, PRO_PRICE_TEXT
 from app.custom_widgets.dialogs.error_dialog import ErrorDialog
 from app.logger import log_error
-from app.services.license_manager import license_manager
+from app.services.license_manager import LicenseManager, license_manager
 
 
 class GetProPersuasionDialog(QDialog):
@@ -18,13 +20,27 @@ class GetProPersuasionDialog(QDialog):
     to encourage users to upgrade. Only shown to free users (not Pro users).
     """
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        license_manager: LicenseManager | None = None,
+        browser_open_fn: Callable | None = None,
+        error_dialog_factory: Callable | None = None,
+    ) -> None:
         """Initialize the persuasion dialog.
 
         Args:
             parent: Parent widget for the dialog
+            license_manager: License manager instance to use. If None, uses the module-level singleton.
+            browser_open_fn: Callable used to open URLs in a browser. Defaults to webbrowser.open.
+            error_dialog_factory: Callable used to construct error dialogs. Defaults to ErrorDialog.
         """
         super().__init__(parent)
+        self._license_manager = (
+            license_manager if license_manager is not None else _lm_module.license_manager
+        )
+        self._browser_open_fn = browser_open_fn or webbrowser.open
+        self._error_dialog_factory = error_dialog_factory or ErrorDialog
 
         self.setWindowTitle("Upgrade to MBD Pro")
         self.setModal(True)
@@ -102,11 +118,13 @@ class GetProPersuasionDialog(QDialog):
     def _handle_get_pro(self) -> None:
         """Handle the Get Pro button click by opening the checkout URL."""
         try:
-            checkout_url = license_manager.get_checkout_url()
-            webbrowser.open(checkout_url)
+            checkout_url = self._license_manager.get_checkout_url()
+            self._browser_open_fn(checkout_url)
         except Exception as e:
             log_error(message=f"Failed to retrieve checkout URL: {e}")
-            error_dialog = ErrorDialog(self, LICENSE_CHECKOUT_ERROR, "Checkout Error")
+            error_dialog = self._error_dialog_factory(
+                self, LICENSE_CHECKOUT_ERROR, "Checkout Error"
+            )
             error_dialog.exec()
         finally:
             self.accept()
@@ -116,10 +134,15 @@ class GetProPersuasionDialog(QDialog):
         self.reject()
 
     @staticmethod
-    def should_show() -> bool:
+    def should_show(license_manager_fn: Callable | None = None) -> bool:
         """Determine if the Pro persuasion dialog should be shown.
+
+        Args:
+            license_manager_fn: Optional callable that returns the license manager to use.
+                Defaults to the module-level singleton.
 
         Returns:
             bool: True if dialog should be shown (user is not Pro), False otherwise.
         """
-        return not license_manager.is_pro
+        _lm = license_manager_fn() if license_manager_fn is not None else _lm_module.license_manager
+        return not _lm.is_pro

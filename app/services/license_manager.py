@@ -1,11 +1,13 @@
 """License management for Mixcloud Bulk Downloader Pro features."""
 
 import time
+from collections.abc import Callable
 from typing import Any
 
 import httpx
 from PySide6.QtCore import QObject, Signal
 
+import app.services.settings_manager as _settings_module
 from app.consts.license import (
     DEFAULT_LICENSE_BACKOFF_RATE,
     DEFAULT_LICENSE_RETRY_COUNT,
@@ -19,7 +21,7 @@ from app.consts.license import (
     USER_FEEDBACK_BEARER_TOKEN,
 )
 from app.logger import log_api, log_error
-from app.services.settings_manager import settings
+from app.services.settings_manager import SettingsManager
 
 
 class LicenseManager(QObject):
@@ -36,10 +38,36 @@ class LicenseManager(QObject):
     # Signal emitted when license status changes (is_pro: bool)
     license_status_changed = Signal(bool)
 
-    def __init__(self) -> None:
-        """Initialize the license manager with settings reference."""
+    def __init__(
+        self,
+        settings: SettingsManager | None = None,
+        request_fn: Callable | None = None,
+        http_client_factory: Callable = httpx.Client,
+        sleep_fn: Callable = time.sleep,
+    ) -> None:
+        """Initialize the license manager with settings reference.
+
+        Args:
+            settings: Settings manager instance; falls back to module-level singleton.
+            request_fn: Optional callable to replace the entire HTTP request logic
+                (receives method, uri, url_params, payload, timeout, max_retries,
+                backoff_rate, headers keyword arguments and returns a response dict or None).
+                Useful for high-level stubbing that skips the retry loop.
+            http_client_factory: Optional callable used to create the httpx client in the
+                retry loop.  Receives ``timeout`` as a keyword argument and must return
+                an object that can be used as a context manager yielding an httpx-compatible
+                client (i.e. has a ``.request()`` method).  When *None*, ``httpx.Client`` is
+                used directly.  Inject a ``FakeLicenseServerClient`` (or similar) in tests to
+                avoid real network calls while still exercising the retry/backoff logic.
+            sleep_fn: Optional callable used instead of ``time.sleep`` during retry backoff.
+                Receives the delay in seconds as a positional argument.  Inject a no-op or
+                recording callable in tests to speed up retry tests without real delays.
+        """
         super().__init__()
-        self.settings = settings  # Use the singleton instance
+        self.settings = settings if settings is not None else _settings_module.settings
+        self._request_fn = request_fn
+        self._http_client_factory = http_client_factory
+        self._sleep_fn = sleep_fn
         self._is_pro = False  # Private attribute to track changes
         self._pro_status_initialized: bool = False  # Deferred until first is_pro access
 
@@ -107,8 +135,22 @@ class LicenseManager(QObject):
         Returns:
             Dict containing response JSON data, or None if all attempts failed.
         """
+        if self._request_fn is not None:
+            return self._request_fn(
+                method=method,
+                uri=uri,
+                url_params=url_params,
+                payload=payload,
+                timeout=timeout,
+                max_retries=max_retries,
+                backoff_rate=backoff_rate,
+                headers=headers,
+            )
+
         # Cast timeout to httpx.Timeout inside the method
         http_timeout = httpx.Timeout(timeout=timeout)
+
+        client_factory = self._http_client_factory
 
         # Construct full URL
         full_url = f"{LICENSE_SERVER_URL}{uri}"
@@ -117,7 +159,7 @@ class LicenseManager(QObject):
         last_exception = None
         for attempt in range(max_retries + 1):
             try:
-                with httpx.Client(timeout=http_timeout) as client:
+                with client_factory(timeout=http_timeout) as client:
                     # Send request using generic client.request method
                     request_kwargs = {"params": url_params} if url_params else {}
                     if payload is not None:
@@ -177,7 +219,7 @@ class LicenseManager(QObject):
                 message=f"License server request attempt {attempt + 1}/{max_retries + 1} failed, retrying in {delay:.1f}s...",
                 level="WARNING",
             )
-            time.sleep(delay)
+            self._sleep_fn(delay)
 
         # All retry attempts failed
         log_error(

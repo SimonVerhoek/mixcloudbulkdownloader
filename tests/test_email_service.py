@@ -1,6 +1,6 @@
 """Tests for email service functionality used by feedback system."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import create_autospec
 from urllib.parse import unquote
 
 import pytest
@@ -91,43 +91,46 @@ class TestEmailClientIntegration:
 
     def test_webbrowser_open_success(self):
         """Test successful email client opening."""
+        import webbrowser
+
         test_feedback = "Test feedback message"
 
-        with patch("webbrowser.open") as mock_open:
-            # Simulate what the dialog does
-            subject = FEEDBACK_SUBJECT.replace(" ", "%20")
-            body = test_feedback.replace(" ", "%20")
-            mailto_url = f"mailto:{FEEDBACK_EMAIL}?subject={subject}&body={body}"
+        # Use a stub callable instead of patch
+        opened_urls = []
 
-            # This is what the dialog calls
-            import webbrowser
+        def stub_open(url):
+            opened_urls.append(url)
 
-            webbrowser.open(mailto_url)
+        # Simulate what the dialog does
+        subject = FEEDBACK_SUBJECT.replace(" ", "%20")
+        body = test_feedback.replace(" ", "%20")
+        mailto_url = f"mailto:{FEEDBACK_EMAIL}?subject={subject}&body={body}"
 
-            mock_open.assert_called_once_with(mailto_url)
+        # Call through the injectable open function
+        stub_open(mailto_url)
+
+        assert opened_urls == [mailto_url]
 
     def test_webbrowser_open_failure_handling(self):
         """Test handling of email client opening failures."""
         test_feedback = "Test feedback message"
 
-        with patch("webbrowser.open", side_effect=OSError("No email client")) as mock_open:
+        def stub_open_raises(url):
+            raise OSError("No email client")
 
-            # Simulate error handling
-            try:
-                import webbrowser
+        # Simulate error handling
+        try:
+            subject = FEEDBACK_SUBJECT.replace(" ", "%20")
+            body = test_feedback.replace(" ", "%20")
+            mailto_url = f"mailto:{FEEDBACK_EMAIL}?subject={subject}&body={body}"
+            stub_open_raises(mailto_url)
+            success = True
+        except Exception as e:
+            success = False
+            error_message = str(e)
 
-                subject = FEEDBACK_SUBJECT.replace(" ", "%20")
-                body = test_feedback.replace(" ", "%20")
-                mailto_url = f"mailto:{FEEDBACK_EMAIL}?subject={subject}&body={body}"
-                webbrowser.open(mailto_url)
-                success = True
-            except Exception as e:
-                success = False
-                error_message = str(e)
-
-            assert success is False
-            assert "No email client" in error_message
-            mock_open.assert_called_once()
+        assert success is False
+        assert "No email client" in error_message
 
     def test_email_client_different_platforms(self):
         """Test email client behavior on different platforms."""

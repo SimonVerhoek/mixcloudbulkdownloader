@@ -1,5 +1,6 @@
 """Tree widget for displaying and managing cloudcasts."""
 
+from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Slot
@@ -38,6 +39,7 @@ class CloudcastQTreeWidget(QTreeWidget):
         file_service: FileService = file_service,
         license_manager: LicenseManager = license_manager,
         settings_manager: SettingsManager = settings,
+        dialog_factory: Callable | None = None,
     ) -> None:
         """Initialize the cloudcast tree widget with columns and background threads.
 
@@ -46,8 +48,11 @@ class CloudcastQTreeWidget(QTreeWidget):
             file_service: Service for file operations.
             license_manager: License manager for Pro status checking.
             settings_manager: Settings manager for preference persistence.
+            dialog_factory: Optional callable to create the Pro persuasion dialog.
+                If None, uses GetProPersuasionDialog.
         """
         super().__init__()
+        self._dialog_factory = dialog_factory
 
         # Store services
         self.api_service = api_service
@@ -154,8 +159,9 @@ class CloudcastQTreeWidget(QTreeWidget):
     @Slot()
     def show_pro_persuasion_dialog(self) -> None:
         """Display Pro persuasion dialog after successful download completion."""
-        if GetProPersuasionDialog.should_show():
-            dialog = GetProPersuasionDialog(self.parent())
+        dialog_cls = self._dialog_factory or GetProPersuasionDialog
+        if dialog_cls.should_show():
+            dialog = dialog_cls(self.parent())
             dialog.exec()
 
     def clear(self) -> None:

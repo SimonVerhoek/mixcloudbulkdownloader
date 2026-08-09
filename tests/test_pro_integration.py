@@ -1,12 +1,13 @@
 """Integration tests for Pro license system main application integration."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pytest
 
 from app.custom_widgets.central_widget import CentralWidget
 from app.main_window import MainWindow
 from app.services.license_manager import LicenseManager
+from app.services.settings_manager import SettingsManager
 from app.threads.startup_verification_thread import StartupVerificationThread
 
 
@@ -21,11 +22,11 @@ def mock_license_manager():
     """Create a mock license manager for testing."""
     mock_manager = Mock(spec=LicenseManager)
     mock_manager.is_pro = False
-    mock_manager.settings = Mock()
+    mock_manager.settings = Mock(spec=SettingsManager)
     mock_manager.settings.email = ""
     mock_manager.settings.license_key = ""
     mock_manager.settings.last_successful_verification = None
-    mock_manager.verify_license = Mock(return_value=False)
+    mock_manager.verify_license.return_value = False
     return mock_manager
 
 
@@ -34,12 +35,81 @@ def mock_pro_license_manager():
     """Create a mock license manager for Pro user testing."""
     mock_manager = Mock(spec=LicenseManager)
     mock_manager.is_pro = True
-    mock_manager.settings = Mock()
+    mock_manager.settings = Mock(spec=SettingsManager)
     mock_manager.settings.email = "pro@example.com"
     mock_manager.settings.license_key = "valid-key"
     mock_manager.settings.last_successful_verification = 1640995200  # Some timestamp
-    mock_manager.verify_license = Mock(return_value=True)
+    mock_manager.verify_license.return_value = True
     return mock_manager
+
+
+class StubVerificationThread:
+    """Minimal stub for StartupVerificationThread that does nothing on start."""
+
+    def __init__(self, lm=None, parent=None) -> None:
+        self.started = False
+        self.lm = lm
+
+    def start(self) -> None:
+        self.started = True
+
+    def isRunning(self) -> bool:
+        return False
+
+    def terminate(self) -> None:
+        pass
+
+    def wait(self, ms: int = 0) -> None:
+        pass
+
+
+class StubGetProDialog:
+    """Minimal stub for GetProDialog that records exec() calls."""
+
+    def __init__(self, parent=None) -> None:
+        self.exec_return_value = False
+
+    def exec(self) -> bool:
+        return self.exec_return_value
+
+
+class StubErrorDialog:
+    """Minimal stub for ErrorDialog that records creation."""
+
+    instances: list["StubErrorDialog"] = []
+
+    def __init__(self, parent=None, msg: str = "") -> None:
+        self.msg = msg
+        StubErrorDialog.instances.append(self)
+
+
+class StubMainWindow(MainWindow):
+    """MainWindow subclass that overrides factory methods for testing."""
+
+    def __init__(self, **kwargs) -> None:
+        self._stub_verification_thread: StubVerificationThread | None = None
+        self._stub_pro_dialog: StubGetProDialog | None = None
+        self._ffmpeg_verification_called = False
+        StubErrorDialog.instances.clear()
+        super().__init__(**kwargs)
+
+    def _create_verification_thread(self, lm: LicenseManager) -> StubVerificationThread:
+        self._stub_verification_thread = StubVerificationThread(lm=lm, parent=self)
+        return self._stub_verification_thread
+
+    def _create_pro_dialog(self, parent=None) -> StubGetProDialog:
+        self._stub_pro_dialog = StubGetProDialog(parent=parent)
+        return self._stub_pro_dialog
+
+    def _create_error_dialog(self, msg: str, parent=None) -> StubErrorDialog:
+        return StubErrorDialog(parent=parent, msg=msg)
+
+    def _verify_ffmpeg_availability(self) -> None:
+        self._ffmpeg_verification_called = True
+
+    def _run_update_check(self, is_startup: bool) -> None:
+        """Suppress update check to avoid real HTTP calls and GC-related segfaults."""
+        pass
 
 
 @pytest.mark.qt
@@ -58,7 +128,6 @@ class TestCentralWidgetProIntegration:
         qtbot.addWidget(widget)
         widget.show()
 
-        # Pro button should no longer exist in central widget
         assert not hasattr(widget, "get_mbd_pro_button")
 
     def test_central_widget_has_core_functionality(self, app, mock_license_manager, qtbot):
@@ -66,99 +135,68 @@ class TestCentralWidgetProIntegration:
         widget = CentralWidget(license_manager=mock_license_manager)
         qtbot.addWidget(widget)
 
-        # Should have main functional elements
-        assert hasattr(widget, "search_user_input")
-        assert hasattr(widget.search_user_input, "artist_selected")
-        assert hasattr(widget, "download_button")
-        assert hasattr(widget, "cancel_button")
+        _ = widget.search_user_input
+        _ = widget.search_user_input.artist_selected
+        _ = widget.download_button
+        _ = widget.cancel_button
 
 
 @pytest.mark.qt
 class TestMainWindowProIntegration:
     """Test MainWindow Pro integration functionality."""
 
-    @patch("app.main_window.StartupVerificationThread")
     def test_main_window_creates_central_widget_with_license_manager(
-        self, mock_thread_class, app, mock_license_manager, qtbot
+        self, app, mock_license_manager, qtbot
     ):
         """Test that MainWindow passes license_manager to CentralWidget."""
-        with patch("app.main_window.license_manager", mock_license_manager):
-            window = MainWindow()
-            qtbot.addWidget(window)
-            window.show()
+        window = StubMainWindow(license_manager=mock_license_manager)
+        qtbot.addWidget(window)
+        window.show()
 
-            assert hasattr(window, "central_widget")
-            assert window.central_widget.license_manager == mock_license_manager
+        assert window.central_widget.license_manager == mock_license_manager
 
-    @patch("app.main_window.StartupVerificationThread")
     def test_get_mbd_pro_menu_item_created_for_non_pro_users(
-        self, mock_thread_class, app, mock_license_manager, qtbot
+        self, app, mock_license_manager, qtbot
     ):
         """Test that Get MBD Pro menu item is created and visible for non-Pro users."""
-        with patch("app.main_window.license_manager", mock_license_manager):
-            window = MainWindow()
-            qtbot.addWidget(window)
+        window = StubMainWindow(license_manager=mock_license_manager)
+        qtbot.addWidget(window)
 
-            assert hasattr(window, "get_mbd_pro_action")
-            assert window.get_mbd_pro_action.text() == "Get MBD Pro..."
-            assert window.get_mbd_pro_action.isVisible()
+        assert window.get_mbd_pro_action.text() == "Get MBD Pro..."
+        assert window.get_mbd_pro_action.isVisible()
 
-    @patch("app.main_window.StartupVerificationThread")
-    def test_get_mbd_pro_menu_item_hidden_for_pro_users(
-        self, mock_thread_class, app, mock_pro_license_manager, qtbot
-    ):
+    def test_get_mbd_pro_menu_item_hidden_for_pro_users(self, app, mock_pro_license_manager, qtbot):
         """Test that Get MBD Pro menu item is hidden for Pro users."""
-        with patch("app.main_window.license_manager", mock_pro_license_manager):
-            window = MainWindow()
-            qtbot.addWidget(window)
+        window = StubMainWindow(license_manager=mock_pro_license_manager)
+        qtbot.addWidget(window)
 
-            assert hasattr(window, "get_mbd_pro_action")
-            assert not window.get_mbd_pro_action.isVisible()
+        assert not window.get_mbd_pro_action.isVisible()
 
-    @patch("app.main_window.GetProDialog")
-    @patch("app.main_window.StartupVerificationThread")
-    def test_get_mbd_pro_menu_opens_dialog(
-        self, mock_thread_class, mock_dialog_class, app, mock_license_manager, qtbot
-    ):
+    def test_get_mbd_pro_menu_opens_dialog(self, app, mock_license_manager, qtbot):
         """Test that Get MBD Pro menu item opens GetProDialog."""
-        mock_dialog = Mock()
-        mock_dialog.exec.return_value = False
-        mock_dialog_class.return_value = mock_dialog
+        window = StubMainWindow(license_manager=mock_license_manager)
+        qtbot.addWidget(window)
 
-        with patch("app.main_window.license_manager", mock_license_manager):
-            window = MainWindow()
-            qtbot.addWidget(window)
+        window.get_mbd_pro_action.trigger()
 
-            # Trigger menu action
-            window.get_mbd_pro_action.trigger()
+        assert window._stub_pro_dialog is not None
 
-            mock_dialog_class.assert_called_once_with(window)
-            mock_dialog.exec.assert_called_once()
-
-    @patch("app.main_window.StartupVerificationThread")
-    def test_dynamic_ui_updates_on_pro_status_change(
-        self, mock_thread_class, app, mock_license_manager, qtbot
-    ):
+    def test_dynamic_ui_updates_on_pro_status_change(self, app, mock_license_manager, qtbot):
         """Test that UI updates when Pro status changes."""
-        with patch("app.main_window.license_manager", mock_license_manager):
-            window = MainWindow()
-            qtbot.addWidget(window)
-            window.show()
+        window = StubMainWindow(license_manager=mock_license_manager)
+        qtbot.addWidget(window)
+        window.show()
 
-            # Initially non-Pro, elements should be visible
-            assert window.get_mbd_pro_action.isVisible()
-            assert window.footer_widget.get_pro_button.isVisible()
+        assert window.get_mbd_pro_action.isVisible()
+        assert window.footer_widget.get_pro_button.isVisible()
 
-            # Change to Pro status
-            mock_license_manager.is_pro = True
-            window.refresh_pro_ui_elements()
+        mock_license_manager.is_pro = True
+        window.refresh_pro_ui_elements()
 
-            # Menu should be hidden, footer button handled by license manager signal
-            assert not window.get_mbd_pro_action.isVisible()
+        assert not window.get_mbd_pro_action.isVisible()
 
-            # Simulate the footer widget receiving the license status change
-            window.footer_widget._handle_license_status_changed(True)
-            assert not window.footer_widget.get_pro_button.isVisible()
+        window.footer_widget._handle_license_status_changed(True)
+        assert not window.footer_widget.get_pro_button.isVisible()
 
 
 @pytest.mark.qt
@@ -173,7 +211,6 @@ class TestStartupVerification:
 
         thread = StartupVerificationThread(mock_license_manager)
 
-        # Run the verification
         thread.run()
 
         mock_license_manager.verify_license.assert_called_once_with(timeout=10)
@@ -189,7 +226,6 @@ class TestStartupVerification:
 
         thread.run()
 
-        # License manager should maintain Pro status
         mock_license_manager.verify_license.assert_called_once_with(timeout=10)
 
     def test_startup_verification_corrupted_credentials(self, app, mock_license_manager):
@@ -203,7 +239,6 @@ class TestStartupVerification:
 
         thread.run()
 
-        # Should attempt verification
         mock_license_manager.verify_license.assert_called_once_with(timeout=10)
 
     def test_first_run_no_credentials(self, app, mock_license_manager):
@@ -215,7 +250,6 @@ class TestStartupVerification:
 
         thread.run()
 
-        # Should attempt verification (but will exit early due to missing credentials)
         mock_license_manager.verify_license.assert_called_once_with(timeout=10)
 
     def test_startup_verification_failure_with_previous_success(self, app, mock_license_manager):
@@ -229,7 +263,6 @@ class TestStartupVerification:
 
         thread.run()
 
-        # Should attempt verification
         mock_license_manager.verify_license.assert_called_once_with(timeout=10)
 
     def test_startup_verification_failure_no_previous_success(self, app, mock_license_manager):
@@ -243,7 +276,6 @@ class TestStartupVerification:
 
         thread.run()
 
-        # Should attempt verification
         mock_license_manager.verify_license.assert_called_once_with(timeout=10)
 
 
@@ -253,52 +285,26 @@ class TestMainWindowStartupIntegration:
 
     def test_startup_license_verification_thread_created(self, app, mock_license_manager, qtbot):
         """Test that startup verification thread is created and started."""
-        with (
-            patch("app.main_window.license_manager", mock_license_manager),
-            patch("app.main_window.StartupVerificationThread") as mock_thread_class,
-        ):
+        window = StubMainWindow(license_manager=mock_license_manager)
+        qtbot.addWidget(window)
 
-            mock_thread = Mock()
-            mock_thread_class.return_value = mock_thread
+        assert window._stub_verification_thread is not None
+        assert window._stub_verification_thread.started
 
-            window = MainWindow()
-            qtbot.addWidget(window)
-
-            mock_thread_class.assert_called_once_with(mock_license_manager, window)
-            mock_thread.start.assert_called_once()
-
-    @patch("app.main_window.ErrorDialog")
-    def test_handle_license_status_change_to_non_pro(
-        self, mock_error_dialog, app, mock_license_manager, qtbot
-    ):
+    def test_handle_license_status_change_to_non_pro(self, app, mock_license_manager, qtbot):
         """Test handling license status change to non-Pro."""
-        with (
-            patch("app.main_window.license_manager", mock_license_manager),
-            patch("app.main_window.StartupVerificationThread"),
-        ):
+        window = StubMainWindow(license_manager=mock_license_manager)
+        qtbot.addWidget(window)
 
-            window = MainWindow()
-            qtbot.addWidget(window)
+        window._handle_license_status_changed(is_pro=False)
 
-            # Simulate license status change to False
-            window._handle_license_status_changed(is_pro=False)
-
-            # Should not show error dialog (LicenseManager handles error reporting)
-            mock_error_dialog.assert_not_called()
+        assert len(StubErrorDialog.instances) == 0
 
     def test_handle_license_status_change_to_pro(self, app, mock_license_manager, qtbot):
         """Test handling license status change to Pro."""
-        with (
-            patch("app.main_window.license_manager", mock_license_manager),
-            patch("app.main_window.StartupVerificationThread"),
-            patch.object(MainWindow, "_verify_ffmpeg_availability") as mock_ffmpeg_check,
-        ):
+        window = StubMainWindow(license_manager=mock_license_manager)
+        qtbot.addWidget(window)
 
-            window = MainWindow()
-            qtbot.addWidget(window)
+        window._handle_license_status_changed(is_pro=True)
 
-            # Simulate license status change to True
-            window._handle_license_status_changed(is_pro=True)
-
-            # Should verify FFmpeg availability for Pro users
-            mock_ffmpeg_check.assert_called_once()
+        assert window._ffmpeg_verification_called

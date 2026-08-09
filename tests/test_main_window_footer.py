@@ -1,14 +1,19 @@
 """Tests for main window footer integration."""
 
-from unittest.mock import Mock, patch
+from pathlib import Path
+from unittest.mock import Mock, create_autospec
 
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QVBoxLayout
 
 from app.custom_widgets.central_widget import CentralWidget
+from app.custom_widgets.dialogs.feedback_dialog import FeedbackDialog
 from app.custom_widgets.footer_widget import FooterWidget
 from app.main_window import MainWindow
+from app.services.license_manager import LicenseManager
+from app.services.settings_manager import SettingsManager
+from app.threads.startup_verification_thread import StartupVerificationThread
 
 
 @pytest.fixture
@@ -20,68 +25,91 @@ def qt_app():
     yield app
 
 
+class _StubMainWindow(MainWindow):
+    """Subclass of MainWindow that suppresses background thread startup.
+
+    Overrides ``_create_verification_thread`` so that no real license
+    verification thread is launched during tests.  All other behaviour is
+    inherited from the production class.
+    """
+
+    def _create_verification_thread(self, lm: LicenseManager) -> StartupVerificationThread:
+        """Return a spec'd stub instead of a real StartupVerificationThread."""
+        stub = create_autospec(StartupVerificationThread, instance=True)
+        return stub
+
+
+def _make_stub_license_manager(is_pro: bool = False) -> Mock:
+    """Create a spec'd LicenseManager stub with sensible defaults.
+
+    Args:
+        is_pro: Whether the stub should report Pro status.
+
+    Returns:
+        A ``Mock(spec=LicenseManager)`` instance.
+    """
+    lm = Mock(spec=LicenseManager)
+    lm.is_pro = is_pro
+    return lm
+
+
+def _make_stub_settings_manager(tmp_path: Path) -> Mock:
+    """Create a spec'd SettingsManager stub with sensible defaults.
+
+    Args:
+        tmp_path: Temporary directory for the stub; not actually used for file
+            I/O since all attributes are set directly.
+
+    Returns:
+        A ``Mock(spec=SettingsManager)`` instance.
+    """
+    sm = Mock(spec=SettingsManager)
+    # Disable update checking and credential-reentry prompt so MainWindow.__init__
+    # does not block on QMessageBox or start update threads.
+    sm.credentials_were_cleared = False
+    sm.check_updates_on_startup = False
+    sm.get.side_effect = lambda key, default=None: {
+        "check_updates_on_startup": False,
+        "default_download_directory": None,
+        "preferred_audio_format": "MP3",
+    }.get(key, default)
+    return sm
+
+
 @pytest.fixture
-def mock_services():
-    """Mock all services for testing."""
-    with (
-        patch("app.main_window.settings") as mock_settings,
-        patch("app.main_window.license_manager") as mock_license_manager,
-        patch("app.main_window.StartupVerificationThread") as mock_thread,
-        patch("app.main_window.update_service") as mock_update_service,
-        patch("app.main_window.UpdateCheckThread") as mock_update_thread,
-    ):
+def stub_services(tmp_path: Path):
+    """Build spec'd stubs for all services injected into MainWindow.
 
-        # Configure basic mocks
-        mock_license_manager.is_pro = False
-        mock_license_manager.license_status_changed = Mock()
-        mock_license_manager.license_status_changed.connect = Mock()
+    Yields a dict with keys: ``license_manager``, ``settings``.
+    """
+    lm = _make_stub_license_manager(is_pro=False)
+    sm = _make_stub_settings_manager(tmp_path=tmp_path)
 
-        # Mock settings to disable update checking by default
-        mock_settings.get = Mock()
-        mock_settings.get.side_effect = lambda key, default=None: {
-            "check_updates_on_startup": False,  # Disable update checking
-            "default_download_directory": None,
-            "preferred_audio_format": "MP3",
-        }.get(key, default)
-        # Explicitly set to False — MagicMock attributes are truthy by default, which would
-        # trigger _prompt_credential_reentry() and block on QMessageBox.exec().
-        mock_settings.credentials_were_cleared = False
-        mock_settings.check_updates_on_startup = False
-
-        # Mock thread to prevent actual startup verification
-        mock_thread_instance = Mock()
-        mock_thread.return_value = mock_thread_instance
-
-        # Mock update service and thread to prevent real GitHub API calls
-        mock_update_service.check_for_updates = Mock(return_value=(None, ""))
-        mock_update_thread_instance = Mock()
-        mock_update_thread.return_value = mock_update_thread_instance
-
-        yield {
-            "settings": mock_settings,
-            "license_manager": mock_license_manager,
-            "thread": mock_thread_instance,
-            "update_service": mock_update_service,
-            "update_thread": mock_update_thread_instance,
-        }
+    yield {
+        "license_manager": lm,
+        "settings": sm,
+    }
 
 
 @pytest.mark.qt
 class TestMainWindowFooterIntegration:
     """Test main window footer integration."""
 
-    def test_main_window_has_footer_widget(self, qt_app, mock_services):
+    def test_main_window_has_footer_widget(self, qt_app, stub_services):
         """Test that main window contains footer widget."""
-        # No additional patches needed for MainWindow initialization
-        window = MainWindow()
+        window = _StubMainWindow(
+            license_manager=stub_services["license_manager"],
+            settings=stub_services["settings"],
+        )
 
-        assert hasattr(window, "footer_widget")
         assert isinstance(window.footer_widget, FooterWidget)
 
-    def test_main_window_layout_structure(self, qt_app, mock_services):
+    def test_main_window_layout_structure(self, qt_app, stub_services):
         """Test that main window has correct layout structure."""
-        # No additional patches needed for MainWindow initialization
-        window = MainWindow()
+        window = _StubMainWindow(
+            license_manager=stub_services["license_manager"],
+            settings=stub_services["settings"],
+        )
         # Main widget should be the central widget
         central_widget = window.centralWidget()
         assert central_widget is not None
@@ -99,27 +127,33 @@ class TestMainWindowFooterIntegration:
         footer_item = layout.itemAt(1).widget()
         assert isinstance(footer_item, FooterWidget)
 
-    def test_footer_widget_receives_license_manager(self, qt_app, mock_services):
+    def test_footer_widget_receives_license_manager(self, qt_app, stub_services):
         """Test that footer widget receives the same license manager."""
-        # No additional patches needed for MainWindow initialization
-        window = MainWindow()
+        window = _StubMainWindow(
+            license_manager=stub_services["license_manager"],
+            settings=stub_services["settings"],
+        )
 
         assert window.footer_widget.license_manager is window.license_manager
 
-    def test_license_status_change_propagates_to_footer(self, qt_app, mock_services):
+    def test_license_status_change_propagates_to_footer(self, qt_app, stub_services):
         """Test that license status changes propagate to footer."""
-        mock_license_manager = mock_services["license_manager"]
+        lm = stub_services["license_manager"]
 
-        # No additional patches needed for MainWindow initialization
-        window = MainWindow()
+        window = _StubMainWindow(
+            license_manager=lm,
+            settings=stub_services["settings"],
+        )
         # License manager should be connected to footer via its own signal
         # The footer widget connects directly to license_manager.license_status_changed
-        mock_license_manager.license_status_changed.connect.assert_called()
+        lm.license_status_changed.connect.assert_called()
 
-    def test_main_window_layout_margins_and_spacing(self, qt_app, mock_services):
+    def test_main_window_layout_margins_and_spacing(self, qt_app, stub_services):
         """Test that main window layout has correct margins and spacing."""
-        # No additional patches needed for MainWindow initialization
-        window = MainWindow()
+        window = _StubMainWindow(
+            license_manager=stub_services["license_manager"],
+            settings=stub_services["settings"],
+        )
         central_widget = window.centralWidget()
         layout = central_widget.layout()
 
@@ -130,27 +164,31 @@ class TestMainWindowFooterIntegration:
         assert layout.contentsMargins().bottom() == 0
         assert layout.spacing() == 0
 
-    def test_footer_widget_signal_connection_in_main_window(self, qt_app, mock_services):
+    def test_footer_widget_signal_connection_in_main_window(self, qt_app, stub_services):
         """Test that footer widget properly connects to license manager signals."""
-        mock_license_manager = mock_services["license_manager"]
+        lm = stub_services["license_manager"]
 
-        # No additional patches needed for MainWindow initialization
-        window = MainWindow()
+        window = _StubMainWindow(
+            license_manager=lm,
+            settings=stub_services["settings"],
+        )
         # Footer widget should connect to license status changes
         # This happens inside FooterWidget.__init__, but we verify the manager was passed
-        assert window.footer_widget.license_manager is mock_license_manager
+        assert window.footer_widget.license_manager is lm
 
 
 @pytest.mark.qt
 class TestMainWindowFooterBehavior:
     """Test footer behavior within main window context."""
 
-    def test_footer_widget_default_state_free_user(self, qt_app, mock_services):
+    def test_footer_widget_default_state_free_user(self, qt_app, stub_services):
         """Test footer shows correct default state for free users."""
-        mock_services["license_manager"].is_pro = False
+        stub_services["license_manager"].is_pro = False
 
-        # No additional patches needed for MainWindow initialization
-        window = MainWindow()
+        window = _StubMainWindow(
+            license_manager=stub_services["license_manager"],
+            settings=stub_services["settings"],
+        )
         window.show()  # Widget needs to be shown for visibility to work
 
         # Footer should show Free status and Pro button
@@ -158,56 +196,69 @@ class TestMainWindowFooterBehavior:
         assert window.footer_widget.get_pro_button.isVisible() == True
         window.close()
 
-    def test_footer_widget_default_state_pro_user(self, qt_app, mock_services):
+    def test_footer_widget_default_state_pro_user(self, qt_app, stub_services):
         """Test footer shows correct default state for Pro users."""
-        mock_services["license_manager"].is_pro = True
+        stub_services["license_manager"].is_pro = True
 
-        # No additional patches needed for MainWindow initialization
-        window = MainWindow()
+        window = _StubMainWindow(
+            license_manager=stub_services["license_manager"],
+            settings=stub_services["settings"],
+        )
         # Footer should show Pro status and hide Pro button
         assert window.footer_widget.status_label.text() == "MBD Pro"
         assert window.footer_widget.get_pro_button.isVisible() == False
 
-    def test_footer_feedback_button_opens_dialog(self, qt_app, mock_services):
+    def test_footer_feedback_button_opens_dialog(self, qt_app, stub_services):
         """Test that footer feedback button opens dialog in main window context."""
-        # No additional patches needed for MainWindow initialization
-        window = MainWindow()
-        with patch("app.custom_widgets.footer_widget.FeedbackDialog") as mock_dialog_class:
-            mock_dialog = Mock()
-            mock_dialog_class.return_value = mock_dialog
+        window = _StubMainWindow(
+            license_manager=stub_services["license_manager"],
+            settings=stub_services["settings"],
+        )
 
-            # Click feedback button
-            window.footer_widget._show_feedback_dialog()
+        stub_dialog = create_autospec(FeedbackDialog, instance=True)
+        dialog_calls = []
 
-            # Verify dialog was created with footer as parent
-            mock_dialog_class.assert_called_once_with(window.footer_widget)
-            mock_dialog.exec.assert_called_once()
+        def stub_factory(parent):
+            dialog_calls.append(parent)
+            return stub_dialog
+
+        # Assign stub factory directly to the test-provided instance (no patch needed).
+        window.footer_widget._feedback_dialog_factory = stub_factory
+
+        # Click feedback button
+        window.footer_widget._show_feedback_dialog()
+
+        # Verify dialog was created with footer as parent
+        assert len(dialog_calls) == 1
+        assert dialog_calls[0] is window.footer_widget
+        stub_dialog.exec.assert_called_once()
 
 
 @pytest.mark.qt
 class TestMainWindowFooterIntegrationEdgeCases:
     """Test edge cases for main window footer integration."""
 
-    def test_main_window_initialization_order(self, qt_app, mock_services):
+    def test_main_window_initialization_order(self, qt_app, stub_services):
         """Test that footer is initialized after central widget."""
-        # No additional patches needed for MainWindow initialization
-        window = MainWindow()
-        # Both widgets should exist
-        assert hasattr(window, "central_widget")
-        assert hasattr(window, "footer_widget")
-
-        # They should be different instances
+        window = _StubMainWindow(
+            license_manager=stub_services["license_manager"],
+            settings=stub_services["settings"],
+        )
+        # Both widgets should be different instances
         assert window.central_widget is not window.footer_widget
 
-    def test_window_close_event_with_footer(self, qt_app, mock_services):
+    def test_window_close_event_with_footer(self, qt_app, stub_services):
         """Test that window close event works correctly with footer."""
-        # No additional patches needed for MainWindow initialization
-        window = MainWindow()
-        # Mock close event
+        window = _StubMainWindow(
+            license_manager=stub_services["license_manager"],
+            settings=stub_services["settings"],
+        )
         from PySide6.QtGui import QCloseEvent
 
         close_event = QCloseEvent()
-        close_event.accept = Mock()
+        # Use spec= to avoid a bare Mock. QCloseEvent.accept is a bound method
+        # on the test-provided instance; wrapping it keeps type safety.
+        close_event.accept = Mock(spec=close_event.accept)
 
         # Should not raise exception
         window.closeEvent(close_event)
@@ -215,10 +266,12 @@ class TestMainWindowFooterIntegrationEdgeCases:
         # Event should be accepted
         close_event.accept.assert_called_once()
 
-    def test_footer_widget_survives_central_widget_refresh(self, qt_app, mock_services):
+    def test_footer_widget_survives_central_widget_refresh(self, qt_app, stub_services):
         """Test that footer widget remains when central widget is refreshed."""
-        # No additional patches needed for MainWindow initialization
-        window = MainWindow()
+        window = _StubMainWindow(
+            license_manager=stub_services["license_manager"],
+            settings=stub_services["settings"],
+        )
         original_footer = window.footer_widget
 
         # Refresh Pro UI elements (which might affect layouts)

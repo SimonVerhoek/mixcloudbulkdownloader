@@ -1,60 +1,71 @@
 """Unit tests for Sentry integration in sentry_service."""
 
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
-from app.consts.settings import SENTRY_DSN
-from app.services.sentry_service import before_breadcrumb, before_send, scrub_obj, scrub_str
+from app.services.sentry_service import (
+    before_breadcrumb,
+    before_send,
+    make_before_send,
+    scrub_obj,
+    scrub_str,
+)
+
+
+class StubSettings:
+    """Minimal stub for SettingsManager with error_reporting_enabled control."""
+
+    def __init__(self, error_reporting_enabled: bool = True) -> None:
+        self.error_reporting_enabled = error_reporting_enabled
 
 
 @pytest.mark.unit
 class TestBeforeSend:
     """Tests for the before_send Sentry gate function."""
 
-    def test_returns_event_when_consent_enabled(self):
+    def test_returns_event_when_consent_enabled(self, tmp_path):
         """before_send should return the event unchanged when consent is enabled."""
         event = {"type": "event", "level": "error"}
         hint = {}
+        stub_settings = StubSettings(error_reporting_enabled=True)
+        fn = make_before_send(settings=stub_settings, home_dir=tmp_path)
 
-        with patch("app.services.sentry_service.settings") as mock_settings:
-            mock_settings.error_reporting_enabled = True
-            result = before_send(event=event, hint=hint)
+        result = fn(event, hint)
 
         assert result == event
 
-    def test_returns_none_when_consent_disabled(self):
+    def test_returns_none_when_consent_disabled(self, tmp_path):
         """before_send should return None (drop the event) when consent is disabled."""
         event = {"type": "event", "level": "error"}
         hint = {}
+        stub_settings = StubSettings(error_reporting_enabled=False)
+        fn = make_before_send(settings=stub_settings, home_dir=tmp_path)
 
-        with patch("app.services.sentry_service.settings") as mock_settings:
-            mock_settings.error_reporting_enabled = False
-            result = before_send(event=event, hint=hint)
+        result = fn(event, hint)
 
         assert result is None
 
-    def test_reads_setting_dynamically(self):
+    def test_reads_setting_dynamically(self, tmp_path):
         """before_send reads the setting on every call, so toggling takes effect immediately."""
         event = {"type": "event", "level": "error"}
         hint = {}
+        stub_settings = StubSettings(error_reporting_enabled=True)
+        fn = make_before_send(settings=stub_settings, home_dir=tmp_path)
 
-        with patch("app.services.sentry_service.settings") as mock_settings:
-            mock_settings.error_reporting_enabled = True
-            assert before_send(event=event, hint=hint) == event
+        assert fn(event, hint) == event
 
-            mock_settings.error_reporting_enabled = False
-            assert before_send(event=event, hint=hint) is None
+        stub_settings.error_reporting_enabled = False
+        assert fn(event, hint) is None
 
-    def test_scrubs_home_from_event_when_consent_enabled(self):
+    def test_scrubs_home_from_event_when_consent_enabled(self, tmp_path):
         """before_send should replace the home directory path with <username> in the returned event."""
-        home = str(Path.home())
+        home = str(tmp_path)
         event = {"message": f"Error writing to {home}/Downloads/mix.mp3"}
+        stub_settings = StubSettings(error_reporting_enabled=True)
+        fn = make_before_send(settings=stub_settings, home_dir=tmp_path)
 
-        with patch("app.services.sentry_service.settings") as mock_settings:
-            mock_settings.error_reporting_enabled = True
-            result = before_send(event=event, hint={})
+        result = fn(event, {})
 
         assert result is not None
         assert home not in result["message"]

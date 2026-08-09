@@ -1,8 +1,9 @@
 """Tests for pro feature gating and functionality."""
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock
 
 import pytest
+from PySide6.QtWidgets import QWidget
 
 from app.decorators import pro_feature_gate, requires_pro
 from app.services.license_manager import LicenseManager
@@ -24,47 +25,62 @@ def pro_license_manager():
     return mock_manager
 
 
+class StubWidget(QWidget):
+    """Minimal QWidget stub for decorator isinstance checks."""
+
+
+class StubGetProDialog:
+    """Stub for GetProDialog that records construction and exec calls without showing UI."""
+
+    def __init__(self, parent=None) -> None:
+        self.parent_arg = parent
+        self.exec_called = False
+        StubGetProDialog.instances.append(self)
+
+    instances: list["StubGetProDialog"] = []
+
+    def exec(self) -> None:
+        self.exec_called = True
+
+
 class TestRequiresProDecorator:
     """Test suite for @requires_pro decorator."""
 
     def test_requires_pro_allows_pro_users(self, pro_license_manager):
         """Test that @requires_pro allows Pro users to access features."""
-        with patch("app.decorators.license_manager", pro_license_manager):
 
-            @requires_pro
-            def premium_feature():
-                return "premium_result"
+        @requires_pro(_license_manager=pro_license_manager)
+        def premium_feature():
+            return "premium_result"
 
-            result = premium_feature()
-            assert result == "premium_result"
+        result = premium_feature()
+        assert result == "premium_result"
 
     def test_requires_pro_blocks_free_users(self, mock_license_manager):
         """Test that @requires_pro blocks free users from accessing features."""
-        with patch("app.decorators.license_manager", mock_license_manager):
 
-            @requires_pro
-            def premium_feature():
-                return "premium_result"
+        @requires_pro(_license_manager=mock_license_manager)
+        def premium_feature():
+            return "premium_result"
 
-            result = premium_feature()
-            assert result is None
+        result = premium_feature()
+        assert result is None
 
-    def test_requires_pro_with_widget_shows_upgrade_prompt(self, mock_license_manager):
+    def test_requires_pro_with_widget_shows_upgrade_prompt(self, mock_license_manager, qapp):
         """Test that @requires_pro shows upgrade prompt for widget methods."""
-        mock_widget = Mock()
-        mock_widget.parent = Mock(return_value=None)
+        mock_widget = StubWidget()
 
-        with patch("app.decorators.license_manager", mock_license_manager):
-            with patch("app.custom_widgets.dialogs.get_pro_dialog.GetProDialog") as mock_dialog:
+        StubGetProDialog.instances.clear()
 
-                @requires_pro
-                def widget_method(self):
-                    return "premium_result"
+        @requires_pro(_license_manager=mock_license_manager, _dialog_factory=StubGetProDialog)
+        def widget_method(self):
+            return "premium_result"
 
-                result = widget_method(mock_widget)
-                assert result is None
-                # Upgrade dialog should have been shown
-                mock_dialog.assert_called_once()
+        result = widget_method(mock_widget)
+        assert result is None
+        # Upgrade dialog should have been shown
+        assert len(StubGetProDialog.instances) == 1
+        assert StubGetProDialog.instances[0].exec_called
 
 
 class TestProFeatureGateDecorator:
@@ -72,25 +88,23 @@ class TestProFeatureGateDecorator:
 
     def test_pro_feature_gate_with_custom_name(self, mock_license_manager):
         """Test @pro_feature_gate with custom feature name."""
-        with patch("app.decorators.license_manager", mock_license_manager):
 
-            @pro_feature_gate("advanced downloads")
-            def advanced_download():
-                return "advanced_result"
+        @pro_feature_gate("advanced downloads", _license_manager=mock_license_manager)
+        def advanced_download():
+            return "advanced_result"
 
-            result = advanced_download()
-            assert result is None
+        result = advanced_download()
+        assert result is None
 
     def test_pro_feature_gate_allows_pro_users(self, pro_license_manager):
         """Test that @pro_feature_gate allows Pro users."""
-        with patch("app.decorators.license_manager", pro_license_manager):
 
-            @pro_feature_gate("advanced downloads")
-            def advanced_download():
-                return "advanced_result"
+        @pro_feature_gate("advanced downloads", _license_manager=pro_license_manager)
+        def advanced_download():
+            return "advanced_result"
 
-            result = advanced_download()
-            assert result == "advanced_result"
+        result = advanced_download()
+        assert result == "advanced_result"
 
 
 class MockWidget:
@@ -199,24 +213,23 @@ class TestProFeatureIntegration:
 
         from app.custom_widgets.pro_feature_widget import ProFeatureWidget
 
+        StubGetProDialog.instances.clear()
+
         class TestWidget(ProFeatureWidget, QWidget):
             def __init__(self, license_manager):
                 QWidget.__init__(self)
                 ProFeatureWidget.__init__(self, license_manager)
 
-            @requires_pro
+            @requires_pro(_license_manager=mock_license_manager, _dialog_factory=StubGetProDialog)
             def premium_method(self):
                 return "premium_functionality"
 
-        # Mock the global license_manager that the decorator uses
-        with patch("app.decorators.license_manager", mock_license_manager):
-            with patch("app.custom_widgets.dialogs.get_pro_dialog.GetProDialog") as mock_dialog:
-                widget = TestWidget(mock_license_manager)
-                qtbot.addWidget(widget)
-                result = widget.premium_method()
+        widget = TestWidget(mock_license_manager)
+        qtbot.addWidget(widget)
+        result = widget.premium_method()
 
-                assert result is None  # Should be blocked for free user
-                mock_dialog.assert_called_once()
+        assert result is None  # Should be blocked for free user
+        assert len(StubGetProDialog.instances) == 1
 
     def test_pro_widget_with_pro_license(self, qtbot, pro_license_manager):
         """Test pro widget behavior with Pro license."""

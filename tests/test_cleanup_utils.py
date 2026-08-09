@@ -3,7 +3,6 @@
 import os
 import time
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 import pytest
 
@@ -71,7 +70,6 @@ class TestPartialFileCleanup:
 
         # Mock time to make files appear old
         current_time = time.time()
-        old_time = current_time - (2 * 60 * 60)  # 2 hours ago
 
         # Use real file timestamps by setting them manually
         old_timestamp = current_time - (2 * 60 * 60)  # 2 hours ago
@@ -82,10 +80,11 @@ class TestPartialFileCleanup:
         os.utime(downloading_file, (old_timestamp, old_timestamp))
         os.utime(converting_file, (old_timestamp, old_timestamp))
 
-        with patch("app.utils.cleanup.time.time", return_value=current_time):
-            result = PartialFileCleanup.cleanup_partial_files(
-                directory=tmp_path, max_age_minutes=60
-            )
+        result = PartialFileCleanup.cleanup_partial_files(
+            directory=tmp_path,
+            max_age_minutes=60,
+            now=current_time,
+        )
 
         assert result == {"downloading": 1, "converting": 1}
         assert not downloading_file.exists()
@@ -97,18 +96,21 @@ class TestPartialFileCleanup:
         downloading_file.write_text("downloading")
 
         current_time = time.time()
-        old_time = current_time - (2 * 60 * 60)  # 2 hours ago
 
         # Set actual file timestamp to be old
         old_timestamp = current_time - (2 * 60 * 60)  # 2 hours ago
         downloading_file.touch()
         os.utime(downloading_file, (old_timestamp, old_timestamp))
 
-        with patch("app.utils.cleanup.time.time", return_value=current_time):
-            with patch("pathlib.Path.unlink", side_effect=PermissionError):
-                result = PartialFileCleanup.cleanup_partial_files(
-                    directory=tmp_path, max_age_minutes=60
-                )
+        def stub_remove_raises(path: Path) -> None:
+            raise PermissionError
+
+        result = PartialFileCleanup.cleanup_partial_files(
+            directory=tmp_path,
+            max_age_minutes=60,
+            now=current_time,
+            remove_fn=stub_remove_raises,
+        )
 
         # Should handle error gracefully and continue
         assert result == {"downloading": 0, "converting": 0}
@@ -126,18 +128,21 @@ class TestPartialFileCleanup:
         downloading_file.touch()
         os.utime(downloading_file, (file_time, file_time))
 
-        with patch("app.utils.cleanup.time.time", return_value=current_time):
-            # With max_age=60 minutes, should not be cleaned
-            result1 = PartialFileCleanup.cleanup_partial_files(
-                directory=tmp_path, max_age_minutes=60
-            )
-            assert result1 == {"downloading": 0, "converting": 0}
+        # With max_age=60 minutes, should not be cleaned
+        result1 = PartialFileCleanup.cleanup_partial_files(
+            directory=tmp_path,
+            max_age_minutes=60,
+            now=current_time,
+        )
+        assert result1 == {"downloading": 0, "converting": 0}
 
-            # With max_age=15 minutes, should be cleaned
-            result2 = PartialFileCleanup.cleanup_partial_files(
-                directory=tmp_path, max_age_minutes=15
-            )
-            assert result2 == {"downloading": 1, "converting": 0}
+        # With max_age=15 minutes, should be cleaned
+        result2 = PartialFileCleanup.cleanup_partial_files(
+            directory=tmp_path,
+            max_age_minutes=15,
+            now=current_time,
+        )
+        assert result2 == {"downloading": 1, "converting": 0}
 
     def test_list_partial_files_nonexistent_directory(self):
         """Test listing partial files in non-existent directory."""
@@ -244,8 +249,13 @@ class TestPartialFileCleanup:
         fragment_file = tmp_path / "protected.part"
         fragment_file.write_text("data")
 
-        with patch("pathlib.Path.unlink", side_effect=PermissionError):
-            result = PartialFileCleanup.cleanup_fragment_files(directory=tmp_path)
+        def stub_remove_raises(path: Path) -> None:
+            raise PermissionError
+
+        result = PartialFileCleanup.cleanup_fragment_files(
+            directory=tmp_path,
+            remove_fn=stub_remove_raises,
+        )
 
         # Should handle error gracefully
         assert result == 0
@@ -393,20 +403,20 @@ class TestPartialFileCleanupIntegration:
             file_path.touch()
             os.utime(file_path, (recent_time, recent_time))
 
-        with patch("app.utils.cleanup.time.time", return_value=current_time):
+        # Test listing files before cleanup
+        listed = PartialFileCleanup.list_partial_files(directory=tmp_path)
+        assert len(listed["downloading"]) == 2
+        assert len(listed["converting"]) == 2
 
-            # Test listing files before cleanup
-            listed = PartialFileCleanup.list_partial_files(directory=tmp_path)
-            assert len(listed["downloading"]) == 2
-            assert len(listed["converting"]) == 2
+        # Cleanup partial files
+        partial_result = PartialFileCleanup.cleanup_partial_files(
+            directory=tmp_path,
+            max_age_minutes=60,
+            now=current_time,
+        )
 
-            # Cleanup partial files
-            partial_result = PartialFileCleanup.cleanup_partial_files(
-                directory=tmp_path, max_age_minutes=60
-            )
-
-            # Cleanup fragment files
-            fragment_result = PartialFileCleanup.cleanup_fragment_files(directory=tmp_path)
+        # Cleanup fragment files
+        fragment_result = PartialFileCleanup.cleanup_fragment_files(directory=tmp_path)
 
         # Verify results
         assert partial_result == {"downloading": 1, "converting": 1}

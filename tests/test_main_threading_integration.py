@@ -1,6 +1,6 @@
 """Tests for threading settings integration in main.py."""
 
-from unittest.mock import MagicMock, Mock, patch
+from pathlib import Path
 
 import pytest
 
@@ -50,27 +50,19 @@ class TestMainThreadingIntegration:
 class TestMainThreadingIntegrationWithRealServices:
     """Integration tests with real service instances."""
 
-    def test_main_window_with_real_services(self):
+    def test_main_window_with_real_services(self, tmp_path: Path):
         """Test MainWindow initialization with real SettingsManager and LicenseManager."""
-        from app.main_window import MainWindow
         from app.services.license_manager import LicenseManager
         from app.services.settings_manager import SettingsManager
 
-        # This test would need Qt application context in real usage
-        with (
-            patch("app.main_window.CentralWidget"),
-            patch("app.main_window.FooterWidget"),
-            patch("app.main_window.StartupVerificationThread"),
-            patch("app.services.settings_manager.QSettings"),
-        ):
+        # Use tmp_path to avoid QSettings and filesystem side effects.
+        # SettingsManager(storage_path=...) bypasses the platform-specific
+        # storage path resolution and uses a plain INI file in tmp_path instead.
+        real_settings = SettingsManager(storage_path=tmp_path)
+        assert callable(real_settings.initialize_threading_settings)
 
-            # Test that the real services have the expected method
-            real_settings = SettingsManager()
-            assert hasattr(real_settings, "initialize_threading_settings")
-            assert callable(real_settings.initialize_threading_settings)
-
-            real_license_manager = LicenseManager()
-            assert hasattr(real_license_manager, "is_pro")
+        real_license_manager = LicenseManager(settings=real_settings)
+        _ = real_license_manager.is_pro
 
     def test_threading_constants_accessible_from_main(self):
         """Test that threading constants are accessible in main module context."""

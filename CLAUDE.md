@@ -36,11 +36,7 @@ Mixcloud Bulk Downloader is a desktop application built with PySide6 that allows
 - **Constants**: Define magic numbers and strings in `app/consts.py`
 - **Line Length**: 100 characters (configured in pyproject.toml)
 - **Imports**: **ALWAYS** use absolute imports (`from app.module import Item`) instead of relative imports (`from .module import Item`)
-- **Import Placement**: **ALL** imports must be placed at the top of the module after docstrings and before any other code. **Exception**: Platform-specific or optional dependency imports may be placed at the top of the specific method/function that uses them, but only when:
-  - The import is platform-conditional (e.g., Windows-only, macOS-only)
-  - The import is an optional dependency that may not be available
-  - The import would cause circular dependencies if placed at module level
-  This ensures better performance, clearer dependencies, and easier static analysis while allowing for necessary conditional imports.
+- **Import Placement**: **ALL** imports must be placed at the top of the module after docstrings and before any other code. **No inline imports are permitted** — not for platform-conditional logic, optional dependencies, or circular-dependency workarounds. If a circular dependency forces a late import, that is a design signal: extract a shared interface/protocol or inject the dependency via constructor or method parameter instead. This ensures better performance, clearer dependencies, and easier static analysis.
 - **File Path Handling**: **ALWAYS** use `pathlib.Path` for file path operations instead of `os.path` when possible. This provides better cross-platform compatibility, more readable code, and modern Python best practices. Use `Path` objects for path construction, joining, existence checks, and file operations.
 - **Explicit Parameter Names**: **ALWAYS** use explicit parameter names in function and method calls (`function(param1=value1, param2=value2)`) instead of positional arguments (`function(value1, value2)`). This improves code readability, maintainability, and reduces errors when function signatures change. 
 
@@ -128,6 +124,195 @@ from ..custom_widgets.error_dialog import ErrorDialog
 - **IDE Support**: Better autocomplete and navigation in development tools
 - **Testing**: Simpler to mock and test individual modules
 - **Consistency**: Uniform import style across the entire codebase
+
+### Testing Philosophy & Mocking Rules
+
+#### Rule 1 — No `@patch`: use dependency injection instead
+
+`@patch` is **forbidden in all test files**. Even for external systems, dependency injection and
+handwritten stubs produce cleaner, more refactor-safe tests. The `scripts/check_mock_rules.py`
+script enforces this at pre-commit time.
+
+**Replace every `@patch` with injection — use these alternatives:**
+
+| Old `@patch` use | Replacement |
+|---|---|
+| `@patch("app.api.httpx.get")` | Inject `httpx.Client`; use `httpx.MockTransport` or a `StubHttpClient` stub |
+| `@patch("app.X.yt_dlp.YoutubeDL")` | Inject `YoutubeDL` class/factory; write `StubYoutubeDL` |
+| `@patch("sys.platform")` / `@patch("platform.system")` | Accept platform string as a parameter: `def foo(platform: str = sys.platform)` |
+| `@patch("PySide6.QtWidgets.QFileDialog.getExistingDirectory")` | Wrap in an injectable callable; pass `dir_picker: Callable` to the widget |
+| `@patch("app.X.QMetaObject.invokeMethod")` | Override in a test subclass or inject the invoker |
+| Your own functions or classes | Accept the dependency as a constructor/method parameter |
+| `Path` or any stdlib type | Accept the resolved path as a parameter (e.g. `home_dir: Path`) |
+| Module-level singletons (`settings`, `license_manager`) | Inject via constructor |
+| Configuration constants (`DEVELOPMENT`) | Pass as a parameter where possible |
+
+#### Rule 2 — Internal patch = design signal
+
+If you find yourself wanting to patch something internal, stop and ask why:
+
+| What you want to patch | What it signals | Fix |
+|---|---|---|
+| `module.Path` to avoid `Path.home()` | Path is hardcoded; not injected | Accept the path as a parameter |
+| `module.get_ffmpeg_path` called inside a method | Dependency not injectable | Accept `ffmpeg_path: Path` as a constructor or method param |
+| `module.get_appdata_dir` / `get_xdg_config_home` | Platform helpers hardcoded inside logic | Accept a `storage_path: Path` param instead |
+| `module.CredentialEncryptor` class | Collaborator is hardcoded in `__init__` | Inject via constructor (`encryptor: CredentialEncryptor`) |
+| `module.settings` singleton | Module-level import instead of injection | Accept `settings_manager: SettingsManager` as a parameter |
+| `module.StartupVerificationThread` | Thread created directly instead of via factory | Accept an optional thread factory or use a test subclass |
+
+#### Rule 3 — Test double hierarchy
+
+When you need a stand-in for a dependency, prefer in order:
+
+1. **Real object** — use the real implementation when it is fast and has no side effects
+2. **Handwritten fake / stub** — a minimal class implementing the same interface with
+   controlled behaviour; readable and refactor-safe
+3. **`unittest.mock.MagicMock` / `create_autospec`** — for unimportant collaborators
+   where you only need call verification
+4. **`@patch`** — only for external boundaries (Rule 1)
+
+Never use `@patch` to replace an internal collaborator with a `MagicMock`. Write a stub instead.
+
+#### Rule 6 — Mock instances must always carry a spec
+
+Never instantiate a mock without telling it what it represents:
+
+```python
+# Bad — silently accepts any attribute or call, hides interface drift
+m = Mock()
+m = MagicMock()
+
+# Good — raises AttributeError for attributes that don't exist on the real class
+m = Mock(spec=SettingsManager)
+m = MagicMock(spec=SettingsManager)
+
+# Best — also validates call signatures (argument names and counts)
+m = create_autospec(SettingsManager)
+m = create_autospec(SettingsManager, instance=True)
+```
+
+**Why it matters:** a spec-less mock will happily return another mock for any attribute you
+typo or that no longer exists on the real class. `spec=` turns those silent successes into
+`AttributeError`, catching regressions at test time instead of production time.
+
+**Preference order within mocks:**
+1. `create_autospec(RealClass, instance=True)` — validates both attributes and call signatures
+2. `Mock(spec=RealClass)` / `MagicMock(spec=RealClass)` — validates attributes only
+3. Never: `Mock()` / `MagicMock()` without `spec`
+
+#### Rule 7 — Inject values, not callables, for pure functions
+
+When the goal is to make a pure function's result controllable in tests, inject the
+**resolved value**, not the callable itself:
+
+```python
+# Bad — callable injection for a pure function; no external side effect
+def cleanup_partial_files(
+    ...,
+    time_fn: Callable[[], float] | None = None,
+)
+
+# Good — value injection; matches existing CredentialEncryptor pattern
+def cleanup_partial_files(
+    ...,
+    now: float | None = None,
+)
+```
+
+Callable injection is reserved for genuine external boundaries:
+- Spawning OS processes: `popen_fn` → `subprocess.Popen`
+- Third-party library entry points: `ydl_class` → `yt_dlp.YoutubeDL`
+- Framework infrastructure: `invoke_method_fn` → `QMetaObject.invokeMethod`
+- Simulating OS-level errors (e.g. `PermissionError` on file deletion) where real
+  `os.chmod` manipulation is fragile and platform-dependent: `remove_fn`
+
+Do **not** inject callables for pure stdlib functions (`time.time`, `uuid.uuid4`,
+`os.getcwd`, `open`, `sleep`, etc.). Pass the computed value instead.
+
+#### Rule 8 — Use `T = real_default` instead of `T | None = None` for injectable parameters
+
+When a DI parameter has a production default that is stable and safe to evaluate at
+module-load time, express it directly rather than using `None` as a sentinel:
+
+```python
+# Bad — type is a lie (param is never None at runtime); adds resolution boilerplate
+def __init__(self, popen_fn: Callable | None = None):
+    _popen = popen_fn if popen_fn is not None else subprocess.Popen
+    result = _popen(...)
+
+# Good — honest type, simpler body
+def __init__(self, popen_fn: Callable = subprocess.Popen):
+    result = popen_fn(...)
+```
+
+Keep `T | None = None` only when the real default **cannot** be expressed at definition time:
+- It must be called at call time: `now: float | None = None` (defaults to `time.time()`)
+- It depends on runtime context: `storage_path: Path | None = None` (env-var path)
+- It is a module-level singleton not ready at import time: `settings: SettingsManager | None = None`
+- It requires lazy import to avoid circular dependencies
+- Calling it at import time may raise (e.g. `ffmpeg_path` defaulting to `get_ffmpeg_path()`)
+
+#### Rule 9 — No `hasattr()` or `getattr()` — use explicit typing instead
+
+Both functions return `Any` or `bool` without narrowing the type, defeating static analysis:
+
+| Pattern | Replacement |
+|---|---|
+| `if hasattr(self, "x"):` where `x` may not be set | Declare `x: T \| None = None` in `__init__`; check `if self.x is not None:` |
+| `if hasattr(obj, "method"):` to test an interface | `isinstance(obj, ExpectedType)` or a `@runtime_checkable Protocol` |
+| `getattr(self, name)` in dynamic iteration | Use `vars(self).items()` or a private `dict` registry |
+| Duck-typing widget detection via `hasattr(x, "parent")` | `isinstance(x, QWidget)` |
+| Singleton guard `hasattr(cls, "_instance")` | Declare `_instance: T \| None = None` class var; check `if cls._instance is None:` |
+
+**Exception:** Runtime-injected markers from PyInstaller (`sys._MEIPASS`, `sys.frozen`) that
+genuinely do not exist at static analysis time. Keep `getattr`/`hasattr` for these, and annotate
+with `# type: ignore[attr-defined]`.
+
+**Scope — production code only.** Rule 9 targets production code where type narrowing matters
+for correctness. In test code the following guidance applies instead:
+
+| Test usage | Guidance |
+|---|---|
+| `assert not hasattr(obj, "attr")` — negative attribute check | **Allowed** — no clean, readable alternative exists |
+| `assert hasattr(obj, "attr")` followed immediately by direct access | **Forbidden** — the direct access already proves existence; drop the `hasattr` |
+| `if hasattr(widget, "text"):` type guard in a test helper | **Prefer `isinstance`** — more specific, catches renames |
+| `assert hasattr(obj, "method")` standalone callable check | **Prefer `assert callable(obj.method)`** — more specific |
+
+#### Rule 4 — Never patch `Path` or other stdlib types inside app modules
+
+If a function calls `Path.home()`, `Path(__file__).parent`, or similar, the fix is to accept the
+resolved path as a parameter:
+
+```python
+# Instead of patching Path inside credential_encryptor:
+def get_device_salt(home_dir: Path = Path.home()) -> bytes: ...
+
+# Instead of patching Path inside settings_manager:
+class SettingsManager:
+    def __init__(self, storage_path: Path | None = None): ...
+```
+
+Tests then pass a known `tmp_path` fixture path. No patching required.
+
+#### Rule 5 — Use `caplog` for log assertions, not `@patch`
+
+Do not patch `log_ui`, `log_error`, or similar logging functions to verify they were called.
+Use pytest's built-in `caplog` fixture instead:
+
+```python
+def test_logs_warning(caplog):
+    with caplog.at_level(logging.WARNING):
+        do_something()
+    assert "expected message" in caplog.text
+```
+
+#### Acceptable exceptions
+
+The `scripts/check_mock_rules.py` script flags every `patch()` call. The only acceptable
+exception is `patch.object()` used on a **test-provided instance** (not a production import)
+to adjust a single attribute — and only when no injection point exists. Document the reason
+inline with a comment.
+
 
 ## Development Workflows
 

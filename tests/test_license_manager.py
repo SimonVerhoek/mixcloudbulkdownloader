@@ -1,7 +1,7 @@
 """Unit tests for LicenseManager singleton and stub functionality."""
 
 import time
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import create_autospec, patch
 
 import pytest
 
@@ -12,19 +12,28 @@ from app.consts.license import (
     OFFLINE_GRACE_PERIOD_DAYS,
 )
 from app.services.license_manager import LicenseManager, license_manager
+from app.services.settings_manager import SettingsManager
+
+
+def _make_settings(
+    email: str = "",
+    license_key: str = "",
+    last_successful_verification: float = 0.0,
+) -> SettingsManager:
+    """Create a spec'd mock SettingsManager with sensible defaults."""
+    mock_settings = create_autospec(spec=SettingsManager, instance=True)
+    mock_settings.email = email
+    mock_settings.license_key = license_key
+    mock_settings.last_successful_verification = last_successful_verification
+    return mock_settings
 
 
 @pytest.fixture
 def fresh_license_manager():
     """Create a fresh LicenseManager instance for testing."""
-    with patch("app.services.license_manager.settings") as mock_settings:
-        # Set default values for settings properties
-        mock_settings.email = ""
-        mock_settings.license_key = ""
-        mock_settings.last_successful_verification = 0.0
-
-        manager = LicenseManager()
-        return manager, mock_settings
+    mock_settings = _make_settings()
+    manager = LicenseManager(settings=mock_settings)
+    return manager, mock_settings
 
 
 class TestLicenseManagerStructure:
@@ -39,18 +48,18 @@ class TestLicenseManagerStructure:
 
     def test_license_manager_has_required_methods(self):
         """Test LicenseManager has all required methods."""
-        assert hasattr(LicenseManager, "verify_license")
-        assert hasattr(LicenseManager, "_send_request_to_licensing_server")
-        assert hasattr(LicenseManager, "check_offline_status")
-        assert hasattr(LicenseManager, "update_verification_timestamp")
-        assert hasattr(LicenseManager, "get_license_status_info")
+        assert callable(LicenseManager.verify_license)
+        assert callable(LicenseManager._send_request_to_licensing_server)
+        assert callable(LicenseManager.check_offline_status)
+        assert callable(LicenseManager.update_verification_timestamp)
+        assert callable(LicenseManager.get_license_status_info)
 
     def test_license_manager_has_required_attributes(self, fresh_license_manager):
         """Test LicenseManager has required attributes."""
         manager, mock_settings = fresh_license_manager
 
-        assert hasattr(manager, "is_pro")
-        assert hasattr(manager, "settings")
+        _ = manager.is_pro
+        _ = manager.settings
         assert isinstance(manager.is_pro, bool)
 
 
@@ -65,9 +74,10 @@ class TestVerifyLicenseAPI:
         mock_settings.email = "test@example.com"
         mock_settings.license_key = "testkey123"
 
-        # Mock the _send_request_to_licensing_server method to simulate network failure
-        with patch.object(manager, "_send_request_to_licensing_server", return_value=None):
-            result = manager.verify_license(max_retries=3, backoff_rate=2.0, timeout=60)
+        # Inject a stub request_fn that simulates network failure
+        manager._request_fn = lambda **kwargs: None
+
+        result = manager.verify_license(max_retries=3, backoff_rate=2.0, timeout=60)
 
         assert result is False  # Network failure should return False
         assert manager.is_pro is False
@@ -78,9 +88,9 @@ class TestVerifyLicenseAPI:
         mock_settings.email = "settings@example.com"
         mock_settings.license_key = "settingskey123"
 
-        # Mock the _send_request_to_licensing_server method to simulate network failure
-        with patch.object(manager, "_send_request_to_licensing_server", return_value=None):
-            result = manager.verify_license()
+        manager._request_fn = lambda **kwargs: None
+
+        result = manager.verify_license()
 
         assert result is False
         assert manager.is_pro is False
@@ -124,21 +134,25 @@ class TestVerifyLicenseAPI:
         mock_settings.email = "test@example.com"
         mock_settings.license_key = "testkey"
 
-        # Mock the _send_request_to_licensing_server method and verify it's called with correct defaults
-        with patch.object(
-            manager, "_send_request_to_licensing_server", return_value=None
-        ) as mock_send:
-            result = manager.verify_license()
+        received_kwargs: dict = {}
 
-        # Verify _send_request_to_licensing_server was called with default parameters
-        mock_send.assert_called_once_with(
-            method="POST",
-            uri="/public/license/verify",
-            payload={"email": "test@example.com", "license_key": "testkey"},
-            timeout=DEFAULT_LICENSE_TIMEOUT,
-            max_retries=DEFAULT_LICENSE_RETRY_COUNT,
-            backoff_rate=DEFAULT_LICENSE_BACKOFF_RATE,
-        )
+        def stub_request_fn(**kwargs):
+            received_kwargs.update(kwargs)
+            return None
+
+        manager._request_fn = stub_request_fn
+
+        result = manager.verify_license()
+
+        assert received_kwargs["method"] == "POST"
+        assert received_kwargs["uri"] == "/public/license/verify"
+        assert received_kwargs["payload"] == {
+            "email": "test@example.com",
+            "license_key": "testkey",
+        }
+        assert received_kwargs["timeout"] == DEFAULT_LICENSE_TIMEOUT
+        assert received_kwargs["max_retries"] == DEFAULT_LICENSE_RETRY_COUNT
+        assert received_kwargs["backoff_rate"] == DEFAULT_LICENSE_BACKOFF_RATE
         assert result is False
 
     def test_verify_license_custom_parameters(self, fresh_license_manager):
@@ -147,21 +161,25 @@ class TestVerifyLicenseAPI:
         mock_settings.email = "settings@example.com"
         mock_settings.license_key = "settingskey"
 
-        # Mock the _send_request_to_licensing_server method and verify it's called with custom parameters
-        with patch.object(
-            manager, "_send_request_to_licensing_server", return_value=None
-        ) as mock_send:
-            result = manager.verify_license(max_retries=5, backoff_rate=3.0, timeout=120)
+        received_kwargs: dict = {}
 
-        # Verify _send_request_to_licensing_server was called with custom parameters
-        mock_send.assert_called_once_with(
-            method="POST",
-            uri="/public/license/verify",
-            payload={"email": "settings@example.com", "license_key": "settingskey"},
-            timeout=120,
-            max_retries=5,
-            backoff_rate=3.0,
-        )
+        def stub_request_fn(**kwargs):
+            received_kwargs.update(kwargs)
+            return None
+
+        manager._request_fn = stub_request_fn
+
+        result = manager.verify_license(max_retries=5, backoff_rate=3.0, timeout=120)
+
+        assert received_kwargs["method"] == "POST"
+        assert received_kwargs["uri"] == "/public/license/verify"
+        assert received_kwargs["payload"] == {
+            "email": "settings@example.com",
+            "license_key": "settingskey",
+        }
+        assert received_kwargs["timeout"] == 120
+        assert received_kwargs["max_retries"] == 5
+        assert received_kwargs["backoff_rate"] == 3.0
         assert result is False
 
 
@@ -313,6 +331,6 @@ class TestLicenseManagerSingleton:
         """Test that license_manager singleton has correct initial state."""
         # Note: This test interacts with the real singleton, so it might affect other tests
         # In a real scenario, you might want to reset the singleton state in a fixture
-        assert hasattr(license_manager, "is_pro")
-        assert hasattr(license_manager, "settings")
+        _ = license_manager.is_pro
+        _ = license_manager.settings
         assert isinstance(license_manager.is_pro, bool)

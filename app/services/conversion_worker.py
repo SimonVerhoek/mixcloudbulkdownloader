@@ -6,6 +6,7 @@ signal emission through CallbackBridge for FFmpeg audio format conversion.
 
 import re
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import QRunnable
@@ -43,6 +44,8 @@ class ConversionWorker(QRunnable):
         callback_bridge: "CallbackBridge",
         settings_manager: SettingsManager,
         license_manager: LicenseManager,
+        ffmpeg_path: Path | None = None,
+        popen_fn: Callable = subprocess.Popen,
     ):
         """Initialize conversion worker.
 
@@ -54,6 +57,8 @@ class ConversionWorker(QRunnable):
             callback_bridge: Thread-safe signal emission bridge
             settings_manager: Settings manager for configuration
             license_manager: License manager for Pro feature access
+            ffmpeg_path: Path to FFmpeg executable; resolved automatically when None
+            popen_fn: Callable to use instead of subprocess.Popen; used for testing
         """
         super().__init__()
         self.cloudcast_url = cloudcast_url
@@ -65,6 +70,15 @@ class ConversionWorker(QRunnable):
         self.license_manager = license_manager
         self.cancelled = False
         self.ffmpeg_process = None
+        self._popen_fn = popen_fn
+
+        if ffmpeg_path is not None:
+            self._ffmpeg_path = ffmpeg_path
+        else:
+            try:
+                self._ffmpeg_path = get_ffmpeg_path()
+            except RuntimeError:
+                self._ffmpeg_path = None
 
         # Set up file paths using temporary subdirectory approach to fix FFmpeg format detection
         input_path = Path(input_file)
@@ -87,7 +101,7 @@ class ConversionWorker(QRunnable):
                 raise ValueError("Audio conversion requires Pro license")
 
             # Get FFmpeg path
-            ffmpeg_path = get_ffmpeg_path()
+            ffmpeg_path = self._ffmpeg_path
             if not ffmpeg_path:
                 raise ValueError("FFmpeg not found - audio conversion unavailable")
 
@@ -104,7 +118,8 @@ class ConversionWorker(QRunnable):
             log_api(f"Target format: {self.target_format}")
 
             # Use stderr=subprocess.STDOUT so progress info (from stderr) appears in stdout
-            self.ffmpeg_process = subprocess.Popen(
+            _popen = self._popen_fn
+            self.ffmpeg_process = _popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
             )
 

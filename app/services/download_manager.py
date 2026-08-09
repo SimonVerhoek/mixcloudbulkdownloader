@@ -4,6 +4,7 @@ This module provides a replacement for DownloadOrchestrator that follows proper
 PyQt threading patterns using QObject workers and thread-safe signal emission.
 """
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Dict
 
@@ -19,6 +20,7 @@ from app.consts.settings import (
 )
 from app.data_classes import Cloudcast
 from app.services.conversion_worker import ConversionWorker
+from app.services.download_worker import DownloadWorker
 from app.services.license_manager import LicenseManager
 from app.services.settings_manager import SettingsManager
 
@@ -31,14 +33,22 @@ class CallbackBridge:
     QMetaObject.invokeMethod with Qt.QueuedConnection for thread-safe operation.
     """
 
-    def __init__(self, download_manager: "DownloadManager"):
+    def __init__(
+        self,
+        download_manager: "DownloadManager",
+        invoke_method_fn: Callable = QMetaObject.invokeMethod,
+    ):
         """Initialize callback bridge with target DownloadManager.
 
         Args:
-            download_manager: DownloadManager instance to emit signals through
+            download_manager: DownloadManager instance to emit signals through.
+            invoke_method_fn: Callable that replaces ``QMetaObject.invokeMethod``
+                for thread-safe slot invocation.  Inject a recording stub in tests
+                to verify call arguments without relying on a running Qt event loop.
         """
         self.download_manager = download_manager
         self.shutting_down = False
+        self._invoke_method = invoke_method_fn
 
     def emit_progress(self, cloudcast_url: str, progress_text: str, task_type: str = "download"):
         """Emit progress update signal in thread-safe manner.
@@ -50,7 +60,7 @@ class CallbackBridge:
         """
         if self.shutting_down:
             return
-        QMetaObject.invokeMethod(
+        self._invoke_method(
             self.download_manager,
             "_emit_progress_signal",
             Qt.QueuedConnection,
@@ -69,7 +79,7 @@ class CallbackBridge:
         """
         if self.shutting_down:
             return
-        QMetaObject.invokeMethod(
+        self._invoke_method(
             self.download_manager,
             "_emit_completed_signal",
             Qt.QueuedConnection,
@@ -88,7 +98,7 @@ class CallbackBridge:
         """
         if self.shutting_down:
             return
-        QMetaObject.invokeMethod(
+        self._invoke_method(
             self.download_manager,
             "_emit_error_signal",
             Qt.QueuedConnection,
@@ -106,7 +116,7 @@ class CallbackBridge:
         """
         if self.shutting_down:
             return
-        QMetaObject.invokeMethod(
+        self._invoke_method(
             self.download_manager,
             "_emit_cancelled_signal",
             Qt.QueuedConnection,
@@ -144,20 +154,36 @@ class DownloadManager(QObject):
         self,
         settings_manager: SettingsManager,
         license_manager: LicenseManager,
+        download_worker_class: type = DownloadWorker,
+        conversion_worker_class: type | None = None,
+        invoke_method_fn: Callable = QMetaObject.invokeMethod,
     ):
         """Initialize DownloadManager with thread pools and dependencies.
 
         Args:
-            settings_manager: Settings manager for configuration
-            license_manager: License manager for Pro features
+            settings_manager: Settings manager for configuration.
+            license_manager: License manager for Pro features.
+            download_worker_class: Class to use when creating download tasks.
+                Defaults to ``DownloadWorker``.  Inject a stub class in tests
+                to avoid real network downloads.
+            conversion_worker_class: Optional class to use instead of the real
+                ``ConversionWorker`` when creating conversion tasks.  Inject a
+                stub class in tests to avoid real FFmpeg execution.
+            invoke_method_fn: Callable passed through to ``CallbackBridge`` to
+                replace ``QMetaObject.invokeMethod``.  Inject a recording stub in
+                tests to verify signal emission without a running Qt event loop.
         """
         super().__init__()
 
         self.settings_manager = settings_manager
         self.license_manager = license_manager
+        self._download_worker_class = download_worker_class
+        self._conversion_worker_class = conversion_worker_class
 
         # Create callback bridge for thread-safe signal emission
-        self.callback_bridge = CallbackBridge(self)
+        self.callback_bridge = CallbackBridge(
+            download_manager=self, invoke_method_fn=invoke_method_fn
+        )
 
         # Initialize thread pools with current settings
         self.download_pool = QThreadPool()
@@ -165,7 +191,7 @@ class DownloadManager(QObject):
         self._update_thread_pool_sizes()
 
         # Track active tasks and workflows
-        self.active_downloads: Dict[str, "DownloadWorker"] = {}  # cloudcast_url -> worker
+        self.active_downloads: Dict[str, DownloadWorker] = {}  # cloudcast_url -> worker
         self.active_conversions: Dict[str, "ConversionWorker"] = {}  # cloudcast_url -> worker
         self.cancelled = False
 
@@ -201,10 +227,7 @@ class DownloadManager(QObject):
         # Start download workers for all cloudcasts
         for cloudcast in cloudcasts:
             if cloudcast.url not in self.active_downloads:
-                # Import here to avoid circular imports
-                from app.services.download_worker import DownloadWorker
-
-                worker = DownloadWorker(
+                worker = self._download_worker_class(
                     cloudcast=cloudcast,
                     download_dir=download_dir,
                     callback_bridge=self.callback_bridge,
@@ -247,7 +270,14 @@ class DownloadManager(QObject):
         target_format = self.settings_manager.preferred_audio_format.lower()
         downloaded_path = Path(downloaded_file)
 
-        worker = ConversionWorker(
+        # Resolve worker class: use injected class if provided, else default ConversionWorker
+        conversion_cls = (
+            self._conversion_worker_class
+            if self._conversion_worker_class is not None
+            else ConversionWorker
+        )
+
+        worker = conversion_cls(
             cloudcast_url=cloudcast_url,
             input_file=downloaded_file,
             target_format=target_format,

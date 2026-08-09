@@ -9,46 +9,67 @@ not app config, so they are read via ``os.getenv`` rather than ``environs``.
 """
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 
-def get_appdata_dir() -> Path:
+def get_appdata_dir(getenv_fn: Callable[[str, str | None], str | None] | None = None) -> Path:
     """Return the Windows APPDATA base directory.
+
+    Args:
+        getenv_fn: Optional callable with the same signature as ``os.getenv``.
+            Defaults to ``os.getenv``. Allows injection for testing without patching.
 
     Returns:
         Path to the APPDATA roaming directory, falling back to
         ``~/AppData/Roaming`` when the environment variable is not set.
     """
-    return Path(os.getenv("APPDATA", str(Path.home() / "AppData" / "Roaming")))
+    _getenv = getenv_fn if getenv_fn is not None else os.getenv
+    return Path(_getenv("APPDATA", str(Path.home() / "AppData" / "Roaming")))
 
 
-def get_xdg_data_home() -> Path:
+def get_xdg_data_home(getenv_fn: Callable[[str, str | None], str | None] | None = None) -> Path:
     """Return the XDG_DATA_HOME directory.
+
+    Args:
+        getenv_fn: Optional callable with the same signature as ``os.getenv``.
+            Defaults to ``os.getenv``. Allows injection for testing without patching.
 
     Returns:
         Path to the XDG data home directory, falling back to
         ``~/.local/share`` when the environment variable is not set.
     """
-    return Path(os.getenv("XDG_DATA_HOME", str(Path.home() / ".local" / "share")))
+    _getenv = getenv_fn if getenv_fn is not None else os.getenv
+    return Path(_getenv("XDG_DATA_HOME", str(Path.home() / ".local" / "share")))
 
 
-def get_xdg_config_home() -> Path:
+def get_xdg_config_home(getenv_fn: Callable[[str, str | None], str | None] | None = None) -> Path:
     """Return the XDG_CONFIG_HOME directory.
+
+    Args:
+        getenv_fn: Optional callable with the same signature as ``os.getenv``.
+            Defaults to ``os.getenv``. Allows injection for testing without patching.
 
     Returns:
         Path to the XDG config home directory, falling back to
         ``~/.config`` when the environment variable is not set.
     """
-    return Path(os.getenv("XDG_CONFIG_HOME", str(Path.home() / ".config")))
+    _getenv = getenv_fn if getenv_fn is not None else os.getenv
+    return Path(_getenv("XDG_CONFIG_HOME", str(Path.home() / ".config")))
 
 
-def get_current_user() -> str:
+def get_current_user(getenv_fn: Callable[[str, str | None], str | None] | None = None) -> str:
     """Return the current OS username.
 
     Tries the Unix ``USER`` variable first, then the Windows ``USERNAME``
     variable, falling back to ``"default"`` if neither is set.
 
+    Args:
+        getenv_fn: Optional callable with the same signature as ``os.getenv``.
+            Defaults to ``os.getenv``. Allows injection for testing without patching.
+
     Returns:
         Current username string.
     """
-    return os.getenv("USER") or os.getenv("USERNAME") or "default"
+    _getenv = getenv_fn if getenv_fn is not None else os.getenv
+    return _getenv("USER", None) or _getenv("USERNAME", None) or "default"

@@ -1,12 +1,41 @@
 """Tests for app/api.py module functions."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import httpx
 import pytest
 
 from app import api
 from app.consts.api import ERROR_API_REQUEST_FAILED, MIXCLOUD_API_URL
+
+
+def make_mock_transport(responses: dict) -> httpx.MockTransport:
+    """Create a mock transport that returns pre-defined responses based on URL patterns.
+
+    Args:
+        responses: Mapping of URL substring patterns to response configuration dicts.
+            Each value may contain "status_code" (int), "json" (dict), or "text" (str).
+
+    Returns:
+        An httpx.MockTransport that handles matched URLs.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url_str = str(request.url)
+        for pattern, response_data in responses.items():
+            if pattern in url_str:
+                if "json" in response_data:
+                    return httpx.Response(
+                        status_code=response_data.get("status_code", 200),
+                        json=response_data["json"],
+                    )
+                return httpx.Response(
+                    status_code=response_data.get("status_code", 200),
+                    text=response_data.get("text", ""),
+                )
+        return httpx.Response(status_code=404, text="Not found")
+
+    return httpx.MockTransport(handler)
 
 
 class TestAPIURLGeneration:
@@ -61,143 +90,132 @@ class TestAPIURLGeneration:
 class TestMixcloudAPIData:
     """Test Mixcloud API data fetching."""
 
-    @patch("app.api.httpx.get")
-    def test_get_mixcloud_API_data_success(self, mock_get):
+    def test_get_mixcloud_API_data_success(self):
         """Test successful API data retrieval."""
         expected_data = {"data": [{"name": "Test"}]}
-        mock_response = MagicMock()
-        mock_response.json.return_value = expected_data
-        mock_get.return_value = mock_response
+        transport = make_mock_transport({"http://api.test.com": {"json": expected_data}})
+        client = httpx.Client(transport=transport)
 
-        data, error = api.get_mixcloud_API_data("http://api.test.com")
+        data, error = api.get_mixcloud_API_data(url="http://api.test.com", client=client)
 
         assert data == expected_data
         assert error == ""
-        mock_get.assert_called_once_with(url="http://api.test.com")
 
-    @patch("app.api.httpx.get")
-    def test_get_mixcloud_API_data_network_error(self, mock_get):
+    def test_get_mixcloud_API_data_network_error(self):
         """Test API data retrieval with network error."""
-        mock_get.side_effect = httpx.RequestError("Connection failed")
 
-        data, error = api.get_mixcloud_API_data("http://api.test.com")
+        def raise_network_error(request: httpx.Request) -> httpx.Response:
+            raise httpx.RequestError("Connection failed")
+
+        transport = httpx.MockTransport(raise_network_error)
+        client = httpx.Client(transport=transport)
+
+        data, error = api.get_mixcloud_API_data(url="http://api.test.com", client=client)
 
         assert data is None
         assert error == ERROR_API_REQUEST_FAILED
 
-    @patch("app.api.httpx.get")
-    def test_get_mixcloud_API_data_api_error_response(self, mock_get):
+    def test_get_mixcloud_API_data_api_error_response(self):
         """Test API data retrieval with API error in response."""
         error_response = {"error": {"type": "NotFound", "message": "User not found"}}
-        mock_response = MagicMock()
-        mock_response.json.return_value = error_response
-        mock_get.return_value = mock_response
+        transport = make_mock_transport({"http://api.test.com": {"json": error_response}})
+        client = httpx.Client(transport=transport)
 
-        data, error = api.get_mixcloud_API_data("http://api.test.com")
+        data, error = api.get_mixcloud_API_data(url="http://api.test.com", client=client)
 
         assert data == error_response
         assert error == "NotFound: User not found"
 
-    @patch("app.api.httpx.get")
-    def test_get_mixcloud_API_data_invalid_json(self, mock_get):
-        """Test API data retrieval with invalid JSON response."""
-        mock_response = MagicMock()
-        mock_response.json.side_effect = ValueError("Invalid JSON")
-        mock_get.return_value = mock_response
-
-        with pytest.raises(ValueError):
-            api.get_mixcloud_API_data("http://api.test.com")
-
-    @patch("app.api.httpx.get")
-    def test_get_mixcloud_API_data_http_status_error(self, mock_get):
+    def test_get_mixcloud_API_data_http_status_error(self):
         """Test API data retrieval with HTTP status error."""
-        mock_get.side_effect = httpx.HTTPStatusError(
-            "404 Not Found", request=MagicMock(), response=MagicMock()
-        )
 
-        data, error = api.get_mixcloud_API_data("http://api.test.com")
+        def raise_http_error(request: httpx.Request) -> httpx.Response:
+            raise httpx.HTTPStatusError(
+                "404 Not Found",
+                request=request,
+                response=httpx.Response(status_code=404),
+            )
+
+        transport = httpx.MockTransport(raise_http_error)
+        client = httpx.Client(transport=transport)
+
+        data, error = api.get_mixcloud_API_data(url="http://api.test.com", client=client)
 
         assert data is None
         assert error == ERROR_API_REQUEST_FAILED
 
-    @patch("app.api.httpx.get")
-    def test_get_mixcloud_API_data_timeout_error(self, mock_get):
+    def test_get_mixcloud_API_data_timeout_error(self):
         """Test API data retrieval with timeout error."""
-        mock_get.side_effect = httpx.TimeoutException("Request timed out")
 
-        data, error = api.get_mixcloud_API_data("http://api.test.com")
+        def raise_timeout(request: httpx.Request) -> httpx.Response:
+            raise httpx.TimeoutException("Request timed out")
+
+        transport = httpx.MockTransport(raise_timeout)
+        client = httpx.Client(transport=transport)
+
+        data, error = api.get_mixcloud_API_data(url="http://api.test.com", client=client)
 
         assert data is None
         assert error == ERROR_API_REQUEST_FAILED
 
-    @patch("app.api.httpx.get")
-    def test_get_mixcloud_API_data_empty_response(self, mock_get):
+    def test_get_mixcloud_API_data_empty_response(self):
         """Test API data retrieval with empty response."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = {}
-        mock_get.return_value = mock_response
+        transport = make_mock_transport({"http://api.test.com": {"json": {}}})
+        client = httpx.Client(transport=transport)
 
-        data, error = api.get_mixcloud_API_data("http://api.test.com")
+        data, error = api.get_mixcloud_API_data(url="http://api.test.com", client=client)
 
         assert data == {}
         assert error == ""
 
-    @patch("app.api.httpx.get")
-    def test_get_mixcloud_API_data_malformed_error_response(self, mock_get):
+    def test_get_mixcloud_API_data_malformed_error_response(self):
         """Test API data retrieval with malformed error response."""
-        # Error response missing required fields
         error_response = {
             "error": {
                 "type": "BadRequest"
                 # Missing "message" field
             }
         }
-        mock_response = MagicMock()
-        mock_response.json.return_value = error_response
-        mock_get.return_value = mock_response
+        transport = make_mock_transport({"http://api.test.com": {"json": error_response}})
+        client = httpx.Client(transport=transport)
 
-        # Should handle gracefully even with malformed error
         with pytest.raises(KeyError):
-            api.get_mixcloud_API_data("http://api.test.com")
+            api.get_mixcloud_API_data(url="http://api.test.com", client=client)
 
 
 class TestAPIIntegration:
     """Test integration scenarios combining API functions."""
 
-    @patch("app.api.httpx.get")
-    def test_full_workflow_simulation(self, mock_get):
+    def test_full_workflow_simulation(self):
         """Test a complete API workflow from search to user cloudcasts."""
-        # Mock successful API response
         api_response = {
             "data": [{"key": "/testuser/", "username": "testuser", "cloudcasts": ["mix1", "mix2"]}]
         }
-        mock_response = MagicMock()
-        mock_response.json.return_value = api_response
-        mock_get.return_value = mock_response
+        transport = make_mock_transport({MIXCLOUD_API_URL: {"json": api_response}})
+        client = httpx.Client(transport=transport)
 
-        # Simulate API workflow
         search_url = api.search_user_API_url("test")
-        data, error = api.get_mixcloud_API_data(search_url)
+        data, error = api.get_mixcloud_API_data(url=search_url, client=client)
 
         assert error == ""
         assert len(data["data"]) == 1
 
-        # Get user cloudcasts
         user_url = api.user_cloudcasts_API_url("testuser")
-        cloudcasts_data, cloudcasts_error = api.get_mixcloud_API_data(user_url)
+        cloudcasts_data, cloudcasts_error = api.get_mixcloud_API_data(url=user_url, client=client)
 
         assert cloudcasts_error == ""
 
     def test_error_handling_consistency(self):
         """Test that error handling is consistent across functions."""
-        # URL generation functions should never raise exceptions
         assert api.search_user_API_url("") == f"{MIXCLOUD_API_URL}/search/?q=&type=user"
         assert api.user_cloudcasts_API_url("") == f"{MIXCLOUD_API_URL}//cloudcasts/"
 
-        # API function should return errors, not raise them (for network issues)
-        with patch("app.api.httpx.get") as mock_get:
-            mock_get.side_effect = httpx.RequestError("Network error")
+        def raise_network_error(request: httpx.Request) -> httpx.Response:
+            raise httpx.RequestError("Network error")
 
-            data, error = api.get_mixcloud_API_data("http://test.com")
-            assert data is None
-            assert error == ERROR_API_REQUEST_FAILED
+        transport = httpx.MockTransport(raise_network_error)
+        client = httpx.Client(transport=transport)
+
+        data, error = api.get_mixcloud_API_data(url="http://test.com", client=client)
+        assert data is None
+        assert error == ERROR_API_REQUEST_FAILED

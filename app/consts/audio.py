@@ -32,9 +32,9 @@ class AudioFormats:
 
     def __iter__(self):
         """Enable iteration over format name and AudioFormat pairs."""
-        for name in dir(self):
-            if not name.startswith("_") and isinstance(getattr(self, name), AudioFormat):
-                yield name, getattr(self, name)
+        for name, value in vars(self).items():
+            if isinstance(value, AudioFormat):
+                yield name, value
 
     def values(self):
         """Return all AudioFormat instances."""
@@ -52,8 +52,9 @@ class AudioFormats:
         Raises:
             KeyError: If the format key is not found
         """
-        if hasattr(self, key):
-            return getattr(self, key)
+        value = vars(self).get(key)
+        if isinstance(value, AudioFormat):
+            return value
         raise KeyError(f"Audio format '{key}' not found")
 
 

@@ -1,6 +1,6 @@
 """Feedback dialog for user feedback submission."""
 
-from typing import Optional
+from collections.abc import Callable
 
 from PySide6.QtWidgets import (
     QDialog,
@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 from app.consts.license import LICENSE_FEEDBACK_ERROR
 from app.custom_widgets.dialogs.error_dialog import ErrorDialog
 from app.logger import log_error_with_traceback, log_ui
-from app.services.license_manager import license_manager
+from app.services.license_manager import LicenseManager, license_manager as _default_license_manager
 
 
 class FeedbackDialog(QDialog):
@@ -27,13 +27,26 @@ class FeedbackDialog(QDialog):
     and buttons to cancel or send the feedback via API.
     """
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        license_manager: LicenseManager | None = None,
+        error_dialog_factory: Callable | None = None,
+    ) -> None:
         """Initialize feedback dialog with text field and buttons.
 
         Args:
             parent: Parent widget for the dialog
+            license_manager: License manager instance to use for feedback submission.
+                If None, uses the module-level singleton.
+            error_dialog_factory: Callable used to construct error dialogs.
+                Defaults to ErrorDialog.
         """
         super().__init__(parent)
+        self._license_manager = (
+            license_manager if license_manager is not None else _default_license_manager
+        )
+        self._error_dialog_factory = error_dialog_factory or ErrorDialog
 
         self.setWindowTitle("Send Feedback")
         self.setModal(True)
@@ -139,7 +152,7 @@ class FeedbackDialog(QDialog):
         self.send_button.setText("Sending...")
 
         try:
-            license_manager.submit_feedback(feedback_text, email)
+            self._license_manager.submit_feedback(feedback_text, email)
 
             log_ui("Feedback submitted successfully via API", "INFO")
 
@@ -155,7 +168,9 @@ class FeedbackDialog(QDialog):
             log_error_with_traceback(error_msg, "ERROR")
 
             # Show error dialog
-            error_dialog = ErrorDialog(self, LICENSE_FEEDBACK_ERROR, "Feedback Error")
+            error_dialog = self._error_dialog_factory(
+                self, LICENSE_FEEDBACK_ERROR, "Feedback Error"
+            )
             error_dialog.exec()
         finally:
             # Re-enable send button

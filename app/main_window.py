@@ -13,8 +13,8 @@ from app.custom_widgets.dialogs.settings_dialog import SettingsDialog
 from app.custom_widgets.dialogs.update_dialog import UpdateDialog
 from app.custom_widgets.footer_widget import FooterWidget
 from app.logger import log_ui
-from app.services.license_manager import license_manager
-from app.services.settings_manager import settings
+from app.services.license_manager import LicenseManager, license_manager as _default_license_manager
+from app.services.settings_manager import SettingsManager, settings as _default_settings
 from app.services.update_service import update_service
 from app.threads.startup_verification_thread import StartupVerificationThread
 from app.threads.update_check_thread import UpdateCheckThread
@@ -29,16 +29,36 @@ class MainWindow(QMainWindow):
     and handles window-level operations like menus and window properties.
     """
 
-    def __init__(self) -> None:
-        """Initialize the main window with UI components and application settings."""
+    def __init__(
+        self,
+        license_manager: LicenseManager | None = None,
+        settings: SettingsManager | None = None,
+        update_svc=None,
+    ) -> None:
+        """Initialize the main window with UI components and application settings.
+
+        Args:
+            license_manager: Optional license manager instance; falls back to module-level
+                singleton when *None*.
+            settings: Optional settings manager instance; falls back to module-level
+                singleton when *None*.
+            update_svc: Optional update service instance; falls back to the module-level
+                ``update_service`` singleton when *None*.  Inject a stub in tests to avoid
+                real network calls.
+        """
         super().__init__()
 
-        # import services
-        self.settings = settings
-        self.license_manager = license_manager
+        self.settings = settings if settings is not None else _default_settings
+        self.license_manager = (
+            license_manager if license_manager is not None else _default_license_manager
+        )
+        self._update_svc = update_svc if update_svc is not None else update_service
 
         # Initialize update check thread
         self.update_check_thread: UpdateCheckThread | None = None
+
+        # Initialize verification thread (set in startup_license_verification)
+        self.verification_thread: StartupVerificationThread | None = None
 
         # Create main container widget with vertical layout
         main_widget = QWidget()
@@ -109,6 +129,32 @@ class MainWindow(QMainWindow):
             app_instance.setApplicationDisplayName("Mixcloud Bulk Downloader")
             app_instance.processEvents()
 
+    def _create_verification_thread(self, lm: LicenseManager) -> StartupVerificationThread:
+        """Create a StartupVerificationThread for the given license manager."""
+        return StartupVerificationThread(lm, self)
+
+    def _create_pro_dialog(self, parent=None) -> GetProDialog:
+        """Create a GetProDialog instance."""
+        return GetProDialog(parent=parent)
+
+    def _create_error_dialog(self, msg: str, parent=None) -> ErrorDialog:
+        """Create an ErrorDialog instance."""
+        return ErrorDialog(parent, msg)
+
+    def _create_qmessagebox(self, parent=None) -> QMessageBox:
+        """Create a QMessageBox instance.
+
+        Extracted as a factory method so tests can subclass MainWindow and override
+        this method to return a stub, avoiding real dialog display.
+
+        Args:
+            parent: Parent widget for the message box.
+
+        Returns:
+            A new QMessageBox instance.
+        """
+        return QMessageBox(parent)
+
     def _prompt_credential_reentry(self) -> None:
         """Inform the user that stored credentials were cleared and ask them to re-enter.
 
@@ -116,7 +162,7 @@ class MainWindow(QMainWindow):
         decrypted (for example because the encryption key has changed). The user's
         license is not affected — they simply need to re-enter their details once.
         """
-        msg = QMessageBox(self)
+        msg = self._create_qmessagebox(parent=self)
         msg.setWindowTitle("License Re-entry Required")
         msg.setIcon(QMessageBox.Icon.Information)
         msg.setText(
@@ -138,11 +184,12 @@ class MainWindow(QMainWindow):
         main window and uses OS-native styling.
         """
         settings_dialog = SettingsDialog(parent=self)
+        settings_dialog.check_for_updates_requested.connect(self.start_update_check)
         settings_dialog.exec()
 
     def _show_get_pro_dialog(self) -> None:
         """Show the Get Pro dialog from the menu."""
-        dialog = GetProDialog(self)
+        dialog = self._create_pro_dialog(parent=self)
         result = dialog.exec()
         if result:  # Dialog accepted (successful verification)
             self.refresh_pro_ui_elements()
@@ -156,12 +203,11 @@ class MainWindow(QMainWindow):
         is_pro = self.license_manager.is_pro
 
         # Show/hide Get MBD Pro menu item based on Pro status
-        if hasattr(self, "get_mbd_pro_action"):
-            self.get_mbd_pro_action.setVisible(not is_pro)
+        self.get_mbd_pro_action.setVisible(not is_pro)
 
     def startup_license_verification(self) -> None:
         """Perform startup license verification in background thread."""
-        self.verification_thread = StartupVerificationThread(self.license_manager, self)
+        self.verification_thread = self._create_verification_thread(self.license_manager)
         self.verification_thread.start()
 
     def startup_update_check(self) -> None:
@@ -182,7 +228,7 @@ class MainWindow(QMainWindow):
         if self.update_check_thread and self.update_check_thread.isRunning():
             return
 
-        self.update_check_thread = UpdateCheckThread(update_service)
+        self.update_check_thread = UpdateCheckThread(self._update_svc)
         self.update_check_thread.update_available.connect(self._show_update_dialog)
         self.update_check_thread.no_update_available.connect(self._handle_no_update_available)
         error_slot = self._handle_startup_update_error if is_startup else self._handle_update_error
@@ -284,42 +330,32 @@ class MainWindow(QMainWindow):
             log_ui("FFmpeg executable not found - audio conversion may not be available", "WARNING")
 
             # Show user-friendly dialog about audio conversion limitations
-            ErrorDialog(
-                self,
-                message="Audio conversion may not be available due to missing FFmpeg.\n\n"
+            self._create_error_dialog(
+                msg="Audio conversion may not be available due to missing FFmpeg.\n\n"
                 "Some audio formats may not be accessible. If you experience issues "
                 "with downloads, please contact support for assistance.",
+                parent=self,
             )
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Handle application close event with proper cleanup."""
         try:
             # Stop any running verification threads
-            if hasattr(self, "verification_thread") and self.verification_thread.isRunning():
+            if self.verification_thread is not None and self.verification_thread.isRunning():
                 self.verification_thread.terminate()
                 self.verification_thread.wait(1000)  # Wait up to 1 second
 
-            # Stop update check thread (following verification_thread pattern)
-            if (
-                hasattr(self, "update_check_thread")
-                and self.update_check_thread
-                and self.update_check_thread.isRunning()
-            ):
-                self.update_check_thread.stop()  # Use stop() method instead of terminate()
+            # Stop update check thread
+            if self.update_check_thread is not None and self.update_check_thread.isRunning():
+                self.update_check_thread.stop()
 
             # Disable keyring operations during shutdown to prevent crash
-            if hasattr(self, "license_manager") and hasattr(self.license_manager, "settings"):
-                # Mark settings as shutting down to prevent keyring access
-                self.license_manager.settings._shutting_down = True
+            # Mark settings as shutting down to prevent keyring access
+            self.license_manager.settings._shutting_down = True
 
             # Shut down download workers before window destruction to prevent crashes
-            if (
-                hasattr(self, "central_widget")
-                and hasattr(self.central_widget, "cloudcasts")
-                and hasattr(self.central_widget.cloudcasts, "download_manager")
-            ):
-                self.central_widget.cloudcasts.download_manager.shutdown()
-                QCoreApplication.processEvents()  # drain queued _emit_*_signal events
+            self.central_widget.cloudcasts.download_manager.shutdown()
+            QCoreApplication.processEvents()  # drain queued _emit_*_signal events
 
         except Exception:
             # Ignore any errors during cleanup to ensure app can exit

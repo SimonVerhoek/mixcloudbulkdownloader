@@ -30,11 +30,12 @@ def user_cloudcasts_API_url(username: str) -> str:
     return f"{MIXCLOUD_API_URL}/{username}/cloudcasts/"
 
 
-def get_mixcloud_API_data(url: str) -> tuple[dict, str]:
+def get_mixcloud_API_data(url: str, client: httpx.Client | None = None) -> tuple[dict, str]:
     """Fetch data from Mixcloud API.
 
     Args:
         url: API endpoint URL to fetch from
+        client: Optional httpx.Client to use for the request. If None, uses httpx.get directly.
 
     Returns:
         Tuple of (response_data, error_message).
@@ -46,7 +47,10 @@ def get_mixcloud_API_data(url: str) -> tuple[dict, str]:
 
     try:
         log_api(f"Making API request to: {url}", "DEBUG")
-        req = httpx.get(url=url)
+        if client is not None:
+            req = client.get(url=url)
+        else:
+            req = httpx.get(url=url)
         response = req.json()
         log_api(f"API request successful for: {url}", "INFO")
     except (httpx.RequestError, httpx.HTTPStatusError, httpx.TimeoutException) as e:

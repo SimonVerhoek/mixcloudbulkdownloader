@@ -7,7 +7,7 @@ from typing import Literal
 from app.logger import log_download, log_error_with_traceback
 
 
-def _get_macos_architecture() -> Literal["arm64", "intel"]:
+def _get_macos_architecture(machine: str = platform.machine()) -> Literal["arm64", "intel"]:
     """Get macOS architecture for binary selection.
 
     Returns:
@@ -16,7 +16,7 @@ def _get_macos_architecture() -> Literal["arm64", "intel"]:
     Raises:
         RuntimeError: For unrecognized architectures
     """
-    arch = platform.machine().lower()
+    arch = machine.lower()
     if arch == "arm64":
         return "arm64"
     elif arch in ("x86_64", "i386"):
@@ -26,7 +26,7 @@ def _get_macos_architecture() -> Literal["arm64", "intel"]:
         raise RuntimeError(f"Unsupported macOS architecture: {arch}")
 
 
-def get_ffmpeg_path() -> Path:
+def get_ffmpeg_path(system: str = platform.system(), machine: str = platform.machine()) -> Path:
     """Get platform-specific FFmpeg executable path.
 
     Returns:
@@ -36,25 +36,25 @@ def get_ffmpeg_path() -> Path:
         RuntimeError: If running on unsupported platform
     """
     base = Path(__file__).parent.parent / "resources" / "ffmpeg"
-    system = platform.system().lower()
+    resolved_system = system.lower()
 
-    if system == "windows":
+    if resolved_system == "windows":
         selected_path = base / "windows" / "ffmpeg.exe"
-        log_download(f"Detected system: {system}, selected FFmpeg binary: {selected_path}")
+        log_download(f"Detected system: {resolved_system}, selected FFmpeg binary: {selected_path}")
         return selected_path
-    elif system == "darwin":  # macOS
-        arch = _get_macos_architecture()
+    elif resolved_system == "darwin":  # macOS
+        arch = _get_macos_architecture(machine=machine)
         selected_path = base / "macos" / arch / "ffmpeg"
         log_download(
-            f"Detected system: {system}, architecture: {arch}, selected FFmpeg binary: {selected_path}"
+            f"Detected system: {resolved_system}, architecture: {arch}, selected FFmpeg binary: {selected_path}"
         )
         return selected_path
     else:
-        log_error_with_traceback(f"Unsupported OS: {system}")
-        raise RuntimeError(f"Unsupported OS: {system}")
+        log_error_with_traceback(f"Unsupported OS: {resolved_system}")
+        raise RuntimeError(f"Unsupported OS: {resolved_system}")
 
 
-def get_ffprobe_path() -> Path:
+def get_ffprobe_path(system: str = platform.system(), machine: str = platform.machine()) -> Path:
     """Get platform-specific FFprobe executable path.
 
     Returns:
@@ -64,32 +64,35 @@ def get_ffprobe_path() -> Path:
         RuntimeError: If running on unsupported platform
     """
     base = Path(__file__).parent.parent / "resources" / "ffmpeg"
-    system = platform.system().lower()
+    resolved_system = system.lower()
 
-    if system == "windows":
+    if resolved_system == "windows":
         selected_path = base / "windows" / "ffprobe.exe"
-        log_download(f"Detected system: {system}, selected FFprobe binary: {selected_path}")
+        log_download(
+            f"Detected system: {resolved_system}, selected FFprobe binary: {selected_path}"
+        )
         return selected_path
-    elif system == "darwin":  # macOS
-        arch = _get_macos_architecture()
+    elif resolved_system == "darwin":  # macOS
+        arch = _get_macos_architecture(machine=machine)
         selected_path = base / "macos" / arch / "ffprobe"
         log_download(
-            f"Detected system: {system}, architecture: {arch}, selected FFprobe binary: {selected_path}"
+            f"Detected system: {resolved_system}, architecture: {arch}, selected FFprobe binary: {selected_path}"
         )
         return selected_path
     else:
-        log_error_with_traceback(f"Unsupported OS: {system}")
-        raise RuntimeError(f"Unsupported OS: {system}")
+        log_error_with_traceback(f"Unsupported OS: {resolved_system}")
+        raise RuntimeError(f"Unsupported OS: {resolved_system}")
 
 
-def verify_ffmpeg_availability() -> bool:
+def verify_ffmpeg_availability(ffmpeg_path: Path | None = None) -> bool:
     """Verify that FFmpeg is available for audio conversion.
 
     Returns:
         True if FFmpeg executable is found and accessible, False otherwise
     """
     try:
-        ffmpeg_path = get_ffmpeg_path()
+        if ffmpeg_path is None:
+            ffmpeg_path = get_ffmpeg_path()
         return ffmpeg_path.exists() and ffmpeg_path.is_file()
     except (RuntimeError, OSError):
         return False

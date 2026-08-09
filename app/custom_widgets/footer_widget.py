@@ -1,11 +1,13 @@
 """Footer widget showing license status and feedback button."""
 
-from PySide6.QtCore import Signal
+from collections.abc import Callable
+from typing import Optional
+
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
 from app.custom_widgets.dialogs.feedback_dialog import FeedbackDialog
 from app.custom_widgets.dialogs.get_pro_dialog import GetProDialog
-from app.services.license_manager import LicenseManager, license_manager
+from app.services.license_manager import LicenseManager, license_manager as _default_license_manager
 
 
 class FooterWidget(QWidget):
@@ -16,17 +18,29 @@ class FooterWidget(QWidget):
     """
 
     def __init__(
-        self, license_manager: LicenseManager = license_manager, parent: QWidget | None = None
+        self,
+        license_manager: LicenseManager = _default_license_manager,
+        parent: QWidget | None = None,
+        feedback_dialog_factory: Optional[Callable] = None,
+        get_pro_dialog_factory: Optional[Callable] = None,
     ) -> None:
         """Initialize footer widget with license status and feedback button.
 
         Args:
-            license_manager: License manager for Pro status checking
-            parent: Parent widget
+            license_manager: License manager for Pro status checking.
+            parent: Parent widget.
+            feedback_dialog_factory: Callable used to create the feedback dialog.
+                When ``None`` (default) the real ``FeedbackDialog`` class is used.
+                Pass a callable in tests to avoid opening a native dialog.
+            get_pro_dialog_factory: Callable used to create the Get Pro dialog.
+                When ``None`` (default) the real ``GetProDialog`` class is used.
+                Pass a callable in tests to avoid opening a native dialog.
         """
         super().__init__(parent)
 
         self.license_manager = license_manager
+        self._feedback_dialog_factory = feedback_dialog_factory or FeedbackDialog
+        self._get_pro_dialog_factory = get_pro_dialog_factory or GetProDialog
         self.setObjectName("footerWidget")
 
         # Create layout
@@ -84,7 +98,7 @@ class FooterWidget(QWidget):
 
     def _show_get_pro_dialog(self) -> None:
         """Show the Get Pro dialog."""
-        dialog = GetProDialog(self)
+        dialog = self._get_pro_dialog_factory(self)
         result = dialog.exec()
         if result:  # Dialog accepted (successful verification)
             # Status will be updated automatically via license_status_changed signal
@@ -92,5 +106,5 @@ class FooterWidget(QWidget):
 
     def _show_feedback_dialog(self) -> None:
         """Show the feedback dialog."""
-        dialog = FeedbackDialog(self)
+        dialog = self._feedback_dialog_factory(self)
         dialog.exec()

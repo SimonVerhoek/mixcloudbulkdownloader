@@ -1,9 +1,13 @@
 """License server test stubs and mock server responses."""
 
 from typing import Any
-from unittest.mock import Mock
 
 import httpx
+
+
+# Sentinel httpx.Request used when constructing HTTPStatusError instances in fakes.
+# httpx.HTTPStatusError requires a request object but tests don't inspect it.
+_STUB_REQUEST = httpx.Request(method="POST", url="http://stub.invalid/")
 
 
 class FakeLicenseServerClient:
@@ -123,7 +127,7 @@ class FakeLicenseServerClient:
         if self.should_raise_http_error:
             response = FakeLicenseServerResponse({}, status_code=self.http_status_code)
             raise httpx.HTTPStatusError(
-                f"HTTP {self.http_status_code}", request=Mock(), response=response
+                f"HTTP {self.http_status_code}", request=_STUB_REQUEST, response=response
             )
 
         # Process license verification request
@@ -202,6 +206,16 @@ class FakeLicenseServerClient:
         """Simulate client closure."""
         pass
 
+    # Context manager support so FakeLicenseServerClient can be used in
+    # ``with client_factory(timeout=...) as client:`` patterns.
+    def __enter__(self) -> "FakeLicenseServerClient":
+        """Enter context manager."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Exit context manager."""
+        self.close()
+
     # Test configuration methods
     def add_valid_license(self, email: str, license_key: str) -> None:
         """Add a valid license for testing."""
@@ -250,6 +264,65 @@ class FakeLicenseServerClient:
         self.custom_responses.clear()
 
 
+class RecordingSleepFn:
+    """Callable that records all sleep durations without actually sleeping.
+
+    Use as ``sleep_fn=`` in ``LicenseManager`` to avoid real delays in retry tests::
+
+        sleep_fn = RecordingSleepFn()
+        manager = LicenseManager(sleep_fn=sleep_fn)
+        # ... run test ...
+        assert sleep_fn.calls == [1.0, 2.0]
+    """
+
+    def __init__(self) -> None:
+        """Initialise with empty call history."""
+        self.calls: list[float] = []
+
+    def __call__(self, seconds: float) -> None:
+        """Record the requested sleep duration without sleeping.
+
+        Args:
+            seconds: Duration in seconds (recorded but not slept).
+        """
+        self.calls.append(seconds)
+
+
+class FakeHttpClientFactory:
+    """Factory that produces ``FakeLicenseServerClient`` instances.
+
+    Designed to be passed as ``http_client_factory`` to ``LicenseManager``::
+
+        factory = FakeHttpClientFactory(client)
+        manager = LicenseManager(http_client_factory=factory)
+
+    Each call to ``factory(timeout=...)`` returns the same pre-configured
+    ``FakeLicenseServerClient`` instance, allowing tests to inspect call counts
+    and configure error scenarios without patching ``httpx.Client``.
+    """
+
+    def __init__(self, client: FakeLicenseServerClient) -> None:
+        """Initialise factory with a pre-built fake client.
+
+        Args:
+            client: The ``FakeLicenseServerClient`` to return on every call.
+        """
+        self.client = client
+        self.call_count = 0
+
+    def __call__(self, *, timeout: httpx.Timeout) -> FakeLicenseServerClient:
+        """Return the configured client instance (context-manager compatible).
+
+        Args:
+            timeout: Ignored in tests; present to match ``httpx.Client`` signature.
+
+        Returns:
+            The pre-configured ``FakeLicenseServerClient``.
+        """
+        self.call_count += 1
+        return self.client
+
+
 class FakeLicenseServerResponse:
     """Fake license server HTTP response."""
 
@@ -270,7 +343,9 @@ class FakeLicenseServerResponse:
     def raise_for_status(self) -> None:
         """Raise exception for HTTP errors."""
         if self.status_code >= 400:
-            raise httpx.HTTPStatusError(f"HTTP {self.status_code}", request=Mock(), response=self)
+            raise httpx.HTTPStatusError(
+                f"HTTP {self.status_code}", request=_STUB_REQUEST, response=self
+            )
 
 
 class StubLicenseServer:

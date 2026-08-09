@@ -2,6 +2,7 @@
 
 import re
 import webbrowser
+from collections.abc import Callable
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -34,7 +35,7 @@ from app.custom_widgets.dialogs.license_verification_success_dialog import (
     LicenseVerificationSuccessDialog,
 )
 from app.logger import log_error
-from app.services.license_manager import license_manager
+from app.services.license_manager import LicenseManager, license_manager
 
 
 class GetProDialog(QDialog):
@@ -45,13 +46,37 @@ class GetProDialog(QDialog):
     2. Pro features showcase with purchase option for new users
     """
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        license_manager: LicenseManager | None = None,
+        success_dialog_factory: Callable | None = None,
+        failure_dialog_factory: Callable | None = None,
+        error_dialog_factory: Callable | None = None,
+        browser_open_fn: Callable | None = None,
+    ) -> None:
         """Initialize the GetPro dialog.
 
         Args:
             parent: Parent widget for the dialog.
+            license_manager: License manager instance to use. If None, uses the module-level singleton.
+            success_dialog_factory: Callable used to construct the verification success dialog.
+                Defaults to LicenseVerificationSuccessDialog.
+            failure_dialog_factory: Callable used to construct the verification failure dialog.
+                Defaults to LicenseVerificationFailureDialog.
+            error_dialog_factory: Callable used to construct error dialogs. Defaults to ErrorDialog.
+            browser_open_fn: Callable used to open URLs in a browser. Defaults to webbrowser.open.
         """
         super().__init__(parent)
+        import app.services.license_manager as _lm_module
+
+        self._license_manager = (
+            license_manager if license_manager is not None else _lm_module.license_manager
+        )
+        self._success_dialog_factory = success_dialog_factory or LicenseVerificationSuccessDialog
+        self._failure_dialog_factory = failure_dialog_factory or LicenseVerificationFailureDialog
+        self._error_dialog_factory = error_dialog_factory or ErrorDialog
+        self._browser_open_fn = browser_open_fn or webbrowser.open
 
         self.setWindowTitle("Get MBD Pro")
         self.setModal(True)
@@ -172,8 +197,8 @@ class GetProDialog(QDialog):
 
     def _load_existing_credentials(self) -> None:
         """Load existing credentials from settings into the form."""
-        self.email_edit.setText(license_manager.settings.email)
-        self.license_key_edit.setText(license_manager.settings.license_key)
+        self.email_edit.setText(self._license_manager.settings.email)
+        self.license_key_edit.setText(self._license_manager.settings.license_key)
 
     def _validate_form(self) -> bool:
         """Validate the license verification form.
@@ -198,7 +223,7 @@ class GetProDialog(QDialog):
     def _handle_verify(self) -> None:
         """Handle the verify license button click."""
         if not self._validate_form():
-            failure_dialog = LicenseVerificationFailureDialog(self, LICENSE_INVALID_CREDENTIALS)
+            failure_dialog = self._failure_dialog_factory(self, LICENSE_INVALID_CREDENTIALS)
             failure_dialog.exec()
             return
 
@@ -206,28 +231,30 @@ class GetProDialog(QDialog):
         license_key = self.license_key_edit.text().strip()
 
         # Store credentials before verification
-        license_manager.settings.email = email
-        license_manager.settings.license_key = license_key
+        self._license_manager.settings.email = email
+        self._license_manager.settings.license_key = license_key
 
         # Perform verification
-        success = license_manager.verify_license()
+        success = self._license_manager.verify_license()
 
         if success:
-            success_dialog = LicenseVerificationSuccessDialog(self)
+            success_dialog = self._success_dialog_factory(self)
             success_dialog.exec()
             self.accept()  # Close GetPro dialog
         else:
-            failure_dialog = LicenseVerificationFailureDialog(self, LICENSE_VERIFICATION_FAILED)
+            failure_dialog = self._failure_dialog_factory(self, LICENSE_VERIFICATION_FAILED)
             failure_dialog.exec()
             # Keep GetPro dialog open for retry
 
     def _handle_get_pro_now(self) -> None:
         """Handle the Get MBD Pro now button click."""
         try:
-            checkout_url = license_manager.get_checkout_url()
-            webbrowser.open(checkout_url)
+            checkout_url = self._license_manager.get_checkout_url()
+            self._browser_open_fn(checkout_url)
         except Exception as e:
             log_error(message=f"Failed to retrieve checkout URL: {e}")
-            error_dialog = ErrorDialog(self, LICENSE_CHECKOUT_ERROR, "Checkout Error")
+            error_dialog = self._error_dialog_factory(
+                self, LICENSE_CHECKOUT_ERROR, "Checkout Error"
+            )
             error_dialog.exec()
         # Keep dialog open so user can enter credentials after purchase

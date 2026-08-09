@@ -1,5 +1,6 @@
 """Comprehensive tests for ConversionWorker using PyQt threading patterns."""
 
+import subprocess
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, call, patch
@@ -8,6 +9,7 @@ import pytest
 
 from app.consts.audio import AudioFormat
 from app.services.conversion_worker import ConversionCancelled, ConversionWorker
+from app.services.settings_manager import SettingsManager
 from tests.stubs.license_server_stubs import StubLicenseManager
 
 
@@ -83,8 +85,8 @@ def stub_license_manager():
 @pytest.fixture
 def stub_settings_manager():
     """Create stub settings manager."""
-    settings = Mock()
-    settings.get = Mock(return_value=192)  # Default bitrate
+    settings = Mock(spec=SettingsManager)
+    settings.get.return_value = 192  # Default bitrate
     return settings
 
 
@@ -147,16 +149,15 @@ class TestConversionWorkerPrerequisites:
 
     def test_ffmpeg_path_validation(self, conversion_worker, stub_callback_bridge):
         """Test FFmpeg path validation."""
-        with patch("app.services.conversion_worker.get_ffmpeg_path") as mock_ffmpeg:
-            mock_ffmpeg.return_value = None
+        conversion_worker._ffmpeg_path = None
 
-            # Run conversion (should emit error signal instead of raising)
-            conversion_worker.run()
+        # Run conversion (should emit error signal instead of raising)
+        conversion_worker.run()
 
-            # Should emit error signal for missing FFmpeg
-            assert len(stub_callback_bridge.error_calls) == 1
-            error = stub_callback_bridge.error_calls[0]
-            assert "FFmpeg not found" in error["error_msg"]
+        # Should emit error signal for missing FFmpeg
+        assert len(stub_callback_bridge.error_calls) == 1
+        error = stub_callback_bridge.error_calls[0]
+        assert "FFmpeg not found" in error["error_msg"]
 
     def test_input_file_validation(
         self, temp_dir, stub_callback_bridge, stub_settings_manager, stub_license_manager
@@ -171,18 +172,16 @@ class TestConversionWorkerPrerequisites:
             callback_bridge=stub_callback_bridge,
             settings_manager=stub_settings_manager,
             license_manager=stub_license_manager,
+            ffmpeg_path=Path("/usr/bin/ffmpeg"),
         )
 
-        with patch("app.services.conversion_worker.get_ffmpeg_path") as mock_ffmpeg:
-            mock_ffmpeg.return_value = Path("/usr/bin/ffmpeg")
+        # Run conversion (should emit error signal instead of raising)
+        worker.run()
 
-            # Run conversion (should emit error signal instead of raising)
-            worker.run()
-
-            # Should emit error signal for missing input file
-            assert len(stub_callback_bridge.error_calls) == 1
-            error = stub_callback_bridge.error_calls[0]
-            assert "Input file does not exist" in error["error_msg"]
+        # Should emit error signal for missing input file
+        assert len(stub_callback_bridge.error_calls) == 1
+        error = stub_callback_bridge.error_calls[0]
+        assert "Input file does not exist" in error["error_msg"]
 
     def test_empty_input_file_validation(
         self, temp_dir, stub_callback_bridge, stub_settings_manager, stub_license_manager
@@ -200,18 +199,16 @@ class TestConversionWorkerPrerequisites:
             callback_bridge=stub_callback_bridge,
             settings_manager=stub_settings_manager,
             license_manager=stub_license_manager,
+            ffmpeg_path=Path("/usr/bin/ffmpeg"),
         )
 
-        with patch("app.services.conversion_worker.get_ffmpeg_path") as mock_ffmpeg:
-            mock_ffmpeg.return_value = Path("/usr/bin/ffmpeg")
+        # Run conversion (should emit error signal instead of raising)
+        worker.run()
 
-            # Run conversion (should emit error signal instead of raising)
-            worker.run()
-
-            # Should emit error signal for empty input file
-            assert len(stub_callback_bridge.error_calls) == 1
-            error = stub_callback_bridge.error_calls[0]
-            assert "Input file is empty" in error["error_msg"]
+        # Should emit error signal for empty input file
+        assert len(stub_callback_bridge.error_calls) == 1
+        error = stub_callback_bridge.error_calls[0]
+        assert "Input file is empty" in error["error_msg"]
 
 
 @pytest.mark.unit
@@ -333,10 +330,8 @@ class TestConversionCancellation:
     def test_cancel_before_start(self, conversion_worker, stub_callback_bridge):
         """Test cancellation before conversion starts emits emit_cancelled."""
         conversion_worker.cancel()
-
-        with patch("app.services.conversion_worker.get_ffmpeg_path") as mock_ffmpeg:
-            mock_ffmpeg.return_value = Path("/usr/bin/ffmpeg")
-            conversion_worker.run()
+        conversion_worker._ffmpeg_path = Path("/usr/bin/ffmpeg")
+        conversion_worker.run()
 
         # Must emit emit_cancelled, not a progress "Cancelled" message
         assert len(stub_callback_bridge.cancelled_calls) == 1
@@ -356,7 +351,7 @@ class TestConversionCancellation:
     def test_cancel_during_process(self, conversion_worker):
         """Test cancellation during FFmpeg process."""
         # Mock a running process
-        mock_process = Mock()
+        mock_process = Mock(spec=subprocess.Popen)
         conversion_worker.ffmpeg_process = mock_process
 
         conversion_worker.cancel()
@@ -369,7 +364,7 @@ class TestConversionCancellation:
     def test_cancel_with_stuck_process(self, conversion_worker):
         """Test cancellation when process won't terminate gracefully."""
         # Mock a process that times out on terminate
-        mock_process = Mock()
+        mock_process = Mock(spec=subprocess.Popen)
         mock_process.wait.side_effect = [subprocess.TimeoutExpired("ffmpeg", 2), None]
         conversion_worker.ffmpeg_process = mock_process
 
@@ -384,10 +379,8 @@ class TestConversionCancellation:
     ):
         """Cancelling run() emits emit_cancelled and deletes the source file."""
         conversion_worker.cancel()
-
-        with patch("app.services.conversion_worker.get_ffmpeg_path") as mock_ffmpeg:
-            mock_ffmpeg.return_value = Path("/usr/bin/ffmpeg")
-            conversion_worker.run()
+        conversion_worker._ffmpeg_path = Path("/usr/bin/ffmpeg")
+        conversion_worker.run()
 
         # emit_cancelled fired, not emit_progress
         assert len(stub_callback_bridge.cancelled_calls) == 1
@@ -418,17 +411,25 @@ class TestCleanupSourceFile:
         self, conversion_worker, stub_callback_bridge, test_input_file
     ):
         """On conversion error the source file must be preserved for retry."""
-        with (
-            patch("app.services.conversion_worker.get_ffmpeg_path") as mock_ffmpeg,
-            patch("app.services.conversion_worker.subprocess.Popen") as mock_popen,
-            patch.object(conversion_worker, "_validate_conversion_prerequisites"),
-        ):
-            mock_ffmpeg.return_value = Path("/usr/bin/ffmpeg")
-            mock_process = Mock()
-            mock_process.stdout = []
-            mock_process.returncode = 1
-            mock_popen.return_value = mock_process
+        conversion_worker._ffmpeg_path = Path("/usr/bin/ffmpeg")
 
+        class StubErrorProcess:
+            """Stub process that simulates FFmpeg failing with exit code 1."""
+
+            stdout = []
+            returncode = 1
+
+            def wait(self):
+                pass
+
+        stub_proc = StubErrorProcess()
+
+        def stub_popen(cmd, **kwargs):
+            return stub_proc
+
+        conversion_worker._popen_fn = stub_popen
+
+        with patch.object(conversion_worker, "_validate_conversion_prerequisites"):
             conversion_worker.run()
 
         # Error path: source file must still exist
@@ -484,29 +485,38 @@ class TestConversionErrorHandling:
 
 @pytest.mark.integration
 class TestConversionWorkerIntegration:
-    """Integration tests for ConversionWorker with mocked subprocess."""
+    """Integration tests for ConversionWorker with stub subprocess."""
 
-    @patch("app.services.conversion_worker.subprocess.Popen")
-    @patch("app.services.conversion_worker.get_ffmpeg_path")
     def test_successful_conversion_workflow(
-        self, mock_ffmpeg_path, mock_popen, conversion_worker, stub_callback_bridge, temp_dir
+        self, conversion_worker, stub_callback_bridge, temp_dir
     ):
         """Test complete successful conversion workflow."""
-        # Setup mocks
-        mock_ffmpeg_path.return_value = Path("/usr/bin/ffmpeg")
+        conversion_worker._ffmpeg_path = Path("/usr/bin/ffmpeg")
 
-        # Mock successful validation by patching the method
-        with patch.object(conversion_worker, "_validate_conversion_prerequisites"):
-            # Mock FFmpeg process with realistic output
-            mock_process = Mock()
-            mock_process.stdout = [
-                "  Duration: 00:02:30.00, start: 0.000000",  # Duration line
-                "out_time_ms=75000000",  # 75 seconds progress
-                "out_time_ms=150000000",  # 150 seconds (complete)
+        captured_calls = []
+
+        class StubSuccessProcess:
+            """Stub process that simulates a successful FFmpeg conversion."""
+
+            stdout = [
+                "  Duration: 00:02:30.00, start: 0.000000",
+                "out_time_ms=75000000",
+                "out_time_ms=150000000",
             ]
-            mock_process.returncode = 0
-            mock_popen.return_value = mock_process
+            returncode = 0
 
+            def wait(self):
+                pass
+
+        stub_proc = StubSuccessProcess()
+
+        def stub_popen(cmd, **kwargs):
+            captured_calls.append(cmd)
+            return stub_proc
+
+        conversion_worker._popen_fn = stub_popen
+
+        with patch.object(conversion_worker, "_validate_conversion_prerequisites"):
             # Create temp conversion directory and file to simulate FFmpeg output
             conversion_worker.temp_dir.mkdir(parents=True, exist_ok=True)
             conversion_worker.converting_file_path.write_text("converted audio content")
@@ -514,44 +524,47 @@ class TestConversionWorkerIntegration:
             # Run conversion
             conversion_worker.run()
 
-            # Verify FFmpeg was called correctly
-            mock_popen.assert_called_once()
-            args, kwargs = mock_popen.call_args
-            cmd = args[0]
-            # Check that the FFmpeg path appears in the command (platform-agnostic)
-            ffmpeg_path_str = str(mock_ffmpeg_path.return_value)
-            assert ffmpeg_path_str in cmd
-            assert conversion_worker.input_file in cmd
-            assert str(conversion_worker.converting_file_path) in cmd
+        # Verify FFmpeg was called correctly
+        assert len(captured_calls) == 1
+        cmd = captured_calls[0]
+        # Check that the FFmpeg path appears in the command (platform-agnostic)
+        assert str(conversion_worker._ffmpeg_path) in cmd
+        assert conversion_worker.input_file in cmd
+        assert str(conversion_worker.converting_file_path) in cmd
 
-            # Verify progress signals were emitted
-            assert len(stub_callback_bridge.progress_calls) >= 1
+        # Verify progress signals were emitted
+        assert len(stub_callback_bridge.progress_calls) >= 1
 
-            # Verify completion signal was emitted
-            assert len(stub_callback_bridge.completed_calls) == 1
-            completion = stub_callback_bridge.completed_calls[0]
-            assert completion["cloudcast_url"] == "https://mixcloud.com/test/mix"
-            assert completion["file_path"] == str(conversion_worker.final_file_path)
-            assert completion["task_type"] == "conversion"
+        # Verify completion signal was emitted
+        assert len(stub_callback_bridge.completed_calls) == 1
+        completion = stub_callback_bridge.completed_calls[0]
+        assert completion["cloudcast_url"] == "https://mixcloud.com/test/mix"
+        assert completion["file_path"] == str(conversion_worker.final_file_path)
+        assert completion["task_type"] == "conversion"
 
-            # Verify file was moved to final location
-            assert conversion_worker.final_file_path.exists()
-            assert conversion_worker.final_file_path.read_text() == "converted audio content"
+        # Verify file was moved to final location
+        assert conversion_worker.final_file_path.exists()
+        assert conversion_worker.final_file_path.read_text() == "converted audio content"
 
-    @patch("app.services.conversion_worker.subprocess.Popen")
-    @patch("app.services.conversion_worker.get_ffmpeg_path")
-    def test_conversion_failure_handling(
-        self, mock_ffmpeg_path, mock_popen, conversion_worker, stub_callback_bridge
-    ):
+    def test_conversion_failure_handling(self, conversion_worker, stub_callback_bridge):
         """Test handling of FFmpeg conversion failure."""
-        # Setup mocks
-        mock_ffmpeg_path.return_value = Path("/usr/bin/ffmpeg")
+        conversion_worker._ffmpeg_path = Path("/usr/bin/ffmpeg")
 
-        # Mock failed FFmpeg process
-        mock_process = Mock()
-        mock_process.stdout = ["Some error output"]
-        mock_process.returncode = 1  # Error exit code
-        mock_popen.return_value = mock_process
+        class StubFailProcess:
+            """Stub process that simulates FFmpeg failing with exit code 1."""
+
+            stdout = ["Some error output"]
+            returncode = 1
+
+            def wait(self):
+                pass
+
+        stub_proc = StubFailProcess()
+
+        def stub_popen(cmd, **kwargs):
+            return stub_proc
+
+        conversion_worker._popen_fn = stub_popen
 
         # Run conversion (should handle error gracefully)
         conversion_worker.run()
@@ -563,10 +576,8 @@ class TestConversionWorkerIntegration:
         assert "Conversion failed" in error["error_msg"]
         assert error["task_type"] == "conversion"
 
-    @patch("app.services.conversion_worker.subprocess.Popen")
-    @patch("app.services.conversion_worker.get_ffmpeg_path")
     def test_full_error_message_single_conversion_failed_prefix(
-        self, mock_ffmpeg_path, mock_popen, conversion_worker, stub_callback_bridge
+        self, conversion_worker, stub_callback_bridge
     ):
         """Regression guard: end-to-end error for exit code 3221225786 must have exactly one prefix.
 
@@ -574,12 +585,23 @@ class TestConversionWorkerIntegration:
         then wrapped again as f"Conversion failed: {str(e)}", producing a double prefix.
         This test also verifies the antivirus message reaches the user.
         """
-        mock_ffmpeg_path.return_value = Path("/usr/bin/ffmpeg")
+        conversion_worker._ffmpeg_path = Path("/usr/bin/ffmpeg")
 
-        mock_process = Mock()
-        mock_process.stdout = []
-        mock_process.returncode = 3221225786
-        mock_popen.return_value = mock_process
+        class StubAntivirusExitProcess:
+            """Stub process that simulates the Windows antivirus exit code."""
+
+            stdout = []
+            returncode = 3221225786
+
+            def wait(self):
+                pass
+
+        stub_proc = StubAntivirusExitProcess()
+
+        def stub_popen(cmd, **kwargs):
+            return stub_proc
+
+        conversion_worker._popen_fn = stub_popen
 
         with patch.object(conversion_worker, "_validate_conversion_prerequisites"):
             conversion_worker.run()
@@ -655,7 +677,3 @@ class TestConversionWorkerEdgeCases:
         # Should handle long filenames
         expected_filename = "a" * 200 + ".mp3"
         assert worker.final_filename == expected_filename
-
-
-# Import subprocess for the stuck process test
-import subprocess

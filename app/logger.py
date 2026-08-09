@@ -17,6 +17,7 @@ Usage:
 
 import logging
 import sys
+from collections.abc import Callable
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -45,18 +46,37 @@ LOG_FORMAT = "%(asctime)s %(levelname)s [%(name)s:%(lineno)d] %(message)s"
 LOG_DATE_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
 
-def get_log_directory() -> Path:
+def get_log_directory(
+    platform: str | None = None,
+    appdata_dir_fn: Callable[[], Path] | None = None,
+    xdg_data_home_fn: Callable[[], Path] | None = None,
+) -> Path:
     """Get platform-appropriate log directory.
+
+    Args:
+        platform: Platform identifier string (e.g. ``sys.platform``). When ``None``
+            the real ``sys.platform`` value is used. Pass an explicit value in tests
+            to exercise a specific branch without patching.
+        appdata_dir_fn: Callable returning the Windows APPDATA directory. When
+            ``None`` the real ``get_appdata_dir`` function is used. Allows tests to
+            inject a temporary directory without patching.
+        xdg_data_home_fn: Callable returning the XDG data home directory. When
+            ``None`` the real ``get_xdg_data_home`` function is used. Allows tests
+            to inject a temporary directory without patching.
 
     Returns:
         Path to the platform-specific log directory (created if it does not exist).
     """
-    if sys.platform == "darwin":  # macOS
+    _platform = platform if platform is not None else sys.platform
+
+    if _platform == "darwin":  # macOS
         log_dir = Path.home() / "Library" / "Logs" / "MixcloudBulkDownloader"
-    elif sys.platform == "win32":  # Windows
-        log_dir = get_appdata_dir() / "MixcloudBulkDownloader" / "logs"
+    elif _platform == "win32":  # Windows
+        _appdata_dir = (appdata_dir_fn or get_appdata_dir)()
+        log_dir = _appdata_dir / "MixcloudBulkDownloader" / "logs"
     else:  # Linux and other Unix-like systems
-        log_dir = get_xdg_data_home() / "MixcloudBulkDownloader" / "logs"
+        _xdg_data_home = (xdg_data_home_fn or get_xdg_data_home)()
+        log_dir = _xdg_data_home / "MixcloudBulkDownloader" / "logs"
 
     log_dir.mkdir(parents=True, exist_ok=True)
     return log_dir

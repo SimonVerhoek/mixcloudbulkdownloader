@@ -74,9 +74,17 @@ repos:
 
   - repo: local
     hooks:
+      - id: check-mock-rules
+        name: Check mocking rules (Rules 1, 4, 5, 6)
+        entry: python scripts/check_mock_rules.py
+        language: system
+        types: [python]
+        files: ^tests/.*\.py$
+        pass_filenames: true
       - id: pytest
         name: Run pytest tests
         entry: pytest
         language: system  # use system python environment
         pass_filenames: false  # don't pass filenames (pytest runs all tests)
         always_run: true       # run on every commit, regardless of files changed
+

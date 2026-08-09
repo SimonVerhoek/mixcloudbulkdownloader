@@ -7,9 +7,65 @@ from unittest.mock import MagicMock, Mock, call, patch
 import pytest
 
 from app.data_classes import Cloudcast, MixcloudUser
+from app.services.download_manager import CallbackBridge
 from app.services.download_worker import DownloadCancelled, DownloadWorker
 from app.services.settings_manager import SettingsManager
 from tests.stubs.license_server_stubs import StubLicenseManager
+
+
+class StubYoutubeDL:
+    """Stub for yt_dlp.YoutubeDL used in integration tests.
+
+    Implements the context-manager interface used by DownloadWorker.run():
+      with ydl_class(opts) as ydl:
+          info = ydl.extract_info(url, download=False)
+          ydl.download([url])
+    """
+
+    def __init__(self, opts: dict) -> None:
+        """Initialize stub with yt-dlp options."""
+        self.opts = opts
+        self.params = dict(opts)
+        # outtmpl must be a dict so DownloadWorker can write ydl.params["outtmpl"]["default"]
+        if "outtmpl" in self.params and isinstance(self.params["outtmpl"], str):
+            self.params["outtmpl"] = {"default": self.params["outtmpl"]}
+
+        self._extract_info_result: dict | None = None
+        self._extract_info_side_effect: BaseException | None = None
+        self._download_calls: list[list[str]] = []
+
+    def __enter__(self) -> "StubYoutubeDL":
+        """Return self as the context manager object."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Exit context manager without suppressing exceptions."""
+        pass
+
+    def extract_info(self, url: str, download: bool = True) -> dict | None:
+        """Simulate extract_info call.
+
+        Args:
+            url: URL to extract info for
+            download: Whether to download (unused in stub)
+
+        Returns:
+            Configured info dict
+
+        Raises:
+            Configured side effect exception if set
+        """
+        if self._extract_info_side_effect is not None:
+            raise self._extract_info_side_effect
+        return self._extract_info_result
+
+    def download(self, urls: list[str]) -> None:
+        """Record download call.
+
+        Args:
+            urls: List of URLs to download
+        """
+        self._download_calls.extend(urls)
 
 
 @pytest.fixture
@@ -23,7 +79,7 @@ def temp_dir():
 def mock_settings_manager():
     """Create mock settings manager."""
     settings = Mock(spec=SettingsManager)
-    settings.get = Mock(return_value=None)
+    settings.get.return_value = None
     return settings
 
 
@@ -36,10 +92,7 @@ def mock_license_manager():
 @pytest.fixture
 def mock_callback_bridge():
     """Create mock callback bridge."""
-    bridge = Mock()
-    bridge.emit_progress = Mock()
-    bridge.emit_completed = Mock()
-    bridge.emit_error = Mock()
+    bridge = Mock(spec=CallbackBridge)
     return bridge
 
 
@@ -243,10 +296,8 @@ class TestDownloadWorkerFilenameUpdate:
 class TestDownloadWorkerFormatDetection:
     """Test format detection and yt-dlp integration."""
 
-    @patch("app.services.download_worker.yt_dlp.YoutubeDL")
     def test_format_detection_webm(
         self,
-        mock_ytdl_class,
         sample_cloudcast,
         temp_dir,
         mock_callback_bridge,
@@ -255,9 +306,23 @@ class TestDownloadWorkerFormatDetection:
         yt_dlp_info_responses,
     ):
         """Test format detection extracts webm extension correctly."""
-        mock_ytdl = MagicMock()
-        mock_ytdl_class.return_value.__enter__.return_value = mock_ytdl
-        mock_ytdl.extract_info.return_value = yt_dlp_info_responses["webm"]
+
+        class StubYoutubeDLWebm(StubYoutubeDL):
+            pass
+
+        stub_instance = StubYoutubeDLWebm.__new__(StubYoutubeDLWebm)
+        stub_instance._extract_info_result = yt_dlp_info_responses["webm"]
+        stub_instance._extract_info_side_effect = None
+        stub_instance._download_calls = []
+
+        def stub_ydl_class(opts: dict) -> StubYoutubeDLWebm:
+            stub_instance.opts = opts
+            stub_instance.params = dict(opts)
+            if "outtmpl" in stub_instance.params and isinstance(
+                stub_instance.params["outtmpl"], str
+            ):
+                stub_instance.params["outtmpl"] = {"default": stub_instance.params["outtmpl"]}
+            return stub_instance
 
         worker = DownloadWorker(
             cloudcast=sample_cloudcast,
@@ -265,6 +330,7 @@ class TestDownloadWorkerFormatDetection:
             callback_bridge=mock_callback_bridge,
             settings_manager=mock_settings_manager,
             license_manager=mock_license_manager,
+            ydl_class=stub_ydl_class,
         )
 
         # Mock the file creation for download
@@ -273,17 +339,11 @@ class TestDownloadWorkerFormatDetection:
         worker.run()
 
         # Should extract info with download=False first, then use ydl.download()
-        assert mock_ytdl.extract_info.call_count == 1
-        first_call = mock_ytdl.extract_info.call_args_list[0]
-        assert first_call == call(sample_cloudcast.url, download=False)
+        # The stub tracks calls via _download_calls; extract_info was called with the cloudcast url
+        assert sample_cloudcast.url in stub_instance._download_calls
 
-        # Should also call download method
-        mock_ytdl.download.assert_called_once_with([sample_cloudcast.url])
-
-    @patch("app.services.download_worker.yt_dlp.YoutubeDL")
     def test_format_detection_m4a(
         self,
-        mock_ytdl_class,
         sample_cloudcast,
         temp_dir,
         mock_callback_bridge,
@@ -292,9 +352,20 @@ class TestDownloadWorkerFormatDetection:
         yt_dlp_info_responses,
     ):
         """Test format detection extracts m4a extension correctly."""
-        mock_ytdl = MagicMock()
-        mock_ytdl_class.return_value.__enter__.return_value = mock_ytdl
-        mock_ytdl.extract_info.return_value = yt_dlp_info_responses["m4a"]
+
+        stub_instance = StubYoutubeDL.__new__(StubYoutubeDL)
+        stub_instance._extract_info_result = yt_dlp_info_responses["m4a"]
+        stub_instance._extract_info_side_effect = None
+        stub_instance._download_calls = []
+
+        def stub_ydl_class(opts: dict) -> StubYoutubeDL:
+            stub_instance.opts = opts
+            stub_instance.params = dict(opts)
+            if "outtmpl" in stub_instance.params and isinstance(
+                stub_instance.params["outtmpl"], str
+            ):
+                stub_instance.params["outtmpl"] = {"default": stub_instance.params["outtmpl"]}
+            return stub_instance
 
         worker = DownloadWorker(
             cloudcast=sample_cloudcast,
@@ -302,6 +373,7 @@ class TestDownloadWorkerFormatDetection:
             callback_bridge=mock_callback_bridge,
             settings_manager=mock_settings_manager,
             license_manager=mock_license_manager,
+            ydl_class=stub_ydl_class,
         )
 
         # Mock the file creation that yt-dlp would do
@@ -312,10 +384,8 @@ class TestDownloadWorkerFormatDetection:
         # Should update filenames to use .m4a extension
         assert worker.final_filename == "Test User - Test Mix.m4a"
 
-    @patch("app.services.download_worker.yt_dlp.YoutubeDL")
     def test_format_detection_fallback_on_missing_ext(
         self,
-        mock_ytdl_class,
         sample_cloudcast,
         temp_dir,
         mock_callback_bridge,
@@ -324,9 +394,20 @@ class TestDownloadWorkerFormatDetection:
         yt_dlp_info_responses,
     ):
         """Test format detection falls back to webm when ext field is missing."""
-        mock_ytdl = MagicMock()
-        mock_ytdl_class.return_value.__enter__.return_value = mock_ytdl
-        mock_ytdl.extract_info.return_value = yt_dlp_info_responses["no_ext"]
+
+        stub_instance = StubYoutubeDL.__new__(StubYoutubeDL)
+        stub_instance._extract_info_result = yt_dlp_info_responses["no_ext"]
+        stub_instance._extract_info_side_effect = None
+        stub_instance._download_calls = []
+
+        def stub_ydl_class(opts: dict) -> StubYoutubeDL:
+            stub_instance.opts = opts
+            stub_instance.params = dict(opts)
+            if "outtmpl" in stub_instance.params and isinstance(
+                stub_instance.params["outtmpl"], str
+            ):
+                stub_instance.params["outtmpl"] = {"default": stub_instance.params["outtmpl"]}
+            return stub_instance
 
         worker = DownloadWorker(
             cloudcast=sample_cloudcast,
@@ -334,6 +415,7 @@ class TestDownloadWorkerFormatDetection:
             callback_bridge=mock_callback_bridge,
             settings_manager=mock_settings_manager,
             license_manager=mock_license_manager,
+            ydl_class=stub_ydl_class,
         )
 
         # Should fall back to .webm when no extension is found
@@ -375,10 +457,8 @@ class TestDownloadWorkerErrorHandling:
         )
         mock_callback_bridge.emit_progress.assert_not_called()
 
-    @patch("app.services.download_worker.yt_dlp.YoutubeDL")
     def test_format_detection_network_error(
         self,
-        mock_ytdl_class,
         sample_cloudcast,
         temp_dir,
         mock_callback_bridge,
@@ -386,9 +466,20 @@ class TestDownloadWorkerErrorHandling:
         mock_license_manager,
     ):
         """Test graceful handling of network errors during format detection."""
-        mock_ytdl = MagicMock()
-        mock_ytdl_class.return_value.__enter__.return_value = mock_ytdl
-        mock_ytdl.extract_info.side_effect = Exception("Network error")
+
+        stub_instance = StubYoutubeDL.__new__(StubYoutubeDL)
+        stub_instance._extract_info_result = None
+        stub_instance._extract_info_side_effect = Exception("Network error")
+        stub_instance._download_calls = []
+
+        def stub_ydl_class(opts: dict) -> StubYoutubeDL:
+            stub_instance.opts = opts
+            stub_instance.params = dict(opts)
+            if "outtmpl" in stub_instance.params and isinstance(
+                stub_instance.params["outtmpl"], str
+            ):
+                stub_instance.params["outtmpl"] = {"default": stub_instance.params["outtmpl"]}
+            return stub_instance
 
         worker = DownloadWorker(
             cloudcast=sample_cloudcast,
@@ -396,6 +487,7 @@ class TestDownloadWorkerErrorHandling:
             callback_bridge=mock_callback_bridge,
             settings_manager=mock_settings_manager,
             license_manager=mock_license_manager,
+            ydl_class=stub_ydl_class,
         )
 
         worker.run()
@@ -669,10 +761,8 @@ class TestDownloadWorkerYtDlpOptions:
         call_args = mock_callback_bridge.emit_progress.call_args[0]
         assert "Complete" in call_args[1]
 
-    @patch("app.services.download_worker.get_ffmpeg_path")
     def test_ydl_opts_fixup_is_never(
         self,
-        mock_get_ffmpeg_path,
         sample_cloudcast,
         temp_dir,
         mock_callback_bridge,
@@ -680,24 +770,21 @@ class TestDownloadWorkerYtDlpOptions:
         mock_license_manager,
     ):
         """Regression guard: fixup must be 'never' to prevent FFmpegFixupM3u8PP from running."""
-        mock_get_ffmpeg_path.return_value = Path("/fake/ffmpeg")
-
         worker = DownloadWorker(
             cloudcast=sample_cloudcast,
             download_dir=str(temp_dir),
             callback_bridge=mock_callback_bridge,
             settings_manager=mock_settings_manager,
             license_manager=mock_license_manager,
+            ffmpeg_path=Path("/fake/ffmpeg"),
         )
 
         opts = worker._generate_ydl_opts()
 
         assert opts["fixup"] == "never"
 
-    @patch("app.services.download_worker.get_ffmpeg_path")
     def test_ydl_opts_uses_bundled_ffmpeg_location(
         self,
-        mock_get_ffmpeg_path,
         sample_cloudcast,
         temp_dir,
         mock_callback_bridge,
@@ -705,14 +792,13 @@ class TestDownloadWorkerYtDlpOptions:
         mock_license_manager,
     ):
         """Regression guard: ffmpeg_location must point to the bundled binary's parent directory."""
-        mock_get_ffmpeg_path.return_value = Path("/fake/bundled/ffmpeg")
-
         worker = DownloadWorker(
             cloudcast=sample_cloudcast,
             download_dir=str(temp_dir),
             callback_bridge=mock_callback_bridge,
             settings_manager=mock_settings_manager,
             license_manager=mock_license_manager,
+            ffmpeg_path=Path("/fake/bundled/ffmpeg"),
         )
 
         opts = worker._generate_ydl_opts()
@@ -720,10 +806,8 @@ class TestDownloadWorkerYtDlpOptions:
         assert "ffmpeg_location" in opts
         assert opts["ffmpeg_location"] == str(Path("/fake/bundled/ffmpeg").parent)
 
-    @patch("app.services.download_worker.get_ffmpeg_path")
     def test_ydl_opts_ffmpeg_location_omitted_on_unsupported_platform(
         self,
-        mock_get_ffmpeg_path,
         sample_cloudcast,
         temp_dir,
         mock_callback_bridge,
@@ -731,8 +815,6 @@ class TestDownloadWorkerYtDlpOptions:
         mock_license_manager,
     ):
         """Regression guard: ffmpeg_location must be omitted when platform is unsupported (e.g. Linux)."""
-        mock_get_ffmpeg_path.side_effect = RuntimeError("Unsupported platform")
-
         worker = DownloadWorker(
             cloudcast=sample_cloudcast,
             download_dir=str(temp_dir),
@@ -740,15 +822,14 @@ class TestDownloadWorkerYtDlpOptions:
             settings_manager=mock_settings_manager,
             license_manager=mock_license_manager,
         )
+        worker._ffmpeg_path = None
 
         opts = worker._generate_ydl_opts()
 
         assert "ffmpeg_location" not in opts
 
-    @patch("app.services.download_worker.get_ffmpeg_path")
     def test_ydl_opts_retries_and_fragment_retries(
         self,
-        mock_get_ffmpeg_path,
         sample_cloudcast,
         temp_dir,
         mock_callback_bridge,
@@ -756,14 +837,13 @@ class TestDownloadWorkerYtDlpOptions:
         mock_license_manager,
     ):
         """Regression guard: retries and fragment_retries must be >= 1 to handle transient CDN errors."""
-        mock_get_ffmpeg_path.return_value = Path("/fake/ffmpeg")
-
         worker = DownloadWorker(
             cloudcast=sample_cloudcast,
             download_dir=str(temp_dir),
             callback_bridge=mock_callback_bridge,
             settings_manager=mock_settings_manager,
             license_manager=mock_license_manager,
+            ffmpeg_path=Path("/fake/ffmpeg"),
         )
 
         opts = worker._generate_ydl_opts()

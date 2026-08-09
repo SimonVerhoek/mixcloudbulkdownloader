@@ -1,12 +1,12 @@
 """Tests for StylesheetLoader and stylesheet loading functionality."""
 
-import os
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+from PySide6.QtWidgets import QApplication
 
 from app.styles import (
     StylesheetLoader,
@@ -29,29 +29,18 @@ class TestStylesheetLoader:
 
     def test_get_styles_directory_development_environment(self):
         """Test styles directory detection in development environment."""
-        with (
-            patch("app.styles.getattr", side_effect=lambda obj, attr, default=None: default),
-            patch("app.styles.hasattr", return_value=False),
-        ):
-            loader = StylesheetLoader()
-            # Check path components instead of string ending for cross-platform compatibility
-            path_parts = loader.styles_dir.parts
-            assert "app" in path_parts
-            assert "styles" in path_parts
+        loader = StylesheetLoader(is_bundled=False)
+        # Check path components instead of string ending for cross-platform compatibility
+        path_parts = loader.styles_dir.parts
+        assert "app" in path_parts
+        assert "styles" in path_parts
 
     def test_get_styles_directory_bundled_environment(self):
         """Test styles directory detection in PyInstaller bundled environment."""
-        with (
-            patch("app.styles.getattr", return_value=True),
-            patch("app.styles.hasattr", return_value=True),
-            patch("app.styles.sys") as mock_sys,
-        ):
-            # Mock sys to have _MEIPASS attribute
-            mock_sys._MEIPASS = "/tmp/bundled_app"
-
-            loader = StylesheetLoader()
-            expected_dir = Path("/tmp/bundled_app/styles")
-            assert loader.styles_dir == expected_dir
+        fake_meipass = Path("/tmp/bundled_app")
+        loader = StylesheetLoader(is_bundled=True, meipass_dir=fake_meipass)
+        expected_dir = fake_meipass / "styles"
+        assert loader.styles_dir == expected_dir
 
     def test_load_stylesheet_success(self):
         """Test successful stylesheet loading."""
@@ -111,15 +100,14 @@ class TestStylesheetLoader:
             test_file = styles_dir / "readonly.qss"
             test_file.write_text("content")
 
-            loader = StylesheetLoader()
+            def stub_open_raises(filepath, mode="r", encoding=None):
+                raise IOError("Permission denied")
+
+            loader = StylesheetLoader(open_fn=stub_open_raises)
             loader.styles_dir = styles_dir
 
-            # Mock open to raise IOError
-            with patch("builtins.open", mock_open()) as mock_file:
-                mock_file.side_effect = IOError("Permission denied")
-
-                with pytest.raises(IOError, match="Error reading stylesheet file"):
-                    loader.load_stylesheet("readonly.qss")
+            with pytest.raises(IOError, match="Error reading stylesheet file"):
+                loader.load_stylesheet("readonly.qss")
 
     def test_load_all_stylesheets_success(self):
         """Test loading all stylesheets successfully."""
@@ -192,37 +180,34 @@ class TestStylesheetLoader:
 
     def test_apply_styles_no_app_instance(self):
         """Test applying styles when no QApplication instance is provided."""
-        mock_app = MagicMock()
+        mock_app = MagicMock(spec=QApplication)
 
-        with patch("app.styles.QApplication.instance", return_value=mock_app):
-            loader = StylesheetLoader()
-            loader.styles_dir = Path("/nonexistent")  # Will cause load errors
+        loader = StylesheetLoader()
+        loader.styles_dir = Path("/nonexistent")  # Will cause load errors
 
-            loader.apply_styles()
-            # Should still attempt to set stylesheet even with errors
-            mock_app.setStyleSheet.assert_called_once()
+        loader.apply_styles(app_instance_fn=lambda: mock_app)
+        # Should still attempt to set stylesheet even with errors
+        mock_app.setStyleSheet.assert_called_once()
 
     def test_apply_styles_no_qapplication_available(self):
         """Test applying styles when no QApplication is available."""
-        with patch("app.styles.QApplication.instance", return_value=None):
-            loader = StylesheetLoader()
+        loader = StylesheetLoader()
 
-            with pytest.raises(RuntimeError, match="No QApplication instance available"):
-                loader.apply_styles()
+        with pytest.raises(RuntimeError, match="No QApplication instance available"):
+            loader.apply_styles(app_instance_fn=lambda: None)
 
     def test_apply_styles_handles_exceptions(self, capsys):
         """Test that apply_styles handles exceptions gracefully."""
         loader = StylesheetLoader()
         loader.styles_dir = Path("/nonexistent")
 
-        mock_app = MagicMock()
+        mock_app = MagicMock(spec=QApplication)
         mock_app.setStyleSheet.side_effect = Exception("Test exception")
 
-        with patch("app.styles.QApplication.instance", return_value=mock_app):
-            loader.apply_styles()  # Should not raise
+        loader.apply_styles(app_instance_fn=lambda: mock_app)  # Should not raise
 
-            captured = capsys.readouterr()
-            assert "Error applying stylesheets: Test exception" in captured.out
+        captured = capsys.readouterr()
+        assert "Error applying stylesheets: Test exception" in captured.out
 
     def test_reload_styles(self):
         """Test reloading styles clears cache and reapplies."""
@@ -258,36 +243,27 @@ class TestStylesheetLoaderGlobalFunctions:
     @pytest.mark.qt
     def test_load_application_styles_with_app(self, qapp):
         """Test load_application_styles convenience function."""
-        with patch("app.styles.get_stylesheet_loader") as mock_get_loader:
-            mock_loader = MagicMock()
-            mock_get_loader.return_value = mock_loader
+        mock_loader = MagicMock(spec=StylesheetLoader)
 
-            load_application_styles(qapp)
+        load_application_styles(qapp, loader_factory=lambda: mock_loader)
 
-            mock_get_loader.assert_called_once()
-            mock_loader.apply_styles.assert_called_once_with(qapp)
+        mock_loader.apply_styles.assert_called_once_with(qapp)
 
     def test_load_application_styles_no_app(self):
         """Test load_application_styles without app parameter."""
-        with patch("app.styles.get_stylesheet_loader") as mock_get_loader:
-            mock_loader = MagicMock()
-            mock_get_loader.return_value = mock_loader
+        mock_loader = MagicMock(spec=StylesheetLoader)
 
-            load_application_styles()
+        load_application_styles(loader_factory=lambda: mock_loader)
 
-            mock_get_loader.assert_called_once()
-            mock_loader.apply_styles.assert_called_once_with(None)
+        mock_loader.apply_styles.assert_called_once_with(None)
 
     def test_reload_styles_convenience_function(self):
         """Test reload_styles convenience function."""
-        with patch("app.styles.get_stylesheet_loader") as mock_get_loader:
-            mock_loader = MagicMock()
-            mock_get_loader.return_value = mock_loader
+        mock_loader = MagicMock(spec=StylesheetLoader)
 
-            reload_styles()
+        reload_styles(loader_factory=lambda: mock_loader)
 
-            mock_get_loader.assert_called_once()
-            mock_loader.reload_styles.assert_called_once()
+        mock_loader.reload_styles.assert_called_once()
 
 
 @pytest.mark.integration

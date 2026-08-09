@@ -54,6 +54,8 @@ class DownloadWorker(QRunnable):
         callback_bridge: "CallbackBridge",
         settings_manager: SettingsManager,
         license_manager: LicenseManager,
+        ffmpeg_path: Path | None = None,
+        ydl_class: type = yt_dlp.YoutubeDL,
     ):
         """Initialize download worker.
 
@@ -63,6 +65,8 @@ class DownloadWorker(QRunnable):
             callback_bridge: Thread-safe signal emission bridge
             settings_manager: Settings manager for configuration
             license_manager: License manager for configuration
+            ffmpeg_path: Path to FFmpeg executable; resolved automatically when None
+            ydl_class: yt-dlp YoutubeDL class to use; defaults to yt_dlp.YoutubeDL; used for testing
         """
         super().__init__()
         self.cloudcast = cloudcast
@@ -71,6 +75,15 @@ class DownloadWorker(QRunnable):
         self.settings_manager = settings_manager
         self.license_manager = license_manager
         self.cancelled = False
+        self._ydl_class = ydl_class
+
+        if ffmpeg_path is not None:
+            self._ffmpeg_path = ffmpeg_path
+        else:
+            try:
+                self._ffmpeg_path = get_ffmpeg_path()
+            except RuntimeError:
+                self._ffmpeg_path = None
 
         # Set up file paths using existing naming convention
         self.safe_title = self._sanitize_filename(cloudcast.name)
@@ -91,7 +104,8 @@ class DownloadWorker(QRunnable):
             ydl_opts = self._generate_ydl_opts()
 
             # Execute download with format detection
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            _ydl_cls = self._ydl_class
+            with _ydl_cls(ydl_opts) as ydl:
                 # First extract format info to determine actual extension
                 try:
                     info = ydl.extract_info(self.cloudcast.url, download=False)
@@ -291,12 +305,7 @@ class DownloadWorker(QRunnable):
 
         audio_format = "bestaudio/best" if self.license_manager.is_pro else "worstaudio/worst"
 
-        # Use bundled FFmpeg so yt-dlp never falls back to a system install (e.g. ImageMagick).
-        # RuntimeError is raised for unsupported platforms (Linux); fall back gracefully in that case.
-        try:
-            ffmpeg_location = str(get_ffmpeg_path().parent)
-        except RuntimeError:
-            ffmpeg_location = None
+        ffmpeg_location = str(self._ffmpeg_path.parent) if self._ffmpeg_path is not None else None
 
         return {
             "outtmpl": str(self.download_file_path),

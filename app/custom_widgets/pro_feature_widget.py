@@ -1,7 +1,16 @@
 """Base widget class for Pro-only features with consistent styling and behavior."""
 
 from PySide6.QtCore import QObject, Signal, Slot
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QAbstractButton,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from app.services.license_manager import LicenseManager, license_manager
 
@@ -84,8 +93,10 @@ class ProFeatureWidget:
             icon_placed = False
 
             # Strategy 1: If widget parent has an HBoxLayout, add to it
-            if widget.parent() and hasattr(widget.parent(), "layout"):
-                parent_layout = widget.parent().layout()
+            # QWidget always has .layout(); isinstance ensures parent is a QWidget
+            parent = widget.parent()
+            if isinstance(parent, QWidget):
+                parent_layout = parent.layout()
                 if isinstance(parent_layout, QHBoxLayout):
                     parent_layout.addWidget(lock_label)
                     self._lock_labels.append(lock_label)
@@ -106,18 +117,20 @@ class ProFeatureWidget:
                 wrapper_layout.addWidget(lock_label)
 
                 # Replace widget in its original location with wrapper
-                if hasattr(original_parent, "layout") and original_parent.layout():
+                # QWidget always has .layout(); QLayout always has .replaceWidget()
+                if isinstance(original_parent, QWidget):
                     layout = original_parent.layout()
-                    if hasattr(layout, "replaceWidget"):
+                    if layout is not None:
                         layout.replaceWidget(widget, wrapper)
                         icon_placed = True
                         self._lock_labels.append(lock_label)
 
             # Strategy 3: Fallback - set lock as text prefix (visual indicator only)
             if not icon_placed:
-                original_text = widget.text() if hasattr(widget, "text") else ""
-                if hasattr(widget, "setText") and original_text:
-                    widget.setText(f"🔒 {original_text}")
+                if isinstance(widget, (QAbstractButton, QLabel, QLineEdit)):
+                    original_text = widget.text()
+                    if original_text:
+                        widget.setText(f"🔒 {original_text}")
 
             # Always set tooltip on the widget itself
             widget.setToolTip(tooltip_text)
@@ -133,7 +146,7 @@ class ProFeatureWidget:
         for widget in self._pro_widgets:
             widget.setToolTip("")
             # Remove lock prefix from text if it was added as fallback
-            if hasattr(widget, "text") and hasattr(widget, "setText"):
+            if isinstance(widget, (QAbstractButton, QLabel, QLineEdit)):
                 text = widget.text()
                 if text.startswith("🔒 "):
                     widget.setText(text[2:])  # Remove "🔒 " prefix

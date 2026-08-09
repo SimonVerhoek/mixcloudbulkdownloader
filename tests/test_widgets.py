@@ -14,6 +14,7 @@ from app.custom_widgets.dialogs.get_pro_persuasion_dialog import GetProPersuasio
 from app.custom_widgets.footer_widget import FooterWidget
 from app.custom_widgets.search_user_q_combo_box import SearchUserQComboBox
 from app.data_classes import Cloudcast, MixcloudUser
+from app.services.license_manager import LicenseManager
 from app.threads.fetch_by_url_thread import FetchByUrlThread
 from app.threads.search_cloudcast_thread import SearchCloudcastThread
 from tests.stubs.api_stubs import StubMixcloudAPIService
@@ -89,7 +90,6 @@ class TestSearchUserQComboBox:
         stub_service = StubMixcloudAPIService()
         widget = SearchUserQComboBox(api_service=stub_service)
 
-        assert hasattr(widget, "search_cloudcast_thread")
         assert isinstance(widget.search_cloudcast_thread, SearchCloudcastThread)
 
     def test_has_artist_and_cloudcast_selected_signals(self, qt_app):
@@ -427,7 +427,6 @@ class TestSearchUserQComboBox:
         """Test that __init__ creates a FetchByUrlThread attribute of the correct type."""
         widget = SearchUserQComboBox(api_service=StubMixcloudAPIService())
 
-        assert hasattr(widget, "fetch_by_url_thread")
         assert isinstance(widget.fetch_by_url_thread, FetchByUrlThread)
 
     def test_parse_mixcloud_url_user_url(self, qt_app):
@@ -763,8 +762,6 @@ class TestGetProPersuasionDialog:
         """Test that dialog has Get Pro and no thanks buttons."""
         dialog = GetProPersuasionDialog()
 
-        assert hasattr(dialog, "get_pro_button")
-        assert hasattr(dialog, "no_thanks_button")
         assert dialog.get_pro_button.text() == "Get Pro"
         assert dialog.no_thanks_button.text() == "No thank you"
 
@@ -774,9 +771,8 @@ class TestFooterWidget:
 
     def test_footer_widget_initialization(self, qt_app):
         """Test footer widget basic initialization."""
-        mock_license_manager = Mock()
+        mock_license_manager = Mock(spec=LicenseManager)
         mock_license_manager.is_pro = False
-        mock_license_manager.license_status_changed.connect = Mock()
 
         widget = FooterWidget(license_manager=mock_license_manager)
 
@@ -785,8 +781,7 @@ class TestFooterWidget:
 
     def test_footer_status_display(self, qt_app):
         """Test footer status display for different license states."""
-        mock_license_manager = Mock()
-        mock_license_manager.license_status_changed.connect = Mock()
+        mock_license_manager = Mock(spec=LicenseManager)
 
         # Test Free user
         mock_license_manager.is_pro = False
@@ -800,9 +795,8 @@ class TestFooterWidget:
 
     def test_footer_feedback_button(self, qt_app):
         """Test footer feedback button properties."""
-        mock_license_manager = Mock()
+        mock_license_manager = Mock(spec=LicenseManager)
         mock_license_manager.is_pro = False
-        mock_license_manager.license_status_changed.connect = Mock()
 
         widget = FooterWidget(license_manager=mock_license_manager)
 
@@ -827,8 +821,6 @@ class TestFeedbackDialog:
         """Test feedback dialog button configuration."""
         dialog = FeedbackDialog()
 
-        assert hasattr(dialog, "cancel_button")
-        assert hasattr(dialog, "send_button")
         assert dialog.cancel_button.text() == "Cancel"
         assert dialog.send_button.text() == "Send Feedback"
         assert dialog.send_button.isDefault()
@@ -837,7 +829,6 @@ class TestFeedbackDialog:
         """Test feedback dialog text field properties."""
         dialog = FeedbackDialog()
 
-        assert hasattr(dialog, "feedback_text")
         assert dialog.feedback_text.objectName() == "feedbackText"
         placeholder = dialog.feedback_text.placeholderText()
         assert len(placeholder) > 0
@@ -846,7 +837,6 @@ class TestFeedbackDialog:
         """Test feedback dialog email field properties."""
         dialog = FeedbackDialog()
 
-        assert hasattr(dialog, "email_field")
         assert dialog.email_field.objectName() == "emailField"
         placeholder = dialog.email_field.placeholderText()
         assert placeholder == "Enter your email if you'd like a response"

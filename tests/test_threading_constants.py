@@ -201,27 +201,23 @@ class TestThreadingConstantsIntegration:
 
     def test_constants_work_with_settings_manager(self):
         """Test that constants work correctly with SettingsManager."""
-        from unittest.mock import Mock, patch
+        import tempfile
+        from pathlib import Path
 
         from app.services.settings_manager import SettingsManager
 
-        with patch("app.services.settings_manager.QSettings") as mock_qsettings:
-            mock_instance = Mock()
-            mock_qsettings.return_value = mock_instance
-            mock_instance.value.return_value = None
-
-            settings = SettingsManager()
+        # Use a real SettingsManager with a temporary directory to avoid real file I/O
+        # in production locations (no patch needed — inject storage_path instead).
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            storage_path = Path(tmp_dir)
+            settings = SettingsManager(storage_path=storage_path)
 
             # Should be able to call initialize_threading_settings with constants
             settings.initialize_threading_settings(is_pro=True)
 
-            # Verify constants were used in setValue calls
-            mock_instance.setValue.assert_any_call(
-                SETTING_MAX_PARALLEL_DOWNLOADS, DEFAULT_MAX_PARALLEL_DOWNLOADS
-            )
-            mock_instance.setValue.assert_any_call(
-                SETTING_MAX_PARALLEL_CONVERSIONS, DEFAULT_MAX_PARALLEL_CONVERSIONS
-            )
+            # Verify the property values were set to the expected constants
+            assert settings.max_parallel_downloads == DEFAULT_MAX_PARALLEL_DOWNLOADS
+            assert settings.max_parallel_conversions == DEFAULT_MAX_PARALLEL_CONVERSIONS
 
     def test_constants_work_with_settings_dialog(self):
         """Test that constants work correctly with SettingsDialog."""

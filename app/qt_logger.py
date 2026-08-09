@@ -53,10 +53,11 @@ class QtLogger:
     """
 
     _initialized: bool = False
+    _instance: "QtLogger | None" = None
 
     def __new__(cls) -> "QtLogger":
         """Enforce singleton — return the same instance on every call."""
-        if not hasattr(cls, "_instance"):
+        if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 

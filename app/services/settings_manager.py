@@ -41,7 +41,11 @@ class SettingsManager:
     - Development mode support with ./local_settings/
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        storage_path: Path | None = None,
+        encryptor: "CredentialEncryptor | None" = None,
+    ) -> None:
         """Initialize settings manager with encrypted INI storage.
 
         Creates a cross-platform settings manager that stores application settings
@@ -91,8 +95,8 @@ class SettingsManager:
         self._shutting_down: bool = False
 
         # Initialize storage location and encryption
-        self._storage_path = self._get_storage_path()
-        self._encryptor = CredentialEncryptor()
+        self._storage_path = storage_path if storage_path is not None else self._get_storage_path()
+        self._encryptor = encryptor if encryptor is not None else CredentialEncryptor()
         self._settings = self._create_qsettings()
 
         # Pre-load as a plain Python bool so error_reporting_enabled is safe to read

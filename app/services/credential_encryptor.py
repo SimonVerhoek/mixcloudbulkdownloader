@@ -13,23 +13,27 @@ from app.logger import log_error
 from app.utils.platform_paths import get_current_user
 
 
-def get_device_salt() -> str:
+def get_device_salt(
+    home_dir: Path = Path.home(),
+    system: str = platform.system(),
+    machine: str = platform.machine(),
+) -> str:
     """Generate stable, device-specific salt for encryption.
 
     Returns:
         str: A 32-character hexadecimal salt unique to this device and user.
     """
-    # Use stable platform identifiers (intentionally excludes platform.version(),
+    # Use stable platform identifiers (intentionally excludes the OS version string,
     # which changes on every OS update and would invalidate stored credentials)
     stable_identifiers = [
-        platform.system(),  # 'Windows', 'Darwin', 'Linux'
-        platform.machine(),  # 'x86_64', 'arm64', etc.
+        system,  # 'Windows', 'Darwin', 'Linux'
+        machine,  # 'x86_64', 'arm64', etc.
     ]
 
     # Add user-specific component (stable per user)
     try:
         # Use home directory path as user identifier
-        home_path = str(Path.home())
+        home_path = str(home_dir)
         stable_identifiers.append(home_path)
     except Exception:
         # Fallback if home directory unavailable
@@ -49,9 +53,14 @@ class CredentialEncryptor:
     encryption of sensitive credentials before storage in INI files.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        home_dir: Path = Path.home(),
+        system: str = platform.system(),
+        machine: str = platform.machine(),
+    ) -> None:
         """Initialize the encryptor with device-specific salt."""
-        self._salt = get_device_salt()
+        self._salt = get_device_salt(home_dir=home_dir, system=system, machine=machine)
         self._fernet = None
 
     def _get_fernet(self) -> Fernet:

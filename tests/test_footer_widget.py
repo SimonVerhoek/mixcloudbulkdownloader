@@ -1,13 +1,16 @@
 """Tests for footer widget functionality."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, create_autospec
 
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication, QDialog, QWidget
 
+from app.custom_widgets.dialogs.feedback_dialog import FeedbackDialog
+from app.custom_widgets.dialogs.get_pro_dialog import GetProDialog
 from app.custom_widgets.footer_widget import FooterWidget
+from app.services.license_manager import LicenseManager
 
 
 @pytest.fixture
@@ -22,10 +25,8 @@ def qt_app():
 @pytest.fixture
 def mock_license_manager():
     """Mock license manager for testing."""
-    mock = Mock()
+    mock = Mock(spec=LicenseManager)
     mock.is_pro = False
-    mock.license_status_changed = Mock()
-    mock.license_status_changed.connect = Mock()
     return mock
 
 
@@ -39,9 +40,9 @@ class TestFooterWidget:
 
         assert widget.objectName() == "footerWidget"
         assert widget.license_manager is mock_license_manager
-        assert hasattr(widget, "status_label")
-        assert hasattr(widget, "get_pro_button")
-        assert hasattr(widget, "feedback_button")
+        _ = widget.status_label
+        _ = widget.get_pro_button
+        _ = widget.feedback_button
 
     def test_footer_widget_layout(self, qt_app, mock_license_manager):
         """Test footer widget layout structure."""
@@ -79,18 +80,25 @@ class TestFooterWidget:
 
     def test_feedback_button_click_opens_dialog(self, qt_app, mock_license_manager):
         """Test that clicking feedback button opens feedback dialog."""
-        widget = FooterWidget(license_manager=mock_license_manager)
+        stub_dialog = create_autospec(FeedbackDialog, instance=True)
+        dialog_calls = []
 
-        with patch("app.custom_widgets.footer_widget.FeedbackDialog") as mock_dialog_class:
-            mock_dialog = Mock()
-            mock_dialog_class.return_value = mock_dialog
+        def stub_factory(parent):
+            dialog_calls.append(parent)
+            return stub_dialog
 
-            # Simulate button click
-            widget._show_feedback_dialog()
+        widget = FooterWidget(
+            license_manager=mock_license_manager,
+            feedback_dialog_factory=stub_factory,
+        )
 
-            # Verify dialog was created and shown
-            mock_dialog_class.assert_called_once_with(widget)
-            mock_dialog.exec.assert_called_once()
+        # Simulate button click
+        widget._show_feedback_dialog()
+
+        # Verify dialog was created and shown
+        assert len(dialog_calls) == 1
+        assert dialog_calls[0] is widget
+        stub_dialog.exec.assert_called_once()
 
     def test_license_status_change_updates_display(self, qt_app, mock_license_manager):
         """Test that license status changes update the display."""
@@ -167,19 +175,26 @@ class TestFooterWidget:
 
     def test_get_pro_button_click_opens_dialog(self, qt_app, mock_license_manager):
         """Test that clicking Get Pro button opens Get Pro dialog."""
-        widget = FooterWidget(license_manager=mock_license_manager)
+        stub_dialog = create_autospec(GetProDialog, instance=True)
+        stub_dialog.exec.return_value = False  # Dialog cancelled
+        dialog_calls = []
 
-        with patch("app.custom_widgets.footer_widget.GetProDialog") as mock_dialog_class:
-            mock_dialog = Mock()
-            mock_dialog.exec.return_value = False  # Dialog cancelled
-            mock_dialog_class.return_value = mock_dialog
+        def stub_factory(parent):
+            dialog_calls.append(parent)
+            return stub_dialog
 
-            # Simulate button click
-            widget._show_get_pro_dialog()
+        widget = FooterWidget(
+            license_manager=mock_license_manager,
+            get_pro_dialog_factory=stub_factory,
+        )
 
-            # Verify dialog was created and shown
-            mock_dialog_class.assert_called_once_with(widget)
-            mock_dialog.exec.assert_called_once()
+        # Simulate button click
+        widget._show_get_pro_dialog()
+
+        # Verify dialog was created and shown
+        assert len(dialog_calls) == 1
+        assert dialog_calls[0] is widget
+        stub_dialog.exec.assert_called_once()
 
     def test_license_status_change_updates_pro_button_visibility(
         self, qt_app, mock_license_manager
@@ -211,21 +226,28 @@ class TestFooterWidgetInteraction:
 
     def test_feedback_button_keyboard_interaction(self, qt_app, mock_license_manager):
         """Test feedback button can be activated via keyboard."""
-        widget = FooterWidget(license_manager=mock_license_manager)
+        stub_dialog = create_autospec(FeedbackDialog, instance=True)
+        dialog_calls = []
 
-        with patch("app.custom_widgets.footer_widget.FeedbackDialog") as mock_dialog_class:
-            mock_dialog = Mock()
-            mock_dialog_class.return_value = mock_dialog
+        def stub_factory(parent):
+            dialog_calls.append(parent)
+            return stub_dialog
 
-            # Set focus to feedback button
-            widget.feedback_button.setFocus()
+        widget = FooterWidget(
+            license_manager=mock_license_manager,
+            feedback_dialog_factory=stub_factory,
+        )
 
-            # Simulate space key press (should activate button)
-            QTest.keyClick(widget.feedback_button, Qt.Key.Key_Space)
+        # Set focus to feedback button
+        widget.feedback_button.setFocus()
 
-            # Verify dialog was opened
-            mock_dialog_class.assert_called_once_with(widget)
-            mock_dialog.exec.assert_called_once()
+        # Simulate space key press (should activate button)
+        QTest.keyClick(widget.feedback_button, Qt.Key.Key_Space)
+
+        # Verify dialog was opened
+        assert len(dialog_calls) == 1
+        assert dialog_calls[0] is widget
+        stub_dialog.exec.assert_called_once()
 
     def test_multiple_status_changes(self, qt_app, mock_license_manager):
         """Test multiple rapid status changes."""

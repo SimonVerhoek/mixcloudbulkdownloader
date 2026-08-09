@@ -288,8 +288,7 @@ class MixcloudAPIService:
 
     def close(self) -> None:
         """Close the HTTP client connection."""
-        if hasattr(self.client, "close"):
-            self.client.close()
+        self.client.close()
 
 
 # Create module-level singleton instance

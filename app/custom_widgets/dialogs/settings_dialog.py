@@ -1,8 +1,9 @@
 """Settings dialog for Mixcloud Bulk Downloader user preferences."""
 
+from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QCursor, QFontMetrics
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -55,11 +56,15 @@ class SettingsDialog(ProFeatureWidget, QDialog):
     and audio format preferences. Uses consistent Pro feature gating.
     """
 
+    check_for_updates_requested = Signal()
+
     def __init__(
         self,
         license_manager: LicenseManager = license_manager,
         settings_manager: SettingsManager = settings,
         parent: QWidget | None = None,
+        dir_picker_fn: Callable | None = None,
+        cpu_count_override: int | None = None,
     ) -> None:
         """Initialize the settings dialog with UI components.
 
@@ -67,6 +72,13 @@ class SettingsDialog(ProFeatureWidget, QDialog):
             license_manager: License manager for Pro status checking
             settings_manager: Settings manager for persistence
             parent: Parent widget for the dialog. If None, dialog is top-level.
+            dir_picker_fn: Callable used to open a directory picker dialog. When
+                ``None`` the real ``QFileDialog.getExistingDirectory`` is used.
+                Pass a callable in tests to avoid opening a native dialog.
+            cpu_count_override: Override for the CPU core count displayed in the
+                parallel conversions label. When ``None`` the real ``cpu_count``
+                value from ``app.services.system_service`` is used. Pass an
+                integer in tests to exercise the label text without patching.
         """
         # Initialize QDialog first, then ProFeatureWidget mixin
         QDialog.__init__(self, parent)
@@ -75,6 +87,8 @@ class SettingsDialog(ProFeatureWidget, QDialog):
         self.settings_manager = settings_manager
         self._full_download_path = None  # Store the full path separately from display
         self.update_check_thread: UpdateCheckThread | None = None
+        self._dir_picker_fn = dir_picker_fn
+        self._cpu_count = cpu_count_override if cpu_count_override is not None else cpu_count
 
         self._setup_dialog()
         self._setup_ui()
@@ -278,7 +292,7 @@ class SettingsDialog(ProFeatureWidget, QDialog):
         self.parallel_conversions_combo.addItems([str(i) for i in PARALLEL_CONVERSIONS_OPTIONS])
         self.parallel_conversions_combo.setCurrentText(str(DEFAULT_MAX_PARALLEL_CONVERSIONS))
 
-        label_text = f"Max Parallel Conversions\n(CPU cores available: {cpu_count}):"
+        label_text = f"Max Parallel Conversions\n(CPU cores available: {self._cpu_count}):"
         if not self.license_manager.is_pro:
             label_text += " 🔒"
 
@@ -293,9 +307,12 @@ class SettingsDialog(ProFeatureWidget, QDialog):
 
         current_dir = self.settings_manager.default_download_directory or str(Path.home())
 
-        directory = QFileDialog.getExistingDirectory(
-            self, "Select Default Download Directory", current_dir
-        )
+        if self._dir_picker_fn is not None:
+            directory = self._dir_picker_fn(self, "Select Default Download Directory", current_dir)
+        else:
+            directory = QFileDialog.getExistingDirectory(
+                self, "Select Default Download Directory", current_dir
+            )
 
         if directory:
             self._set_directory_text(directory)
@@ -405,17 +422,10 @@ class SettingsDialog(ProFeatureWidget, QDialog):
         dialog.exec()
 
     def _check_for_updates_now(self) -> None:
-        """Trigger immediate update check via MainWindow."""
-        # Disable button during check
+        """Emit signal to request an update check from the parent window."""
         self.check_now_button.setEnabled(False)
         self.check_now_button.setText("Checking...")
-
-        # Get main window reference and trigger update check
-        main_window = self.parent()
-        if hasattr(main_window, "start_update_check"):
-            main_window.start_update_check()
-
-        # Re-enable button (this is immediate, actual check happens in background)
+        self.check_for_updates_requested.emit()
         self.check_now_button.setEnabled(True)
         self.check_now_button.setText("Check now")
 

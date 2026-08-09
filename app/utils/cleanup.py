@@ -1,6 +1,7 @@
 """Cleanup utilities for partial download and conversion files."""
 
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 
@@ -8,12 +9,21 @@ class PartialFileCleanup:
     """Utility for cleaning up partial download and conversion files."""
 
     @staticmethod
-    def cleanup_partial_files(directory: Path, max_age_minutes: int = 60) -> dict[str, int]:
+    def cleanup_partial_files(
+        directory: Path,
+        max_age_minutes: int = 60,
+        now: float | None = None,
+        remove_fn: Callable[[Path], None] = Path.unlink,
+    ) -> dict[str, int]:
         """Clean up partial files (.downloading, .converting) older than specified age.
 
         Args:
             directory: Directory to scan for partial files
             max_age_minutes: Maximum age in minutes for partial files before cleanup
+            now: Optional current time as a float (seconds since epoch). Defaults to
+                ``time.time()``. Pass a fixed value in tests to avoid patching.
+            remove_fn: Callable that accepts a Path and removes it. Defaults to
+                ``Path.unlink``. Allows injection for testing without patching.
 
         Returns:
             Dictionary with cleanup statistics: {"downloading": count, "converting": count}
@@ -21,7 +31,7 @@ class PartialFileCleanup:
         if not directory.exists() or not directory.is_dir():
             return {"downloading": 0, "converting": 0}
 
-        current_time = time.time()
+        current_time = now if now is not None else time.time()
         max_age_seconds = max_age_minutes * 60
         stats = {"downloading": 0, "converting": 0}
 
@@ -31,7 +41,7 @@ class PartialFileCleanup:
                 if downloading_file.is_file():
                     file_age = current_time - downloading_file.stat().st_mtime
                     if file_age > max_age_seconds:
-                        downloading_file.unlink()
+                        remove_fn(downloading_file)
                         stats["downloading"] += 1
             except (OSError, PermissionError):
                 continue  # Skip files that can't be accessed or deleted
@@ -42,7 +52,7 @@ class PartialFileCleanup:
                 if converting_file.is_file():
                     file_age = current_time - converting_file.stat().st_mtime
                     if file_age > max_age_seconds:
-                        converting_file.unlink()
+                        remove_fn(converting_file)
                         stats["converting"] += 1
             except (OSError, PermissionError):
                 continue  # Skip files that can't be accessed or deleted
@@ -77,11 +87,16 @@ class PartialFileCleanup:
         return result
 
     @staticmethod
-    def cleanup_fragment_files(directory: Path) -> int:
+    def cleanup_fragment_files(
+        directory: Path,
+        remove_fn: Callable[[Path], None] = Path.unlink,
+    ) -> int:
         """Clean up yt-dlp fragment files (.part, .part-Frag*, etc.).
 
         Args:
             directory: Directory to scan for fragment files
+            remove_fn: Callable that accepts a Path and removes it. Defaults to
+                ``Path.unlink``. Allows injection for testing without patching.
 
         Returns:
             Number of fragment files cleaned up
@@ -96,7 +111,7 @@ class PartialFileCleanup:
             for fragment_file in directory.glob(pattern):
                 try:
                     if fragment_file.is_file():
-                        fragment_file.unlink()
+                        remove_fn(fragment_file)
                         cleaned_count += 1
                 except (OSError, PermissionError):
                     continue  # Skip files that can't be deleted

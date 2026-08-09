@@ -1,11 +1,11 @@
 """Tests for the settings dialog and its Pro feature integration."""
 
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QDialogButtonBox, QFormLayout, QMessageBox
+from PySide6.QtWidgets import QApplication, QDialogButtonBox, QFormLayout, QLabel, QMessageBox
 
 from app.consts.settings import (
     DEFAULT_CHECK_UPDATES_ON_STARTUP,
@@ -29,8 +29,6 @@ def mock_license_manager():
     """Create a mock license manager for testing."""
     manager = Mock(spec=LicenseManager)
     manager.is_pro = False
-    manager.license_status_changed = Mock()
-    manager.license_status_changed.connect = Mock()
     return manager
 
 
@@ -54,8 +52,7 @@ def mock_settings_manager():
         }
         return defaults.get(key, default)
 
-    manager.get = Mock(side_effect=mock_get)
-    manager.set = Mock()
+    manager.get.side_effect = mock_get
 
     # Add property attributes for new property-based interface
     manager.default_download_directory = None
@@ -74,8 +71,6 @@ def pro_license_manager():
     """Create a mock pro license manager for testing."""
     manager = Mock(spec=LicenseManager)
     manager.is_pro = True
-    manager.license_status_changed = Mock()
-    manager.license_status_changed.connect = Mock()
     return manager
 
 
@@ -159,16 +154,19 @@ class TestSettingsDialog:
         assert dialog.download_dir_label.text() == "Not set"
         assert dialog.audio_format_combo.currentText() == "MP3"  # Default
 
-    @patch("PySide6.QtWidgets.QFileDialog.getExistingDirectory")
-    def test_browse_directory_pro_user(
-        self, mock_file_dialog, qtbot, pro_license_manager, mock_settings_manager
-    ):
+    def test_browse_directory_pro_user(self, qtbot, pro_license_manager, mock_settings_manager):
         """Test directory browsing for pro users."""
         test_directory = "/selected/directory"
-        mock_file_dialog.return_value = test_directory
+        dir_picker_calls = []
+
+        def stub_dir_picker(parent, caption, start_dir):
+            dir_picker_calls.append((parent, caption, start_dir))
+            return test_directory
 
         dialog = SettingsDialog(
-            license_manager=pro_license_manager, settings_manager=mock_settings_manager
+            license_manager=pro_license_manager,
+            settings_manager=mock_settings_manager,
+            dir_picker_fn=stub_dir_picker,
         )
         qtbot.addWidget(dialog)
 
@@ -177,7 +175,7 @@ class TestSettingsDialog:
 
         # Directory should be set in label
         assert dialog.download_dir_label.text() == test_directory
-        mock_file_dialog.assert_called_once()
+        assert len(dir_picker_calls) == 1
 
     def test_browse_directory_free_user_does_nothing(
         self, qtbot, mock_license_manager, mock_settings_manager
@@ -294,9 +292,7 @@ class TestSettingsDialog:
         )
         qtbot.addWidget(dialog)
 
-        assert hasattr(dialog, "enable_conversion_checkbox")
         assert dialog.enable_conversion_checkbox.isEnabled()
-        assert hasattr(dialog, "audio_format_combo")
         assert (
             dialog.audio_format_combo.isEnabled() == dialog.enable_conversion_checkbox.isChecked()
         )
@@ -311,9 +307,7 @@ class TestSettingsDialog:
         )
         qtbot.addWidget(dialog)
 
-        assert hasattr(dialog, "enable_conversion_checkbox")
         assert not dialog.enable_conversion_checkbox.isEnabled()
-        assert hasattr(dialog, "audio_format_combo")
         assert not dialog.audio_format_combo.isEnabled()
 
     @pytest.mark.qt
@@ -351,9 +345,7 @@ class TestSettingsDialog:
                 return True
             return default
 
-        settings_manager_enabled.get = Mock(side_effect=mock_get_enabled)
-        settings_manager_enabled.set = Mock()
-        settings_manager_enabled.sync = Mock()
+        settings_manager_enabled.get.side_effect = mock_get_enabled
 
         # Add property attributes for new property-based interface
         settings_manager_enabled.default_download_directory = None
@@ -464,8 +456,7 @@ class TestSettingsDialogIntegration:
         qtbot.addWidget(dialog)
 
         # Should have ProFeatureWidget capabilities
-        assert hasattr(dialog, "register_pro_widget")
-        assert hasattr(dialog, "_pro_widgets")
+        assert callable(dialog.register_pro_widget)
         assert len(dialog._pro_widgets) > 0  # Pro widgets should be registered
 
         # Pro widgets should be in the list
@@ -486,10 +477,6 @@ class TestSettingsDialogThreadingSettings:
         )
         qtbot.addWidget(dialog)
 
-        # Threading combo boxes should exist
-        assert hasattr(dialog, "parallel_downloads_combo")
-        assert hasattr(dialog, "parallel_conversions_combo")
-
         # Should be enabled for Pro users
         assert dialog.parallel_downloads_combo.isEnabled()
         assert dialog.parallel_conversions_combo.isEnabled()
@@ -506,10 +493,6 @@ class TestSettingsDialogThreadingSettings:
             license_manager=mock_license_manager, settings_manager=mock_settings_manager
         )
         qtbot.addWidget(dialog)
-
-        # Threading combo boxes should exist
-        assert hasattr(dialog, "parallel_downloads_combo")
-        assert hasattr(dialog, "parallel_conversions_combo")
 
         # Should be disabled for free users
         assert not dialog.parallel_downloads_combo.isEnabled()
@@ -558,26 +541,27 @@ class TestSettingsDialogThreadingSettings:
         self, qtbot, pro_license_manager, mock_settings_manager
     ):
         """Test that CPU count is displayed in conversions setting label."""
-        with patch("app.custom_widgets.dialogs.settings_dialog.cpu_count", 8):
-            dialog = SettingsDialog(
-                license_manager=pro_license_manager, settings_manager=mock_settings_manager
-            )
-            qtbot.addWidget(dialog)
+        dialog = SettingsDialog(
+            license_manager=pro_license_manager,
+            settings_manager=mock_settings_manager,
+            cpu_count_override=8,
+        )
+        qtbot.addWidget(dialog)
 
-            # Find the label for conversions setting
-            form_layout = dialog.pro_group.layout()
+        # Find the label for conversions setting
+        form_layout = dialog.pro_group.layout()
 
-            # Look for label containing CPU cores text
-            found_cpu_text = False
-            for i in range(form_layout.rowCount()):
-                label_item = form_layout.itemAt(i, form_layout.ItemRole.LabelRole)
-                if label_item and hasattr(label_item.widget(), "text"):
-                    label_text = label_item.widget().text()
-                    if "CPU cores available: 8" in label_text:
-                        found_cpu_text = True
-                        break
+        # Look for label containing CPU cores text
+        found_cpu_text = False
+        for i in range(form_layout.rowCount()):
+            label_item = form_layout.itemAt(i, form_layout.ItemRole.LabelRole)
+            if label_item and isinstance(label_item.widget(), QLabel):
+                label_text = label_item.widget().text()
+                if "CPU cores available: 8" in label_text:
+                    found_cpu_text = True
+                    break
 
-            assert found_cpu_text, "CPU count should be displayed in conversions label"
+        assert found_cpu_text, "CPU count should be displayed in conversions label"
 
     def test_threading_settings_load_from_settings_manager(self, qtbot, pro_license_manager):
         """Test that threading settings are loaded from settings manager."""
@@ -594,8 +578,6 @@ class TestSettingsDialogThreadingSettings:
             SETTING_MAX_PARALLEL_DOWNLOADS: valid_downloads,
             SETTING_MAX_PARALLEL_CONVERSIONS: valid_conversions,
         }.get(key, default)
-        mock_settings.set = Mock()
-        mock_settings.sync = Mock()
 
         # Add property attributes for new property-based interface
         mock_settings.default_download_directory = None
@@ -705,7 +687,7 @@ class TestSettingsDialogThreadingSettings:
 
         for i in range(form_layout.rowCount()):
             label_item = form_layout.itemAt(i, form_layout.ItemRole.LabelRole)
-            if label_item and hasattr(label_item.widget(), "text"):
+            if label_item and isinstance(label_item.widget(), QLabel):
                 label_text = label_item.widget().text()
                 if "Max Parallel Downloads:" in label_text and "🔒" in label_text:
                     found_downloads_lock = True
@@ -730,7 +712,7 @@ class TestSettingsDialogThreadingSettings:
         # Check that lock icons are NOT in threading labels for Pro users
         for i in range(form_layout.rowCount()):
             label_item = form_layout.itemAt(i, form_layout.ItemRole.LabelRole)
-            if label_item and hasattr(label_item.widget(), "text"):
+            if label_item and isinstance(label_item.widget(), QLabel):
                 label_text = label_item.widget().text()
                 if "Max Parallel Downloads:" in label_text:
                     assert (
@@ -752,8 +734,6 @@ class TestSettingsDialogThreadingSettings:
             SETTING_MAX_PARALLEL_DOWNLOADS: default,
             SETTING_MAX_PARALLEL_CONVERSIONS: default,
         }.get(key, default)
-        mock_settings.set = Mock()
-        mock_settings.sync = Mock()
 
         # Add property attributes for new property-based interface
         mock_settings.default_download_directory = None
