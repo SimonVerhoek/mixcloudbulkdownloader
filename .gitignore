@@ -35,6 +35,8 @@ venv*
 # Apple Developer ID
 CertificateSigningRequest.certSigningRequest
 developerID_application.cer
+*.p8
+*.p12
 
 # unit test reports
 .coverage

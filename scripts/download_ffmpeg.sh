@@ -12,7 +12,7 @@
 set -eu
 
 # Configuration
-WINDOWS_FFMPEG_URL="https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+WINDOWS_FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-lgpl.zip"
 MACOS_FFMPEG_URL="https://evermeet.cx/ffmpeg/ffmpeg-6.1.1.7z"
 MACOS_FFPROBE_URL="https://evermeet.cx/ffmpeg/ffprobe-6.1.1.7z"
 MACOS_ARM_FFMPEG_URL="https://www.osxexperts.net/ffmpeg80arm.zip"
