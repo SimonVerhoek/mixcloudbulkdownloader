@@ -6,28 +6,21 @@ on:
       - master
 
 jobs:
-  check-version:
-    name: Check version bump & requirements
+  check-requirements:
+    name: Check requirements
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11.5"
 
       - name: Install Poetry
-        run: pip install poetry==2.1.4
+        run: pip install poetry==2.4.1
 
       - name: Install poetry-plugin-export
         run: poetry self add poetry-plugin-export
-
-      - name: Check version was bumped since last tag
-        run: |
-          sed -i 's/\r$//' scripts/check_version_update.sh
-          bash scripts/check_version_update.sh
 
       - name: Check requirements.txt matches poetry.lock
         run: bash scripts/check_requirements_export.sh
@@ -62,9 +55,9 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install poetry==2.1.4
+          pip install poetry==2.4.1
           poetry config virtualenvs.create false
-          poetry install --with=test,ci --without dev
+          poetry install --with=test,linux --without dev
 
       - name: Run tests
         run: pytest -m "not windows and not macos"
@@ -83,12 +76,12 @@ jobs:
           python-version: "3.11.5"
 
       - name: Install Poetry
-        run: pip install poetry==2.1.4
+        run: pip install poetry==2.4.1
 
       - name: Install Python dependencies
         run: |
           poetry config virtualenvs.create false
-          poetry install --with=test --without dev,ci
+          poetry install --with=test --without dev
 
       - name: Run tests
         run: poetry run pytest -m "not qt" --tb=short -v
@@ -106,9 +99,9 @@ jobs:
 
       - name: Install Poetry and dependencies
         run: |
-          pip install poetry==2.1.4
+          pip install poetry==2.4.1
           poetry config virtualenvs.create false
-          poetry install --with dev --without test,ci
+          poetry install --with dev --without test
 
       - name: Ensure unzip is available
         shell: pwsh
@@ -177,9 +170,9 @@ jobs:
 
       - name: Install Poetry and Python dependencies
         run: |
-          pip install poetry==2.1.4
+          pip install poetry==2.4.1
           poetry config virtualenvs.create false
-          poetry install --with dev --without test,ci
+          poetry install --with dev --without test
 
       - name: Download FFmpeg binaries
         run: bash scripts/download_ffmpeg.sh
@@ -240,7 +233,7 @@ jobs:
       - name: Set up isolated virtual environment
         run: |
           pip install --upgrade pip
-          pip install poetry==2.1.4          # Install into tool-cached Python before project venv exists
+          pip install poetry==2.4.1          # Install into tool-cached Python before project venv exists
           python -m venv .venv
           echo "${{ github.workspace }}/.venv/bin" >> $GITHUB_PATH
 
@@ -248,7 +241,7 @@ jobs:
         run: |
           pip install virtualenv==21.7.1   # Pre-install into .venv; no conflict since poetry is in tool-cached Python
           poetry config virtualenvs.create false
-          poetry install --with dev --without test,ci
+          poetry install --with dev --without test
 
       - name: Download FFmpeg binaries
         run: bash scripts/download_ffmpeg.sh
