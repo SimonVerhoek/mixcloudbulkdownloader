@@ -1,0 +1,11 @@
+changelog:
+  exclude:
+    labels:
+      - maintenance   # apply to CI, refactoring, docs PRs — hides them from changelog
+  categories:
+    - title: "New Features"
+      labels:
+        - enhancement
+    - title: "Bug Fixes"
+      labels:
+        - bug

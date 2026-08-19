@@ -1,9 +1,11 @@
-[tool.poetry]
+[project]
 name = "mixcloud-bulk-downloader"
 version = "3.3.1"
 description = "Download for FREE all cloudcasts of your favorite Mixcloud artist at one go!"
-authors = ["Simon Verhoek <contact+mixcloudbulkdownloader@simonverhoek.com>"]
 readme = "README.md"
+authors = [{name = "Simon Verhoek", email = "contact+mixcloudbulkdownloader@simonverhoek.com"}]
+
+[tool.poetry]
 packages = [{include = "app"}]
 
 [tool.poetry.dependencies]
@@ -21,8 +23,7 @@ idna = "^3.18"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^4.5.1"
-pyinstaller = "^6.21.0"
-setuptools = "^83.0.0"
+pyinstaller = "^6.22.0"
 filelock = "^3.24.3"
 virtualenv = "^21.1.0"
 
@@ -33,7 +34,10 @@ pytest-mock = "^3.15.1"
 pytest-asyncio = "^1.4.0"
 pytest-cov = "^7.1.0"
 
-[tool.poetry.group.ci.dependencies]
+[tool.poetry.group.linux]
+optional = true
+
+[tool.poetry.group.linux.dependencies]
 pytest-xvfb = "^3.1.1"
 
 [tool.poetry.requires-plugins]
