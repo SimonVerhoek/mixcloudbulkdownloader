@@ -52,11 +52,11 @@ repos:
         language_version: python3.11
 
   - repo: https://github.com/python-poetry/poetry-plugin-export
-    rev: '1.9.0'  # add version here
+    rev: 1.10.0
     hooks:
       - id: poetry-export
         args: [ "--with", "dev", "--no-cache", "-f", "requirements.txt", "-o", "requirements.txt" ]
-        language_version: python3.9
+        language_version: python3.11
 
   - repo: https://github.com/psf/black-pre-commit-mirror
     rev: 25.1.0
