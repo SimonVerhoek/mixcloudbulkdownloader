@@ -3,8 +3,8 @@
 # FFmpeg Binary Downloader (Bash Version)
 #
 # Downloads ffmpeg and ffprobe binaries for Windows and macOS platforms.
-# - Windows binaries from gyan.dev (essentials build)
-# - macOS binaries from evermeet.cx (direct downloads)
+# - Windows binaries from BtbN/FFmpeg-Builds (essentials build)
+# - macOS binaries from osxexperts.net (Intel and ARM64, zip archives)
 #
 # Designed to work in Alpine Linux (docker/compose:latest) and other environments.
 #
@@ -13,8 +13,8 @@ set -eu
 
 # Configuration
 WINDOWS_FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-lgpl.zip"
-MACOS_FFMPEG_URL="https://evermeet.cx/ffmpeg/ffmpeg-6.1.1.7z"
-MACOS_FFPROBE_URL="https://evermeet.cx/ffmpeg/ffprobe-6.1.1.7z"
+MACOS_FFMPEG_URL="https://www.osxexperts.net/ffmpeg80intel.zip"
+MACOS_FFPROBE_URL="https://www.osxexperts.net/ffprobe80intel.zip"
 MACOS_ARM_FFMPEG_URL="https://www.osxexperts.net/ffmpeg80arm.zip"
 MACOS_ARM_FFPROBE_URL="https://www.osxexperts.net/ffprobe80arm.zip"
 
@@ -181,29 +181,24 @@ check_dependencies() {
     if ! command -v unzip >/dev/null 2>&1; then
         missing_deps="${missing_deps} unzip"
     fi
-    
-    # Check for 7z (for macOS downloads)
-    if ! command -v 7z >/dev/null 2>&1 && ! command -v 7za >/dev/null 2>&1; then
-        missing_deps="${missing_deps} 7z-or-7za"
-    fi
-    
+
     if [ -n "$missing_deps" ]; then
         log_error "Missing dependencies:$missing_deps"
         log "Installing missing dependencies..."
-        
+
         # Try to install dependencies based on available package manager
         if command -v apk >/dev/null 2>&1; then
             # Alpine Linux
-            apk add --no-cache wget unzip p7zip
+            apk add --no-cache wget unzip
         elif command -v apt-get >/dev/null 2>&1; then
             # Debian/Ubuntu
-            apt-get update && apt-get install -y wget unzip p7zip-full
+            apt-get update && apt-get install -y wget unzip
         elif command -v yum >/dev/null 2>&1; then
             # RHEL/CentOS
-            yum install -y wget unzip p7zip
+            yum install -y wget unzip
         elif command -v brew >/dev/null 2>&1; then
             # macOS with Homebrew
-            brew install wget p7zip
+            brew install wget
         else
             log_error "Cannot install dependencies automatically. Please install:$missing_deps"
             return 1
@@ -260,71 +255,29 @@ extract_windows_binaries() {
     fi
 }
 
-# Extract macOS binary from 7z archive
-extract_macos_7z() {
-    local archive_file="$1"
-    local binary_name="$2"
-    local temp_dir
-    temp_dir=$(mktemp -d)
-    
-    log "Extracting $binary_name from $(basename "$archive_file")"
-    
-    # Determine 7z command
-    local extract_cmd
-    if command -v 7z >/dev/null 2>&1; then
-        extract_cmd="7z"
-    elif command -v 7za >/dev/null 2>&1; then
-        extract_cmd="7za"
-    else
-        log_error "No 7z extraction tool available"
-        rm -rf "$temp_dir"
-        return 1
-    fi
-    
-    # Extract archive
-    if ! "$extract_cmd" x "$archive_file" "-o$temp_dir" -y >/dev/null 2>&1; then
-        log_error "Failed to extract 7z archive"
-        rm -rf "$temp_dir"
-        return 1
-    fi
-    
-    # Find and copy binary
-    local extracted_binary="$temp_dir/$binary_name"
-    if [ -f "$extracted_binary" ]; then
-        cp "$extracted_binary" "$MACOS_INTEL_DIR/$binary_name"
-        chmod +x "$MACOS_INTEL_DIR/$binary_name"
-        log "Installed $binary_name to $MACOS_INTEL_DIR/$binary_name"
-        rm -rf "$temp_dir"
-        return 0
-    else
-        log_error "Binary $binary_name not found in extracted archive"
-        rm -rf "$temp_dir"
-        return 1
-    fi
-}
-
 # Extract macOS binary from zip archive
 extract_macos_zip() {
     local zip_file="$1"
     local binary_name="$2"
+    local target_dir="$3"
     local temp_dir
     temp_dir=$(mktemp -d)
-    
+
     log "Extracting $binary_name from $(basename "$zip_file")"
-    
+
     # Extract zip file
     if ! unzip -q "$zip_file" -d "$temp_dir"; then
         log_error "Failed to extract zip file"
         rm -rf "$temp_dir"
         return 1
     fi
-    
+
     # Find and copy binary
     local extracted_binary="$temp_dir/$binary_name"
     if [ -f "$extracted_binary" ]; then
-        cp "$extracted_binary" "$MACOS_ARM_DIR/$binary_name"
-        chmod +x "$MACOS_ARM_DIR/$binary_name"
-        log "Installed $binary_name to $MACOS_ARM_DIR/$binary_name"
+        cp "$extracted_binary" "$target_dir/$binary_name"
+        chmod +x "$target_dir/$binary_name"
+        log "Installed $binary_name to $target_dir/$binary_name"
         rm -rf "$temp_dir"
         return 0
     else
@@ -376,33 +329,33 @@ download_windows_binaries() {
 # Download macOS Intel binaries
 download_macos_binaries() {
     log "Downloading macOS Intel binaries..."
-    
+
     local temp_ffmpeg temp_ffprobe
-    temp_ffmpeg=$(create_temp_file ".7z")
-    temp_ffprobe=$(create_temp_file ".7z")
-    
+    temp_ffmpeg=$(create_temp_file ".zip")
+    temp_ffprobe=$(create_temp_file ".zip")
+
     local success=true
-    
+
     # Download ffmpeg
     if download_with_progress "$MACOS_FFMPEG_URL" "$temp_ffmpeg"; then
-        if ! extract_macos_7z "$temp_ffmpeg" "ffmpeg"; then
+        if ! extract_macos_zip "$temp_ffmpeg" "ffmpeg" "$MACOS_INTEL_DIR"; then
             success=false
         fi
     else
         success=false
     fi
-    
+
     # Download ffprobe
     if download_with_progress "$MACOS_FFPROBE_URL" "$temp_ffprobe"; then
-        if ! extract_macos_7z "$temp_ffprobe" "ffprobe"; then
+        if ! extract_macos_zip "$temp_ffprobe" "ffprobe" "$MACOS_INTEL_DIR"; then
             success=false
         fi
     else
         success=false
     fi
-    
+
     rm -f "$temp_ffmpeg" "$temp_ffprobe"
-    
+
     [ "$success" = true ]
 }
 
@@ -418,16 +371,16 @@ download_macos_arm_binaries() {
     
     # Download ffmpeg
     if download_with_progress "$MACOS_ARM_FFMPEG_URL" "$temp_ffmpeg"; then
-        if ! extract_macos_zip "$temp_ffmpeg" "ffmpeg"; then
+        if ! extract_macos_zip "$temp_ffmpeg" "ffmpeg" "$MACOS_ARM_DIR"; then
             success=false
         fi
     else
         success=false
     fi
-    
+
     # Download ffprobe
     if download_with_progress "$MACOS_ARM_FFPROBE_URL" "$temp_ffprobe"; then
-        if ! extract_macos_zip "$temp_ffprobe" "ffprobe"; then
+        if ! extract_macos_zip "$temp_ffprobe" "ffprobe" "$MACOS_ARM_DIR"; then
             success=false
         fi
     else

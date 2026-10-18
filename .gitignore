@@ -28,6 +28,7 @@ dist-macos-intel
 # environment variables
 .env
 .env.prod
+.envrc
 
 # virtual environments
 venv*

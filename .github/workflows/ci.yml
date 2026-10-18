@@ -256,7 +256,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: app/resources/ffmpeg/macos/intel/
-          key: ffmpeg-macos-intel-6.1.1
+          key: ffmpeg-macos-intel-8.0
 
       - name: Download FFmpeg binaries
         if: steps.cache-ffmpeg.outputs.cache-hit != 'true'

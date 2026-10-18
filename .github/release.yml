@@ -9,3 +9,6 @@ changelog:
     - title: "Bug Fixes"
       labels:
         - bug
+    - title: "Other Changes"
+      labels:
+        - "*"         # catch-all: any PR not matched above and not excluded
