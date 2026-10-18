@@ -114,7 +114,7 @@ download_with_progress() {
         
         log_warning "Download attempt $attempt failed"
         if [ $attempt -lt $max_retries ]; then
-            sleep 2
+            sleep 30
         fi
         attempt=$((attempt + 1))
     done
