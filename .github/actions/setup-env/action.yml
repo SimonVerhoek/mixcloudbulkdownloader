@@ -1,0 +1,12 @@
+name: Set up Python and Poetry
+description: Install Python (from .python-version) and Poetry with export plugin
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version-file: .python-version
+    - name: Install Poetry
+      run: pip install poetry==2.4.1 poetry-plugin-export
+      shell: bash
