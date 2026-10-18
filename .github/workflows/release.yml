@@ -32,9 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11.5"
+      - uses: ./.github/actions/setup-env
 
       - name: Install Qt system dependencies
         run: |
@@ -56,7 +54,6 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install poetry==2.4.1
           poetry config virtualenvs.create false
           poetry install --with=test,linux --without dev
 
@@ -72,12 +69,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11.5"
-
-      - name: Install Poetry
-        run: pip install poetry==2.4.1
+      - uses: ./.github/actions/setup-env
 
       - name: Install Python dependencies
         run: |
@@ -94,13 +86,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11.5"
+      - uses: ./.github/actions/setup-env
 
       - name: Install Poetry and dependencies
         run: |
-          pip install poetry==2.4.1
           poetry config virtualenvs.create false
           poetry install --with dev --without test
 
@@ -163,16 +152,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11.5"
+      - uses: ./.github/actions/setup-env
 
       - name: Install Homebrew dependencies
         run: brew install openssl@3 create-dmg
 
       - name: Install Poetry and Python dependencies
         run: |
-          pip install poetry==2.4.1
           poetry config virtualenvs.create false
           poetry install --with dev --without test
 
@@ -263,9 +249,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11.5"
+      - uses: ./.github/actions/setup-env
 
       - name: Install Homebrew dependencies
         run: brew install openssl@3 create-dmg
@@ -273,7 +257,6 @@ jobs:
       - name: Set up isolated virtual environment
         run: |
           pip install --upgrade pip
-          pip install poetry==2.4.1          # Install into tool-cached Python before project venv exists
           python -m venv .venv
           echo "${{ github.workspace }}/.venv/bin" >> $GITHUB_PATH
 
