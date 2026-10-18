@@ -135,7 +135,7 @@ class DownloadWorker(QRunnable):
 
                 # Atomically rename from .downloading to final name
                 if self.download_file_path.exists():
-                    self.download_file_path.rename(self.final_file_path)
+                    self.download_file_path.replace(self.final_file_path)
 
                     if not self.cancelled:
                         self.callback_bridge.emit_completed(

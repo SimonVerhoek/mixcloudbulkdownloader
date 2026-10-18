@@ -174,7 +174,15 @@ jobs:
           poetry config virtualenvs.create false
           poetry install --with dev --without test
 
+      - name: Cache FFmpeg binaries (ARM64)
+        id: cache-ffmpeg
+        uses: actions/cache@v4
+        with:
+          path: app/resources/ffmpeg/macos/arm64/
+          key: ffmpeg-macos-arm64-8.0
+
       - name: Download FFmpeg binaries
+        if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
         run: bash scripts/download_ffmpeg.sh
 
       - name: Create .env.prod (ad-hoc signing)
@@ -243,7 +251,15 @@ jobs:
           poetry config virtualenvs.create false
           poetry install --with dev --without test
 
+      - name: Cache FFmpeg binaries (Intel)
+        id: cache-ffmpeg
+        uses: actions/cache@v4
+        with:
+          path: app/resources/ffmpeg/macos/intel/
+          key: ffmpeg-macos-intel-8.0
+
       - name: Download FFmpeg binaries
+        if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
         run: bash scripts/download_ffmpeg.sh
 
       - name: Create .env.prod (ad-hoc signing)
