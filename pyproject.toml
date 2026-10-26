@@ -24,7 +24,7 @@ idna = "^3.18"
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^4.5.1"
 pyinstaller = "^6.22.0"
-filelock = "^3.24.3"
+filelock = "^4.2.1"
 virtualenv = "^21.7.13"
 
 [tool.poetry.group.test.dependencies]
